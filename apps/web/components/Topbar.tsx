@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { IconButton, SearchInput, cn } from "@ads-os/ui";
 import { UserMenu } from "./UserMenu";
 import { IconBell, IconHelp, IconMenu } from "@ads-os/ui/icons";
@@ -71,17 +72,17 @@ export function Topbar({
 
       <div className="flex shrink-0 items-center gap-1.5">
         {/* На телефоне колокольчик уступает место действию экрана: заголовок
-            иначе сжимается до трёх букв. Вернётся вместе с экраном уведомлений,
-            когда по нажатию будет что показывать. */}
+            иначе сжимается до трёх букв. */}
         <span className="relative hidden sm:inline-flex">
-          <IconButton
-            label={
+          <Link
+            href="/notifications"
+            aria-label={
               notifications > 0 ? `Уведомления, непрочитанных: ${notifications}` : "Уведомления"
             }
-            icon={<IconBell size={20} />}
-            variant="ghost"
-            size="sm"
-          />
+            className="text-text-secondary hover:bg-surface-hover hover:text-text-primary rounded-control focus-visible:outline-focus inline-flex size-8 items-center justify-center focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            <IconBell size={20} />
+          </Link>
           {notifications > 0 && (
             <span
               aria-hidden="true"

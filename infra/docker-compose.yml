@@ -103,6 +103,31 @@ services:
     networks:
       - backend
 
+  # Планировщик: только ставит задачи по расписанию, сам ничего не выполняет.
+  #
+  # Отдельный процесс, а не флаг у воркера, по одной причине: воркеров может
+  # быть несколько, и с флагом каждый из них заводил бы своё расписание. Один
+  # плановый обход превратился бы в три, а клиенты получили бы тройной обход
+  # своих сайтов.
+  beat:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "ads_os.worker.app", "beat", "--loglevel", "info"]
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+
   # Воркер краулера: ходит по чужим сайтам.
   #
   # Он подключён только к сети `crawler`, где нет базы. Это не удобство

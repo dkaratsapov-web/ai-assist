@@ -60,6 +60,8 @@ export type AdDraftRead = Schemas["AdDraftRead"];
 export type AdDraftList = Schemas["AdDraftList"];
 export type AdViolationRead = Schemas["AdViolationRead"];
 export type Intent = Schemas["Intent"];
+export type NotificationRead = Schemas["NotificationRead"];
+export type NotificationList = Schemas["NotificationList"];
 export type ActivityRead = Schemas["ActivityRead"];
 export type ActivityList = Schemas["ActivityList"];
 export type ActivityAction = Schemas["ActivityAction"];
@@ -288,6 +290,22 @@ export class ApiClient {
   /**
    * Журнал действий. Без `projectId` — по всей организации.
    */
+  /** Что система заметила сама. Уведомления общие для организации. */
+  listNotifications(unreadOnly = false): Promise<NotificationList> {
+    const suffix = unreadOnly ? "?unread_only=true" : "";
+    return this.request<NotificationList>(`/api/v1/notifications${suffix}`);
+  }
+
+  markNotificationRead(notificationId: string): Promise<NotificationRead> {
+    return this.request<NotificationRead>(`/api/v1/notifications/${notificationId}/read`, {
+      method: "POST",
+    });
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await this.requestNoContent("/api/v1/notifications/read-all", { method: "POST" });
+  }
+
   listActivity(projectId?: string | null, limit?: number): Promise<ActivityList> {
     const query = new URLSearchParams();
     if (projectId) query.set("project_id", projectId);

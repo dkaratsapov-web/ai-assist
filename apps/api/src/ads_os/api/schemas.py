@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..models.activity import ActivityAction
 from ..models.audit import ModuleStatus
+from ..models.notification import NotificationKind, NotificationLevel
 from ..models.project import MainConversion, ProjectStatus
 from ..services.ads import Problem
 from ..services.competitors import FeatureKey
@@ -669,3 +670,28 @@ class AdDraftList(BaseModel):
     ready: int
     #: Пусто, если аудит не проводился: без него неоткуда взять текст.
     source_note: str | None = None
+
+
+class NotificationRead(BaseModel):
+    """Одно сообщение системы.
+
+    Рядом с тем, что случилось, всегда стоит, что с этим делать. Уведомление
+    без второго — это тревога без выхода, и от неё больше вреда, чем пользы.
+    """
+
+    id: uuid.UUID
+    project_id: uuid.UUID | None
+    project_name: str
+    kind: NotificationKind
+    level: NotificationLevel
+    title: str
+    body: str
+    is_read: bool
+    created_at: datetime
+
+
+class NotificationList(BaseModel):
+    items: list[NotificationRead]
+    total: int
+    #: Непрочитанных всего, а не в выдаче: это число показывается на колокольчике.
+    unread: int

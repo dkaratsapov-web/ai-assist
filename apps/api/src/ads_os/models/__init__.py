@@ -7,6 +7,7 @@
 from .activity import ActivityAction, ActivityLog
 from .audit import IssueDismissal, ModuleStatus, SiteAudit
 from .competitor import Competitor
+from .notification import Notification, NotificationKind, NotificationLevel
 from .organization import Organization, OrganizationPlan
 from .project import MainConversion, Project, ProjectEconomics, ProjectStatus
 from .semantics import Keyword, MinusWord
@@ -23,6 +24,9 @@ __all__ = [
     "MainConversion",
     "MinusWord",
     "ModuleStatus",
+    "Notification",
+    "NotificationKind",
+    "NotificationLevel",
     "Organization",
     "OrganizationPlan",
     "Project",

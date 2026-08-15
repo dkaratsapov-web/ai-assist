@@ -20,13 +20,21 @@ from dataclasses import asdict
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ...db.base import utcnow
 from ...db.session import session_scope
 from ...models.audit import ModuleStatus, SiteAudit
-from ...services.audit import audit_page, collect_signals
+from ...models.project import Project
+from ...services.audit import (
+    audit_page,
+    collect_signals,
+    compare_issues,
+    issues_from_stored,
+)
 from ...services.competitors import extract_features
 from ...services.crawler.fetcher import CrawlLimits, FetchError, fetch_page
+from ...services.notifications import evaluate_audit, push
 from ..app import celery_app
 from ..runtime import run_task
 
@@ -89,6 +97,7 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
                 "аудит не выполнен",
                 extra={"audit_id": str(audit_id), "reason": audit.error_reason},
             )
+            await _notify(session, audit, failed_reason=audit.error_reason)
             return ModuleStatus.FAILED.value
 
         result = audit_page(
@@ -114,6 +123,8 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         audit.features = {key.value: value for key, value in extract_features(signals).items()}
         audit.selling_points = list(signals.selling_points)
 
+        await _notify(session, audit)
+
         logger.info(
             "аудит завершён",
             extra={
@@ -136,3 +147,57 @@ def enqueue_site_audit(audit_id: uuid.UUID, url: str) -> None:
     from celery import chain
 
     chain(fetch_site_page.s(url), process_site_audit.s(str(audit_id))).delay()
+
+
+async def _notify(
+    session: AsyncSession, audit: SiteAudit, *, failed_reason: str | None = None
+) -> None:
+    """Сообщает, если состояние сайта изменилось к худшему.
+
+    Сравнение идёт с предыдущей завершённой проверкой этого же проекта. Первая
+    проверка уведомления не порождает: сообщать «у сайта есть замечания» сразу
+    после того, как человек сам её запустил и смотрит на результат, незачем.
+    """
+    previous = (
+        await session.execute(
+            select(SiteAudit)
+            .where(SiteAudit.project_id == audit.project_id)
+            .where(SiteAudit.status == ModuleStatus.COMPLETED)
+            .where(SiteAudit.id != audit.id)
+            .order_by(SiteAudit.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    if previous is None:
+        return
+
+    changes = (
+        compare_issues(
+            issues_from_stored(previous.issues or []),
+            issues_from_stored(audit.issues or []),
+        )
+        if failed_reason is None
+        else None
+    )
+
+    alert = evaluate_audit(
+        changes=changes,
+        score=audit.score,
+        previous_score=previous.score,
+        failed_reason=failed_reason,
+    )
+    if alert is None:
+        return
+
+    project = (
+        await session.execute(select(Project).where(Project.id == audit.project_id))
+    ).scalar_one_or_none()
+
+    await push(
+        session,
+        alert,
+        organization_id=audit.organization_id,
+        project_id=audit.project_id,
+        project_name=project.name if project else "проект удалён",
+    )

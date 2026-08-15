@@ -161,6 +161,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Уведомления
+         * @description Что система заметила сама, от новых к старым.
+         *
+         *     Уведомления общие для организации, а не личные. Поломка сайта касается
+         *     всех, кто ведёт проект, и адресовать её одному человеку значило бы, что в
+         *     его отпуск о ней не узнает никто.
+         */
+        get: operations["list_notifications_api_v1_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Отметить прочитанными все */
+        post: operations["mark_all_read_api_v1_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Отметить прочитанным */
+        post: operations["mark_read_api_v1_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization": {
         parameters: {
             query?: never;
@@ -1419,6 +1477,62 @@ export interface components {
          * @enum {string}
          */
         ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
+        /**
+         * NotificationKind
+         * @description О чём уведомление.
+         *
+         *     Закрытый список: свободная строка со временем превратилась бы в набор
+         *     похожих формулировок, по которому нельзя ни отфильтровать, ни настроить
+         *     правила доставки.
+         * @enum {string}
+         */
+        NotificationKind: "site_broken" | "site_degraded" | "site_unreachable";
+        /**
+         * NotificationLevel
+         * @description Насколько срочно. Совпадает со словарём статусов интерфейса.
+         * @enum {string}
+         */
+        NotificationLevel: "critical" | "warning" | "info";
+        /** NotificationList */
+        NotificationList: {
+            /** Items */
+            items: components["schemas"]["NotificationRead"][];
+            /** Total */
+            total: number;
+            /** Unread */
+            unread: number;
+        };
+        /**
+         * NotificationRead
+         * @description Одно сообщение системы.
+         *
+         *     Рядом с тем, что случилось, всегда стоит, что с этим делать. Уведомление
+         *     без второго — это тревога без выхода, и от неё больше вреда, чем пользы.
+         */
+        NotificationRead: {
+            /** Body */
+            body: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Read */
+            is_read: boolean;
+            kind: components["schemas"]["NotificationKind"];
+            level: components["schemas"]["NotificationLevel"];
+            /** Project Id */
+            project_id: string | null;
+            /** Project Name */
+            project_name: string;
+            /** Title */
+            title: string;
+        };
         /** OrganizationRead */
         OrganizationRead: {
             /** Ad Platform Adapter */
@@ -1900,6 +2014,108 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_notifications_api_v1_notifications_get: {
+        parameters: {
+            query?: {
+                unread_only?: boolean;
+                limit?: number;
+            };
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_all_read_api_v1_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_read_api_v1_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                notification_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

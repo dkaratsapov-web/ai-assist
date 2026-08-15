@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Sidebar } from "./Sidebar";
 import { Topbar } from "./Topbar";
+import { createApiClient } from "@/lib/api";
 
 export interface AppShellProps {
   title: string;
@@ -22,6 +23,7 @@ export interface AppShellProps {
  */
 export function AppShell({ title, subtitle, notifications, actions, children }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const unread = useUnreadCount();
 
   return (
     <div className="flex min-h-dvh">
@@ -31,7 +33,7 @@ export function AppShell({ title, subtitle, notifications, actions, children }: 
         <Topbar
           title={title}
           subtitle={subtitle}
-          notifications={notifications}
+          notifications={notifications ?? unread}
           action={actions}
           onMenuClick={() => setMobileNavOpen(true)}
         />
@@ -42,4 +44,38 @@ export function AppShell({ title, subtitle, notifications, actions, children }: 
       </div>
     </div>
   );
+}
+
+/**
+ * Непрочитанные уведомления для колокольчика.
+ *
+ * Считается здесь, в каркасе, а не на каждом экране: иначе счётчик появлялся бы
+ * на тех страницах, где его не забыли подключить, и пропадал на остальных — то
+ * есть работал бы случайным образом.
+ *
+ * Ошибка запроса гасится молча. Колокольчик — не то, ради чего стоит показывать
+ * человеку экран ошибки поверх работающей страницы.
+ */
+function useUnreadCount(): number {
+  const api = useMemo(() => createApiClient(), []);
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    let ignore = false;
+
+    void (async () => {
+      try {
+        const list = await api.listNotifications(true);
+        if (!ignore) setUnread(list.unread);
+      } catch {
+        // Не вошёл или сервис недоступен — счётчик просто остаётся нулём.
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [api]);
+
+  return unread;
 }

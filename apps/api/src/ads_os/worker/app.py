@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.schedules import crontab
 
 from ..config import get_settings
 
@@ -42,6 +43,9 @@ celery_app.conf.update(
         "ads_os.worker.tasks.audit.fetch_site_page": {"queue": "crawler"},
         "ads_os.worker.tasks.audit.process_site_audit": {"queue": "default"},
         "ads_os.worker.tasks.competitors.process_competitor": {"queue": "default"},
+        # Планировщик читает базу, поэтому идёт в обычную очередь, а не в
+        # очередь краулера — у того доступа к базе нет и быть не должно.
+        "ads_os.worker.tasks.schedule.recheck_sites": {"queue": "default"},
     },
     task_default_queue="default",
 )
@@ -59,6 +63,23 @@ celery_app.conf.update(
 TASK_MODULES = (
     "ads_os.worker.tasks.audit",
     "ads_os.worker.tasks.competitors",
+    "ads_os.worker.tasks.schedule",
 )
 
 celery_app.conf.imports = TASK_MODULES
+
+#: Расписание регулярных задач.
+#:
+#: Запускается ежедневно, но сама задача решает, каким проектам действительно
+#: пора: интервал проверки живёт рядом с ней, а не здесь. Ежедневный запуск при
+#: недельном интервале означает, что проверки размазываются по дням, а не
+#: сваливаются все разом в один.
+#:
+#: Час выбран ночной по московскому времени: краулер ходит по сайтам клиентов, и
+#: делать это в рабочее время — значит попадать на пик их собственного трафика.
+celery_app.conf.beat_schedule = {
+    "recheck-sites": {
+        "task": "ads_os.worker.tasks.schedule.recheck_sites",
+        "schedule": crontab(hour=1, minute=30),
+    },
+}
