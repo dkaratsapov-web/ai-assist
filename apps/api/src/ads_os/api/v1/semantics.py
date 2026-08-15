@@ -41,6 +41,7 @@ from ..schemas import (
     MinusWordList,
     MinusWordRead,
     MinusWordSuggestionRead,
+    SitelinkRead,
 )
 
 router = APIRouter(prefix="/projects", tags=["semantics"])
@@ -464,6 +465,7 @@ async def list_ad_drafts(
     ).scalar_one_or_none()
 
     points: tuple[str, ...] = ()
+    links: tuple[tuple[str, str], ...] = ()
     note: str | None = None
 
     if audit is None:
@@ -473,6 +475,11 @@ async def list_ad_drafts(
         )
     else:
         points = tuple(audit.selling_points or [])
+        links = tuple(
+            (str(pair[0]), str(pair[1]))
+            for pair in (audit.internal_links or [])
+            if isinstance(pair, list) and len(pair) == 2
+        )
         if not points:
             note = (
                 "На проверенной странице не нашлось ни цены, ни срока, ни гарантии — "
@@ -485,6 +492,7 @@ async def list_ad_drafts(
             keywords=group.phrases,
             selling_points=points,
             region=project.primary_region,
+            internal_links=links,
         )
         for group in groups
         # Остаток — это не группа под объявление, а фразы, которым не нашлось
@@ -501,6 +509,9 @@ async def list_ad_drafts(
                 text=draft.text,
                 display_path=draft.display_path,
                 callouts=list(draft.callouts),
+                sitelinks=[
+                    SitelinkRead(title=link.title, url=link.url) for link in draft.sitelinks
+                ],
                 keywords=list(draft.keywords),
                 violations=[
                     AdViolationRead(
@@ -541,7 +552,7 @@ async def export_campaign(
 
     keywords = await _keywords(session, ctx, project_id)
     groups = cluster(_targeted(keywords))
-    points = await _selling_points(session, ctx, project_id)
+    points, links = await _page_content(session, ctx, project_id)
     minus = ", ".join(f"-{row.word}" for row in await _minus_word_rows(session, ctx, project_id))
 
     url = project.website_url or ""
@@ -558,6 +569,7 @@ async def export_campaign(
             keywords=group.phrases,
             selling_points=points,
             region=project.primary_region,
+            internal_links=links,
         )
         warnings = "; ".join(v.message for v in draft.violations)
 
@@ -573,6 +585,7 @@ async def export_campaign(
                     url=url,
                     display_path=draft.display_path or "",
                     callouts=", ".join(draft.callouts),
+                    sitelinks="; ".join(f"{link.title} → {link.url}" for link in draft.sitelinks),
                     minus_words=minus,
                     warnings=warnings,
                 )
@@ -594,9 +607,15 @@ async def export_campaign(
     )
 
 
-async def _selling_points(
+async def _page_content(
     session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
-) -> tuple[str, ...]:
+) -> tuple[tuple[str, ...], tuple[tuple[str, str], ...]]:
+    """Фрагменты предложения и разделы сайта из последней проверки.
+
+    Берутся из одной и той же проверки: текст объявления и быстрые ссылки
+    должны описывать одну версию страницы, иначе объявление обещает то, чего
+    на ней уже нет.
+    """
     audit = (
         await session.execute(
             select(SiteAudit)
@@ -608,4 +627,12 @@ async def _selling_points(
         )
     ).scalar_one_or_none()
 
-    return tuple(audit.selling_points or []) if audit else ()
+    if audit is None:
+        return (), ()
+
+    links = tuple(
+        (str(pair[0]), str(pair[1]))
+        for pair in (audit.internal_links or [])
+        if isinstance(pair, list) and len(pair) == 2
+    )
+    return tuple(audit.selling_points or []), links

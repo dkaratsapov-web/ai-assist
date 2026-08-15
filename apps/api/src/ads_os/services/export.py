@@ -31,6 +31,7 @@ COLUMNS = (
     "Ссылка",
     "Отображаемая ссылка",
     "Уточнения",
+    "Быстрые ссылки",
     "Минус-слова кампании",
     "Замечания",
 )
@@ -49,6 +50,7 @@ class ExportRow:
     url: str
     display_path: str
     callouts: str
+    sitelinks: str
     minus_words: str
     warnings: str
 
@@ -78,6 +80,7 @@ def to_csv(rows: list[ExportRow]) -> str:
                 row.url,
                 row.display_path,
                 row.callouts,
+                row.sitelinks,
                 row.minus_words,
                 row.warnings,
             ]

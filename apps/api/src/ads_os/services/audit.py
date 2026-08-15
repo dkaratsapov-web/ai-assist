@@ -179,6 +179,10 @@ class PageSignals:
     #: «Гарантия 5 лет», «Окно от 12 900 ₽». Из них собираются черновики
     #: объявлений — так текст остаётся текстом клиента, а не выдумкой системы.
     selling_points: list[str] = field(default_factory=list)
+    #: Внутренние разделы сайта: пары «текст ссылки, адрес». Из них собираются
+    #: быстрые ссылки объявления — они занимают место в выдаче и дают человеку
+    #: попасть сразу в нужный раздел, а не искать его на посадочной.
+    internal_links: list[tuple[str, str]] = field(default_factory=list)
     #: Оформлен ли телефон ссылкой tel:. С телефона по ненажимаемому номеру не
     #: позвонить — его надо запоминать и набирать вручную, и часть посетителей
     #: этого просто не делает.
@@ -307,6 +311,7 @@ def collect_signals(html: str) -> PageSignals:
             signals.messengers.append(name)
 
     signals.has_tel_link = "tel:" in hrefs.lower()
+    signals.internal_links = _internal_links(links)
 
     # Политику ищем и по тексту ссылки, и по адресу: на одних сайтах это ссылка
     # «Политика конфиденциальности», на других — галочка согласия рядом с
@@ -754,5 +759,66 @@ def _selling_points(text: str) -> list[str]:
             continue
         seen.add(key)
         found.append(fragment)
+
+    return found[:12]
+
+
+#: Предел длины заголовка быстрой ссылки в Директе.
+MAX_SITELINK_TITLE = 30
+
+#: Слова, по которым ссылка не годится в быстрые. Это служебные разделы: они
+#: занимают место, но не ведут к заявке — человек не кликает на «политику
+#: конфиденциальности» из объявления.
+_SERVICE_LINK_WORDS = (
+    "политик",
+    "конфиденциальн",
+    "персональн",
+    "соглашение",
+    "карта сайта",
+    "вход",
+    "регистрац",
+    "личный кабинет",
+    "корзина",
+    "vacancy",
+    "вакансии",
+)
+
+
+def _internal_links(links: list) -> list[tuple[str, str]]:  # type: ignore[type-arg]
+    """Внутренние разделы сайта с читаемым текстом ссылки.
+
+    Отбираются только те, у которых есть осмысленная подпись: адрес без текста
+    в быструю ссылку не превратить, а придумывать заголовок за клиента нельзя —
+    он окажется обещанием, которого на странице нет.
+    """
+    found: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    for node in links:
+        href = (node.attributes.get("href") or "").strip()
+        text = " ".join(node.text(strip=True).split())
+
+        if not href or not text:
+            continue
+
+        # Внешние ссылки, якоря и служебные схемы разделами сайта не являются.
+        lowered_href = href.lower()
+        if lowered_href.startswith(("#", "tel:", "mailto:", "javascript:")):
+            continue
+        if lowered_href.startswith(("http://", "https://", "//")):
+            continue
+
+        if not (2 < len(text) <= MAX_SITELINK_TITLE):
+            continue
+
+        lowered = text.lower()
+        if any(word in lowered for word in _SERVICE_LINK_WORDS):
+            continue
+
+        key = lowered
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append((text, href))
 
     return found[:12]

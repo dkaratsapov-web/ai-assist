@@ -643,6 +643,13 @@ class AdViolationRead(BaseModel):
     message: str
 
 
+class SitelinkRead(BaseModel):
+    """Быстрая ссылка объявления."""
+
+    title: str
+    url: str
+
+
 class AdDraftRead(BaseModel):
     """Черновик объявления.
 
@@ -657,6 +664,8 @@ class AdDraftRead(BaseModel):
     text: str
     display_path: str | None
     callouts: list[str]
+    #: Быстрые ссылки на разделы сайта, найденные на проверенной странице.
+    sitelinks: list[SitelinkRead]
     keywords: list[str]
     violations: list[AdViolationRead]
     #: Пройдёт ли модерацию по проверяемым правилам. Не «хорошее объявление».

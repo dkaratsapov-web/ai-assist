@@ -873,6 +873,8 @@ export interface components {
             is_ready: boolean;
             /** Keywords */
             keywords: string[];
+            /** Sitelinks */
+            sitelinks: components["schemas"]["SitelinkRead"][];
             /** Text */
             text: string;
             /** Title */
@@ -1881,6 +1883,16 @@ export interface components {
             is_current: boolean;
             /** Last Seen At */
             last_seen_at: string | null;
+        };
+        /**
+         * SitelinkRead
+         * @description Быстрая ссылка объявления.
+         */
+        SitelinkRead: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
         };
         /**
          * StepKey

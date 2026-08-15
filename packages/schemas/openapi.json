@@ -176,6 +176,13 @@
             "title": "Keywords",
             "type": "array"
           },
+          "sitelinks": {
+            "items": {
+              "$ref": "#/components/schemas/SitelinkRead"
+            },
+            "title": "Sitelinks",
+            "type": "array"
+          },
           "text": {
             "title": "Text",
             "type": "string"
@@ -210,6 +217,7 @@
           "text",
           "display_path",
           "callouts",
+          "sitelinks",
           "keywords",
           "violations",
           "is_ready"
@@ -2903,6 +2911,25 @@
           "expires_at"
         ],
         "title": "SessionRead",
+        "type": "object"
+      },
+      "SitelinkRead": {
+        "description": "Быстрая ссылка объявления.",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url"
+        ],
+        "title": "SitelinkRead",
         "type": "object"
       },
       "StepKey": {

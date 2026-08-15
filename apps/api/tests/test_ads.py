@@ -139,3 +139,40 @@ class TestПустойСайт:
 
     def test_черновик_без_текста_не_считается_готовым(self) -> None:
         assert draft(selling_points=()).is_ready is False
+
+
+class TestБыстрыеСсылки:
+    """Занимают место в выдаче и дают попасть сразу в нужный раздел."""
+
+    LINKS = (
+        ("Пластиковые окна", "/okna"),
+        ("Остекление балконов", "/balkony"),
+        ("Цены", "/ceny"),
+        ("О компании", "/o-nas"),
+        ("Отзывы", "/otzyvy"),
+        ("Контакты", "/kontakty"),
+    )
+
+    def test_ссылки_собираются_из_разделов_сайта(self) -> None:
+        result = draft(internal_links=self.LINKS)
+
+        assert len(result.sitelinks) == 4
+        assert result.sitelinks[0].url.startswith("/")
+
+    def test_раздел_совпадающий_с_темой_группы_пропускается(self) -> None:
+        """Вести из объявления «окна» в раздел «окна» — потратить место зря."""
+        result = draft("пластиковые окна тверь", internal_links=self.LINKS)
+
+        assert "Пластиковые окна" not in {link.title for link in result.sitelinks}
+
+    def test_длинная_подпись_не_берётся(self) -> None:
+        long_title = "Остекление балконов и лоджий под ключ с гарантией"
+        result = draft(internal_links=((long_title, "/x"), ("Цены", "/ceny")))
+
+        assert [link.title for link in result.sitelinks] == ["Цены"]
+
+    def test_без_ссылок_черновик_не_ломается(self) -> None:
+        result = draft(internal_links=())
+
+        assert result.sitelinks == ()
+        assert result.is_ready

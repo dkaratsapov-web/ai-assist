@@ -122,6 +122,7 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         signals = collect_signals(fetched["html"])
         audit.features = {key.value: value for key, value in extract_features(signals).items()}
         audit.selling_points = list(signals.selling_points)
+        audit.internal_links = [[text, href] for text, href in signals.internal_links]
 
         await _notify(session, audit)
 

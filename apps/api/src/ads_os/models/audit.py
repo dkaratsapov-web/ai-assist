@@ -77,6 +77,12 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: соответствовать той версии, которую проверяли.
     selling_points: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
 
+    #: Внутренние разделы сайта: пары «подпись, адрес». Из них собираются
+    #: быстрые ссылки объявлений.
+    internal_links: Mapped[list[list[str]]] = mapped_column(
+        JSONB, default=list, nullable=False
+    )
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

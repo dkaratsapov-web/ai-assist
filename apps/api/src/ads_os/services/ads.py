@@ -30,6 +30,10 @@ MAX_TEXT = 81
 MAX_DISPLAY_PATH = 20
 MAX_CALLOUT = 25
 
+#: Лимиты быстрой ссылки. Директ принимает до четырёх на объявление.
+MAX_SITELINK_TITLE = 30
+MAX_SITELINKS = 4
+
 #: Сколько уточнений имеет смысл готовить. Больше Директ примет, но в показе
 #: участвуют не все, и длинный список только создаёт видимость работы.
 MAX_CALLOUTS = 4
@@ -56,6 +60,14 @@ class Violation:
 
 
 @dataclass(frozen=True, slots=True)
+class Sitelink:
+    """Быстрая ссылка: подпись и адрес раздела."""
+
+    title: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
 class AdDraft:
     """Черновик одного объявления."""
 
@@ -66,6 +78,9 @@ class AdDraft:
     text: str
     display_path: str | None
     callouts: tuple[str, ...] = field(default_factory=tuple)
+    #: Быстрые ссылки на разделы сайта. Занимают место в выдаче и дают попасть
+    #: сразу в нужный раздел, а не искать его на посадочной.
+    sitelinks: tuple[Sitelink, ...] = field(default_factory=tuple)
     #: Ключевые фразы группы — они и определяют, что показывать.
     keywords: tuple[str, ...] = field(default_factory=tuple)
     violations: tuple[Violation, ...] = field(default_factory=tuple)
@@ -94,6 +109,7 @@ def build_draft(
     keywords: tuple[str, ...],
     selling_points: tuple[str, ...],
     region: str | None = None,
+    internal_links: tuple[tuple[str, str], ...] = (),
 ) -> AdDraft:
     """Собирает черновик объявления для одной группы.
 
@@ -136,6 +152,8 @@ def build_draft(
         point for point in selling_points if len(point) <= MAX_CALLOUT and point != title_2
     )[:MAX_CALLOUTS]
 
+    sitelinks = _sitelinks(internal_links, exclude=cluster_name)
+
     draft = AdDraft(
         cluster=cluster_name,
         title=title,
@@ -143,6 +161,7 @@ def build_draft(
         text=text,
         display_path=_display_path(cluster_name),
         callouts=callouts,
+        sitelinks=sitelinks,
         keywords=keywords,
     )
 
@@ -263,3 +282,28 @@ def _trim_words(text: str, limit: int) -> str:
         result.append(word)
 
     return " ".join(result) if result else text[:limit]
+
+
+def _sitelinks(links: tuple[tuple[str, str], ...], *, exclude: str) -> tuple[Sitelink, ...]:
+    """Отбирает быстрые ссылки для объявления.
+
+    Раздел, совпадающий с темой самой группы, пропускается: вести из объявления
+    «Окна ПВХ» в раздел «Окна ПВХ» значит потратить место на ссылку туда же,
+    куда ведёт заголовок.
+    """
+    banned = {stem(word) for word in tokenize(exclude)}
+    chosen: list[Sitelink] = []
+
+    for title, url in links:
+        if len(title) > MAX_SITELINK_TITLE:
+            continue
+
+        words = {stem(word) for word in tokenize(title)}
+        if words and words <= banned:
+            continue
+
+        chosen.append(Sitelink(title=title, url=url))
+        if len(chosen) == MAX_SITELINKS:
+            break
+
+    return tuple(chosen)

@@ -187,6 +187,11 @@ function DraftCard({ draft }: { draft: AdDraftRead }) {
         {draft.callouts.length > 0 && (
           <p className="text-caption text-text-secondary mt-1">{draft.callouts.join(" · ")}</p>
         )}
+        {draft.sitelinks.length > 0 && (
+          <p className="text-caption text-info mt-1">
+            {draft.sitelinks.map((link) => link.title).join(" · ")}
+          </p>
+        )}
       </div>
 
       <dl className="text-caption text-text-secondary mb-2 flex flex-wrap gap-x-4 gap-y-1">
