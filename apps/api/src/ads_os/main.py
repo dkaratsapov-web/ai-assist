@@ -18,6 +18,7 @@ from .api.v1 import (
     organization,
     overview,
     projects,
+    sessions,
 )
 from .config import get_settings
 from .db.session import dispose_engine
@@ -115,6 +116,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(sessions.router, prefix="/api/v1")
     app.include_router(projects.router, prefix="/api/v1")
     app.include_router(audit.router, prefix="/api/v1")
     app.include_router(competitors.router, prefix="/api/v1")

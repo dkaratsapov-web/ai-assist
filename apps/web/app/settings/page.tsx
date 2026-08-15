@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { ApiError, MemberRead, OrganizationRead } from "@ads-os/schemas";
+import type { ApiError, MemberRead, OrganizationRead, SessionRead } from "@ads-os/schemas";
 import {
   Button,
   Card,
@@ -29,6 +29,7 @@ export default function SettingsPage() {
   const isOwner = me.role === "owner";
 
   const [organization, setOrganization] = useState<OrganizationRead | null>(null);
+  const [sessions, setSessions] = useState<SessionRead[]>([]);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -41,10 +42,11 @@ export default function SettingsPage() {
 
     void (async () => {
       try {
-        const result = await api.getOrganization();
+        const [result, mySessions] = await Promise.all([api.getOrganization(), api.listSessions()]);
         if (ignore) return;
         setError(null);
         setOrganization(result);
+        setSessions(mySessions.items);
       } catch (err) {
         if (ignore) return;
         setError(toApiError(err));
@@ -74,6 +76,15 @@ export default function SettingsPage() {
       setAdding(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const endSession = async (sessionId: string) => {
+    try {
+      await api.revokeSession(sessionId);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
     }
   };
 
@@ -183,6 +194,18 @@ export default function SettingsPage() {
                   canManage={isOwner}
                   onToggle={(next) => void setActive(member, next)}
                 />
+              ))}
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
+              title="Ваши входы"
+              description="Устройства, с которых вы сейчас вошли. Если видите чужое — завершите его"
+            />
+            <div className="flex flex-col">
+              {sessions.map((item) => (
+                <SessionRow key={item.id} session={item} onEnd={() => void endSession(item.id)} />
               ))}
             </div>
           </Card>
@@ -338,6 +361,43 @@ function MemberRow({
           </Button>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Строка активного входа.
+ *
+ * Текущий вход помечен и не имеет кнопки завершения: для выхода есть отдельная
+ * кнопка в меню пользователя, которая ещё и убирает куку. Иначе человек
+ * «завершил бы» сам себя и остался с нерабочей вкладкой, не понимая, почему.
+ */
+function SessionRow({ session, onEnd }: { session: SessionRead; onEnd: () => void }) {
+  const seen = session.last_seen_at
+    ? new Date(session.last_seen_at).toLocaleString("ru-RU", {
+        day: "numeric",
+        month: "long",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  return (
+    <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
+      <div className="flex flex-col">
+        <span className="text-body-sm text-text-primary">{session.device}</span>
+        <span className="text-caption text-text-secondary">
+          {session.ip_address ?? "адрес неизвестен"}
+          {seen && ` · был(а) ${seen}`}
+        </span>
+      </div>
+      {session.is_current ? (
+        <StatusBadge tone="success">Это устройство</StatusBadge>
+      ) : (
+        <Button size="sm" variant="ghost" onClick={onEnd}>
+          Завершить
+        </Button>
+      )}
     </div>
   );
 }

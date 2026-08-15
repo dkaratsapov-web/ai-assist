@@ -72,6 +72,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Мои активные входы */
+        get: operations["list_sessions_api_v1_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Завершить вход
+         * @description Завершает один чужой вход.
+         *
+         *     Текущую сессию через этот путь завершить нельзя: для выхода есть отдельная
+         *     кнопка, которая ещё и убирает куку. Иначе человек «завершил бы» сам себя и
+         *     остался с нерабочей сессией в браузере, не понимая, что произошло.
+         */
+        delete: operations["revoke_api_v1_auth_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -991,6 +1032,46 @@ export interface components {
             /** Website Url */
             website_url?: string | null;
         };
+        /** SessionList */
+        SessionList: {
+            /** Items */
+            items: components["schemas"]["SessionRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * SessionRead
+         * @description Один вход.
+         *
+         *     Показывается человеку, чтобы он узнал свои устройства и заметил чужое.
+         *     Полный User-Agent не хранится и не показывается: для узнавания достаточно
+         *     браузера и системы, а точный отпечаток браузера — лишние данные.
+         */
+        SessionRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Device */
+            device: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Ip Address */
+            ip_address: string | null;
+            /** Is Current */
+            is_current: boolean;
+            /** Last Seen At */
+            last_seen_at: string | null;
+        };
         /**
          * StepKey
          * @description Ключи шагов. Порядок объявления — это и есть порядок работы.
@@ -1123,6 +1204,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CurrentUserRead"];
+                };
+            };
+        };
+    };
+    list_sessions_api_v1_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+        };
+    };
+    revoke_api_v1_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

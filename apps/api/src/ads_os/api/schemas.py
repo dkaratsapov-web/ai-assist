@@ -275,6 +275,30 @@ class CurrentUserRead(BaseModel):
     organization_name: str
 
 
+class SessionRead(BaseModel):
+    """Один вход.
+
+    Показывается человеку, чтобы он узнал свои устройства и заметил чужое.
+    Полный User-Agent не хранится и не показывается: для узнавания достаточно
+    браузера и системы, а точный отпечаток браузера — лишние данные.
+    """
+
+    id: uuid.UUID
+    #: Та ли это сессия, из которой пришёл запрос. Её нельзя завершить кнопкой
+    #: «завершить» — для этого есть выход.
+    is_current: bool
+    device: str
+    ip_address: str | None
+    last_seen_at: datetime | None
+    created_at: datetime
+    expires_at: datetime
+
+
+class SessionList(BaseModel):
+    items: list[SessionRead]
+    total: int
+
+
 class MemberCreate(BaseModel):
     """Добавление участника.
 

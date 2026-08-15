@@ -35,6 +35,8 @@ export type CurrentUserRead = Schemas["CurrentUserRead"];
 export type MemberCreate = Schemas["MemberCreate"];
 export type MemberUpdate = Schemas["MemberUpdate"];
 export type MemberRead = Schemas["MemberRead"];
+export type SessionRead = Schemas["SessionRead"];
+export type SessionList = Schemas["SessionList"];
 export type PlanRead = Schemas["PlanRead"];
 export type AuditRead = Schemas["AuditRead"];
 export type AuditHistory = Schemas["AuditHistory"];
@@ -201,6 +203,15 @@ export class ApiClient {
 
   async logout(): Promise<void> {
     await this.requestNoContent("/api/v1/auth/logout", { method: "POST" });
+  }
+
+  /** Мои активные входы. Список личный: чужие сюда не попадают. */
+  listSessions(): Promise<SessionList> {
+    return this.request<SessionList>("/api/v1/auth/sessions");
+  }
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await this.requestNoContent(`/api/v1/auth/sessions/${sessionId}`, { method: "DELETE" });
   }
 
   addMember(payload: MemberCreate): Promise<MemberRead> {

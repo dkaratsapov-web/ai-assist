@@ -1726,6 +1726,89 @@
         "title": "ProjectUpdate",
         "type": "object"
       },
+      "SessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "SessionList",
+        "type": "object"
+      },
+      "SessionRead": {
+        "description": "Один вход.\n\nПоказывается человеку, чтобы он узнал свои устройства и заметил чужое.\nПолный User-Agent не хранится и не показывается: для узнавания достаточно\nбраузера и системы, а точный отпечаток браузера — лишние данные.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "ip_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip Address"
+          },
+          "is_current": {
+            "title": "Is Current",
+            "type": "boolean"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          }
+        },
+        "required": [
+          "id",
+          "is_current",
+          "device",
+          "ip_address",
+          "last_seen_at",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "SessionRead",
+        "type": "object"
+      },
       "StepKey": {
         "description": "Ключи шагов. Порядок объявления — это и есть порядок работы.",
         "enum": [
@@ -1949,6 +2032,64 @@
           }
         },
         "summary": "Текущий пользователь",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sessions": {
+      "get": {
+        "operationId": "list_sessions_api_v1_auth_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Мои активные входы",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/sessions/{session_id}": {
+      "delete": {
+        "description": "Завершает один чужой вход.\n\nТекущую сессию через этот путь завершить нельзя: для выхода есть отдельная\nкнопка, которая ещё и убирает куку. Иначе человек «завершил бы» сам себя и\nостался с нерабочей сессией в браузере, не понимая, что произошло.",
+        "operationId": "revoke_api_v1_auth_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Завершить вход",
         "tags": [
           "auth"
         ]
