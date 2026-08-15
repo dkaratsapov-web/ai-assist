@@ -512,6 +512,24 @@ export interface components {
             /** User Name */
             user_name: string;
         };
+        /**
+         * AuditChangesRead
+         * @description Что изменилось с прошлой проверки.
+         *
+         *     Отвечает на вопрос, ради которого повторную проверку и запускают. Изменение
+         *     балла на него не отвечает: балл мог вырасти, пока критическая проблема
+         *     осталась на месте.
+         */
+        AuditChangesRead: {
+            /** Appeared */
+            appeared: components["schemas"]["AuditIssueRead"][];
+            /** Compared */
+            compared: boolean;
+            /** Fixed */
+            fixed: components["schemas"]["AuditIssueRead"][];
+            /** Remaining */
+            remaining: components["schemas"]["AuditIssueRead"][];
+        };
         /** AuditHistory */
         AuditHistory: {
             /** Items */
@@ -527,6 +545,8 @@ export interface components {
          *     «что именно сломано». За подробностями — в последний результат.
          */
         AuditHistoryItem: {
+            /** Appeared Count */
+            appeared_count: number;
             /** Can Launch */
             can_launch: boolean;
             /**
@@ -538,6 +558,8 @@ export interface components {
             error_reason: string | null;
             /** Finished At */
             finished_at: string | null;
+            /** Fixed Count */
+            fixed_count: number;
             /**
              * Id
              * Format: uuid
@@ -562,6 +584,8 @@ export interface components {
             action: string;
             /** Category */
             category: string;
+            /** Key */
+            key?: string | null;
             /** Severity */
             severity: string;
             /** Title */
@@ -573,6 +597,7 @@ export interface components {
             can_launch: boolean;
             /** Categories */
             categories: components["schemas"]["CategoryRead"][];
+            changes?: components["schemas"]["AuditChangesRead"] | null;
             /**
              * Created At
              * Format: date-time

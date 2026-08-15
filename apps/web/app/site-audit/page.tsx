@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   type ApiError,
+  type AuditChangesRead,
   type AuditHistoryItem,
   type AuditIssueRead,
   type AuditRead,
@@ -260,6 +261,10 @@ function SiteAuditScreen() {
             </Card>
           )}
 
+          {audit?.status === "completed" && audit.changes?.compared && (
+            <ChangesCard changes={audit.changes} />
+          )}
+
           {audit?.status === "completed" && (
             <>
               <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -419,7 +424,21 @@ function HistoryRow({ item }: { item: AuditHistoryItem }) {
 
   return (
     <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
-      <span className="text-body-sm text-text-secondary">{when}</span>
+      <span className="text-body-sm text-text-secondary">
+        {when}
+        {/* Счётчики рядом с датой, а не только изменение балла: «+3» не
+            отличает исправленную мелочь от исправленной блокировки. */}
+        {(item.fixed_count > 0 || item.appeared_count > 0) && (
+          <span className="text-caption text-text-secondary block">
+            {[
+              item.fixed_count > 0 ? `исправлено: ${item.fixed_count}` : null,
+              item.appeared_count > 0 ? `появилось: ${item.appeared_count}` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
+        )}
+      </span>
 
       <div className="flex items-center gap-3">
         {item.status === "completed" ? (
@@ -442,6 +461,78 @@ function HistoryRow({ item }: { item: AuditHistoryItem }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Что изменилось с прошлой проверки.
+ *
+ * Показывается выше оценки: человек, нажавший «Проверить заново», пришёл
+ * именно за этим ответом, а не за баллом. Балл мог вырасти на три пункта, пока
+ * критическая проблема осталась на месте.
+ */
+function ChangesCard({ changes }: { changes: AuditChangesRead }) {
+  const nothing = changes.fixed.length === 0 && changes.appeared.length === 0;
+
+  if (nothing) {
+    return (
+      <Card>
+        <p className="text-body-sm text-text-secondary">
+          С прошлой проверки список замечаний не изменился.
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card
+      className={
+        // Появившееся замечание важнее исправленного: обычно это значит, что
+        // на сайте что-то сломали. Поэтому предупреждающий фон включает именно
+        // оно, а не отсутствие исправлений.
+        changes.appeared.length > 0 ? "border-warning-border bg-warning-bg" : ""
+      }
+    >
+      <CardHeader title="Что изменилось с прошлой проверки" />
+      <div className="flex flex-col gap-3">
+        {changes.appeared.length > 0 && (
+          <ChangeGroup title="Появилось" issues={changes.appeared} tone="warning" />
+        )}
+        {changes.fixed.length > 0 && (
+          <ChangeGroup title="Исправлено" issues={changes.fixed} tone="success" />
+        )}
+        {changes.remaining.length > 0 && (
+          <p className="text-caption text-text-secondary">
+            Осталось без изменений: {changes.remaining.length}
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function ChangeGroup({
+  title,
+  issues,
+  tone,
+}: {
+  title: string;
+  issues: AuditIssueRead[];
+  tone: Tone;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <StatusBadge tone={tone} className="w-fit">
+        {title}: {issues.length}
+      </StatusBadge>
+      <ul className="flex flex-col gap-0.5">
+        {issues.map((issue) => (
+          <li key={issue.key ?? issue.title} className="text-body-sm text-text-primary">
+            {issue.title}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

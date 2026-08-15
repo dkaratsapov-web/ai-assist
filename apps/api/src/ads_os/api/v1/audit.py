@@ -14,10 +14,12 @@ from ...models import Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import record
+from ...services.audit import Issue, compare_issues, issues_from_stored
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
+    AuditChangesRead,
     AuditHistory,
     AuditHistoryItem,
     AuditIssueRead,
@@ -151,16 +153,31 @@ async def get_audit(
     await ProjectRepository(session, ctx).get_or_404(project_id)
 
     audits = AuditRepository(session, ctx)
-    latest = (
-        await session.execute(
-            audits.scoped()
-            .where(SiteAudit.project_id == project_id)
-            .order_by(SiteAudit.created_at.desc())
-            .limit(1)
+    # Читаются две последние записи, а не одна: свежий результат почти всегда
+    # смотрят с вопросом «стало ли лучше», и ответ на него требует предыдущей.
+    rows = list(
+        (
+            await session.execute(
+                audits.scoped()
+                .where(SiteAudit.project_id == project_id)
+                .order_by(SiteAudit.created_at.desc())
+                .limit(2)
+            )
         )
-    ).scalar_one_or_none()
+        .scalars()
+        .all()
+    )
 
-    return _to_read(latest) if latest else None
+    if not rows:
+        return None
+
+    latest = rows[0]
+    previous = next(
+        (row for row in rows[1:] if row.status is ModuleStatus.COMPLETED),
+        None,
+    )
+
+    return _to_read(latest, previous)
 
 
 @router.get(
@@ -228,6 +245,15 @@ def _with_deltas(rows: list[SiteAudit]) -> list[AuditHistoryItem]:
             else None
         )
 
+        changes = (
+            compare_issues(
+                issues_from_stored(previous.issues or []),
+                issues_from_stored(audit.issues or []),
+            )
+            if audit.status is ModuleStatus.COMPLETED and previous is not None
+            else None
+        )
+
         items.append(
             AuditHistoryItem(
                 id=audit.id,
@@ -241,13 +267,34 @@ def _with_deltas(rows: list[SiteAudit]) -> list[AuditHistoryItem]:
                 finished_at=audit.finished_at,
                 created_at=audit.created_at or utcnow(),
                 score_delta=delta,
+                fixed_count=len(changes.fixed) if changes else 0,
+                appeared_count=len(changes.appeared) if changes else 0,
             )
         )
 
     return items
 
 
-def _to_read(audit: SiteAudit) -> AuditRead:
+def _to_read(audit: SiteAudit, previous: SiteAudit | None = None) -> AuditRead:
+    changes: AuditChangesRead | None = None
+
+    if audit.status is ModuleStatus.COMPLETED:
+        if previous is None:
+            # Первая завершённая проверка. «Сравнение не проводилось» и «ничего
+            # не изменилось» — разные вещи, и путать их нельзя.
+            changes = AuditChangesRead(compared=False, fixed=[], appeared=[], remaining=[])
+        else:
+            diff = compare_issues(
+                issues_from_stored(previous.issues or []),
+                issues_from_stored(audit.issues or []),
+            )
+            changes = AuditChangesRead(
+                compared=True,
+                fixed=[_issue(i) for i in diff.fixed],
+                appeared=[_issue(i) for i in diff.appeared],
+                remaining=[_issue(i) for i in diff.remaining],
+            )
+
     return AuditRead(
         id=audit.id,
         project_id=audit.project_id,
@@ -261,7 +308,18 @@ def _to_read(audit: SiteAudit) -> AuditRead:
         categories=[CategoryRead(**c) for c in (audit.categories or [])],
         issues=[AuditIssueRead(**i) for i in (audit.issues or [])],
         can_launch=not any(i.get("severity") == "critical" for i in (audit.issues or [])),
+        changes=changes,
         started_at=audit.started_at,
         finished_at=audit.finished_at,
         created_at=audit.created_at or utcnow(),
+    )
+
+
+def _issue(issue: Issue) -> AuditIssueRead:
+    return AuditIssueRead(
+        key=issue.key.value,
+        category=issue.category.value,
+        severity=issue.severity.value,
+        title=issue.title,
+        action=issue.action,
     )

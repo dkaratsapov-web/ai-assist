@@ -415,10 +415,33 @@ class AuditIssueRead(BaseModel):
     Поле `action` обязательное: находка без понятного действия бесполезна.
     """
 
+    #: Устойчивое имя проверки. Пусто у записей, сделанных до его появления.
+    key: str | None = None
     category: str
     severity: str
     title: str
     action: str
+
+
+class AuditChangesRead(BaseModel):
+    """Что изменилось с прошлой проверки.
+
+    Отвечает на вопрос, ради которого повторную проверку и запускают. Изменение
+    балла на него не отвечает: балл мог вырасти, пока критическая проблема
+    осталась на месте.
+    """
+
+    #: Сравнение проводилось. False означает, что сравнивать не с чем — это
+    #: первая завершённая проверка, а не «изменений нет».
+    compared: bool
+    # Списки обязательны, а не со значением по умолчанию: иначе в контракте они
+    # становятся необязательными, и клиент вынужден проверять каждый на
+    # существование — при том, что сервер всегда их присылает.
+    fixed: list[AuditIssueRead]
+    #: Появившиеся замечания. Их выделяют отдельно: обычно это значит, что на
+    #: сайте что-то сломали по дороге.
+    appeared: list[AuditIssueRead]
+    remaining: list[AuditIssueRead]
 
 
 class AuditHistoryItem(BaseModel):
@@ -439,6 +462,9 @@ class AuditHistoryItem(BaseModel):
     #: Насколько балл изменился по сравнению с предыдущей завершённой проверкой.
     #: None у самой первой и у незавершённых — сравнивать не с чем.
     score_delta: int | None
+    #: Сколько замечаний исправлено и сколько появилось с прошлой проверки.
+    fixed_count: int
+    appeared_count: int
 
 
 class AuditHistory(BaseModel):
@@ -460,6 +486,8 @@ class AuditRead(BaseModel):
     issues: list[AuditIssueRead]
     #: Можно ли запускать рекламу. Критические находки это запрещают (v0.3 §15).
     can_launch: bool
+    #: Что изменилось с прошлой завершённой проверки. None у незавершённых.
+    changes: AuditChangesRead | None = None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime

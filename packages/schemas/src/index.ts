@@ -54,6 +54,7 @@ export type ActivityList = Schemas["ActivityList"];
 export type ActivityAction = Schemas["ActivityAction"];
 export type CategoryRead = Schemas["CategoryRead"];
 export type AuditIssueRead = Schemas["AuditIssueRead"];
+export type AuditChangesRead = Schemas["AuditChangesRead"];
 export type ModuleStatus = Schemas["ModuleStatus"];
 export type Availability = Schemas["Availability"];
 export type EconomicsMode = Schemas["EconomicsMode"];

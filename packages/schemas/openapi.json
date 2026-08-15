@@ -99,6 +99,44 @@
         "title": "ActivityRead",
         "type": "object"
       },
+      "AuditChangesRead": {
+        "description": "Что изменилось с прошлой проверки.\n\nОтвечает на вопрос, ради которого повторную проверку и запускают. Изменение\nбалла на него не отвечает: балл мог вырасти, пока критическая проблема\nосталась на месте.",
+        "properties": {
+          "appeared": {
+            "items": {
+              "$ref": "#/components/schemas/AuditIssueRead"
+            },
+            "title": "Appeared",
+            "type": "array"
+          },
+          "compared": {
+            "title": "Compared",
+            "type": "boolean"
+          },
+          "fixed": {
+            "items": {
+              "$ref": "#/components/schemas/AuditIssueRead"
+            },
+            "title": "Fixed",
+            "type": "array"
+          },
+          "remaining": {
+            "items": {
+              "$ref": "#/components/schemas/AuditIssueRead"
+            },
+            "title": "Remaining",
+            "type": "array"
+          }
+        },
+        "required": [
+          "compared",
+          "fixed",
+          "appeared",
+          "remaining"
+        ],
+        "title": "AuditChangesRead",
+        "type": "object"
+      },
       "AuditHistory": {
         "properties": {
           "items": {
@@ -123,6 +161,10 @@
       "AuditHistoryItem": {
         "description": "Одна прошлая проверка.\n\nБез списка находок: история отвечает на вопрос «стало лучше или хуже», а не\n«что именно сломано». За подробностями — в последний результат.",
         "properties": {
+          "appeared_count": {
+            "title": "Appeared Count",
+            "type": "integer"
+          },
           "can_launch": {
             "title": "Can Launch",
             "type": "boolean"
@@ -154,6 +196,10 @@
               }
             ],
             "title": "Finished At"
+          },
+          "fixed_count": {
+            "title": "Fixed Count",
+            "type": "integer"
           },
           "id": {
             "format": "uuid",
@@ -206,7 +252,9 @@
           "error_reason",
           "finished_at",
           "created_at",
-          "score_delta"
+          "score_delta",
+          "fixed_count",
+          "appeared_count"
         ],
         "title": "AuditHistoryItem",
         "type": "object"
@@ -221,6 +269,17 @@
           "category": {
             "title": "Category",
             "type": "string"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
           },
           "severity": {
             "title": "Severity",
@@ -252,6 +311,16 @@
             },
             "title": "Categories",
             "type": "array"
+          },
+          "changes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AuditChangesRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",

@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import urlsplit
@@ -34,6 +35,40 @@ class Category(StrEnum):
     CONVERSION = "conversion"
     TRUST = "trust"
     TRACKING = "tracking"
+
+
+class IssueKey(StrEnum):
+    """Устойчивое имя проверки.
+
+    Заголовок находки для этого не годится: он меняется вместе с формулировкой
+    и иногда содержит число («открывается за 4,2 с»). Сравнить две проверки по
+    заголовкам нельзя — каждая выглядела бы новой.
+
+    Ключ живёт дольше текста: по нему видно, что замечание исправлено, а не
+    просто переформулировано.
+    """
+
+    SERVER_ERROR = "server_error"
+    PAGE_UNAVAILABLE = "page_unavailable"
+    NO_HTTPS = "no_https"
+    NO_MOBILE = "no_mobile"
+    NO_TITLE = "no_title"
+    SLOW = "slow"
+    VERY_SLOW = "very_slow"
+
+    NO_H1 = "no_h1"
+    NO_PRICES = "no_prices"
+
+    NO_CONTACTS = "no_contacts"
+    NO_FORM = "no_form"
+    LONG_FORM = "long_form"
+    PHONE_NOT_CLICKABLE = "phone_not_clickable"
+    NO_CTA = "no_cta"
+
+    NO_TRUST_SIGNALS = "no_trust_signals"
+    NO_PRIVACY_POLICY = "no_privacy_policy"
+
+    NO_METRICA = "no_metrica"
 
 
 class Verdict(StrEnum):
@@ -58,6 +93,8 @@ CATEGORY_WEIGHTS: dict[Category, int] = {
 
 @dataclass(frozen=True, slots=True)
 class Issue:
+    #: Что именно проверялось. По нему находки сопоставляются между проверками.
+    key: IssueKey
     category: Category
     severity: Severity
     title: str
@@ -295,6 +332,7 @@ def _technical(
     if status_code >= 500:
         issues.append(
             Issue(
+                IssueKey.SERVER_ERROR,
                 Category.TECHNICAL,
                 Severity.CRITICAL,
                 f"Сайт отвечает ошибкой {status_code}",
@@ -305,6 +343,7 @@ def _technical(
     elif status_code >= 400:
         issues.append(
             Issue(
+                IssueKey.PAGE_UNAVAILABLE,
                 Category.TECHNICAL,
                 Severity.CRITICAL,
                 f"Страница недоступна: код {status_code}",
@@ -318,6 +357,7 @@ def _technical(
     if urlsplit(url).scheme != "https":
         issues.append(
             Issue(
+                IssueKey.NO_HTTPS,
                 Category.TECHNICAL,
                 Severity.CRITICAL,
                 "Сайт работает без HTTPS",
@@ -332,6 +372,7 @@ def _technical(
     if not s.has_viewport:
         issues.append(
             Issue(
+                IssueKey.NO_MOBILE,
                 Category.TECHNICAL,
                 Severity.WARNING,
                 "Нет мобильной вёрстки",
@@ -345,6 +386,7 @@ def _technical(
     if not s.title:
         issues.append(
             Issue(
+                IssueKey.NO_TITLE,
                 Category.TECHNICAL,
                 Severity.WARNING,
                 "Нет заголовка страницы",
@@ -358,6 +400,7 @@ def _technical(
         if elapsed_ms >= VERY_SLOW_RESPONSE_MS:
             issues.append(
                 Issue(
+                    IssueKey.VERY_SLOW,
                     Category.TECHNICAL,
                     Severity.WARNING,
                     f"Сайт открывается очень долго: {seconds:.1f} с",
@@ -369,6 +412,7 @@ def _technical(
         elif elapsed_ms >= SLOW_RESPONSE_MS:
             issues.append(
                 Issue(
+                    IssueKey.SLOW,
                     Category.TECHNICAL,
                     Severity.RECOMMENDATION,
                     f"Сайт открывается медленно: {seconds:.1f} с",
@@ -390,6 +434,7 @@ def _offer(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if not s.h1:
         issues.append(
             Issue(
+                IssueKey.NO_H1,
                 Category.OFFER,
                 Severity.WARNING,
                 "Нет заголовка H1",
@@ -403,6 +448,7 @@ def _offer(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if s.prices == 0:
         issues.append(
             Issue(
+                IssueKey.NO_PRICES,
                 Category.OFFER,
                 Severity.RECOMMENDATION,
                 "На странице нет цен",
@@ -431,6 +477,7 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
         # Некуда оставить заявку — реклама будет расходовать бюджет впустую.
         issues.append(
             Issue(
+                IssueKey.NO_CONTACTS,
                 Category.CONVERSION,
                 Severity.CRITICAL,
                 "Нет ни одного способа связаться",
@@ -443,6 +490,7 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if s.forms == 0:
         issues.append(
             Issue(
+                IssueKey.NO_FORM,
                 Category.CONVERSION,
                 Severity.WARNING,
                 "Нет формы заявки",
@@ -456,6 +504,7 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if s.max_form_fields > MAX_COMFORTABLE_FORM_FIELDS:
         issues.append(
             Issue(
+                IssueKey.LONG_FORM,
                 Category.CONVERSION,
                 Severity.RECOMMENDATION,
                 f"В форме {s.max_form_fields} полей",
@@ -468,6 +517,7 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if s.phones and not s.has_tel_link:
         issues.append(
             Issue(
+                IssueKey.PHONE_NOT_CLICKABLE,
                 Category.CONVERSION,
                 Severity.RECOMMENDATION,
                 "Телефон нельзя нажать",
@@ -485,6 +535,7 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if s.cta_buttons == 0:
         issues.append(
             Issue(
+                IssueKey.NO_CTA,
                 Category.CONVERSION,
                 Severity.WARNING,
                 "Нет призыва к действию",
@@ -505,6 +556,7 @@ def _trust(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if not s.trust_words:
         issues.append(
             Issue(
+                IssueKey.NO_TRUST_SIGNALS,
                 Category.TRUST,
                 Severity.RECOMMENDATION,
                 "Нет признаков доверия",
@@ -526,6 +578,7 @@ def _trust(s: PageSignals, issues: list[Issue]) -> CategoryResult:
         # просто не запустится, поэтому это блокирующая находка.
         issues.append(
             Issue(
+                IssueKey.NO_PRIVACY_POLICY,
                 Category.TRUST,
                 Severity.CRITICAL,
                 "Форма есть, а политики обработки данных нет",
@@ -547,6 +600,7 @@ def _tracking(s: PageSignals, issues: list[Issue]) -> CategoryResult:
         # источников. Это блокирующая проблема, а не замечание.
         issues.append(
             Issue(
+                IssueKey.NO_METRICA,
                 Category.TRACKING,
                 Severity.CRITICAL,
                 "Не установлена Яндекс Метрика",
@@ -565,3 +619,71 @@ def _tracking(s: PageSignals, issues: list[Issue]) -> CategoryResult:
 
 def _clamp(value: int) -> int:
     return max(0, min(100, value))
+
+
+@dataclass(frozen=True, slots=True)
+class IssueChanges:
+    """Что изменилось между двумя проверками.
+
+    Отвечает на вопрос, ради которого повторный аудит и запускают: помогли
+    доработки или нет. Изменение балла на это не отвечает — балл мог вырасти на
+    три пункта, пока критическая проблема осталась на месте.
+    """
+
+    #: Замечания, которых больше нет.
+    fixed: tuple[Issue, ...] = ()
+    #: Замечания, которых раньше не было. Их появление важнее исправлений:
+    #: обычно это значит, что сайт что-то сломал по дороге.
+    appeared: tuple[Issue, ...] = ()
+    #: Замечания, которые были и остались.
+    remaining: tuple[Issue, ...] = ()
+
+
+def compare_issues(previous: Sequence[Issue], current: Sequence[Issue]) -> IssueChanges:
+    """Сопоставляет находки двух проверок по ключам.
+
+    Сравнение идёт по ключу, а не по заголовку: заголовок «Сайт открывается за
+    4,2 с» меняется при каждой проверке, и по нему любая находка выглядела бы
+    одновременно исправленной и новой.
+    """
+    previous_by_key = {issue.key: issue for issue in previous}
+    current_by_key = {issue.key: issue for issue in current}
+
+    return IssueChanges(
+        fixed=tuple(issue for key, issue in previous_by_key.items() if key not in current_by_key),
+        appeared=tuple(
+            issue for key, issue in current_by_key.items() if key not in previous_by_key
+        ),
+        remaining=tuple(issue for key, issue in current_by_key.items() if key in previous_by_key),
+    )
+
+
+def issues_from_stored(rows: Iterable[dict[str, object]]) -> tuple[Issue, ...]:
+    """Восстанавливает находки из сохранённого вида.
+
+    Записи, сделанные до появления ключей, пропускаются: у них нет устойчивого
+    имени, и сопоставить их не с чем. Молча подставлять им заголовок вместо
+    ключа нельзя — сравнение показало бы исправления, которых не было.
+    """
+    restored: list[Issue] = []
+
+    for row in rows:
+        key = row.get("key")
+        if not key:
+            continue
+        try:
+            restored.append(
+                Issue(
+                    key=IssueKey(str(key)),
+                    category=Category(str(row["category"])),
+                    severity=Severity(str(row["severity"])),
+                    title=str(row["title"]),
+                    action=str(row["action"]),
+                )
+            )
+        except (KeyError, ValueError):
+            # Незнакомая проверка — из будущей или уже удалённой версии.
+            # Пропускаем её, а не роняем всю историю.
+            continue
+
+    return tuple(restored)

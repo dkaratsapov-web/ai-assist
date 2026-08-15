@@ -7,7 +7,15 @@
 
 from __future__ import annotations
 
-from ads_os.services.audit import Category, Severity, Verdict, audit_page
+from ads_os.services.audit import (
+    Category,
+    IssueKey,
+    Severity,
+    Verdict,
+    audit_page,
+    compare_issues,
+    issues_from_stored,
+)
 
 GOOD_PAGE = """
 <html><head>
@@ -227,3 +235,76 @@ class TestУдобствоЗаявки:
         result = audit_page("https://example.com/", html)
 
         assert not any("нажать" in i.title for i in result.issues)
+
+
+class TestСравнениеПроверок:
+    """Ради этого повторный аудит и запускают: помогли доработки или нет."""
+
+    def test_исправленное_попадает_в_исправленные(self) -> None:
+        broken = GOOD_PAGE.replace(
+            '<meta name="viewport" content="width=device-width, initial-scale=1">', ""
+        )
+        before = audit_page("https://example.com/", broken)
+        after = audit_page("https://example.com/", GOOD_PAGE)
+
+        changes = compare_issues(before.issues, after.issues)
+
+        assert IssueKey.NO_MOBILE in {i.key for i in changes.fixed}
+
+    def test_новое_попадает_в_появившиеся(self) -> None:
+        """Появление важнее исправления: обычно это сломали что-то по дороге."""
+        before = audit_page("https://example.com/", GOOD_PAGE)
+        broken = GOOD_PAGE.replace("<script>ym(12345678, 'init', {});</script>", "")
+        after = audit_page("https://example.com/", broken)
+
+        changes = compare_issues(before.issues, after.issues)
+
+        assert IssueKey.NO_METRICA in {i.key for i in changes.appeared}
+        # Остальное не должно поехать заодно: сломали одно, а не всё сразу.
+        assert len(changes.appeared) == 1
+
+    def test_неисправленное_остаётся_в_остальных(self) -> None:
+        result = audit_page("https://example.com/", BARE_PAGE)
+
+        changes = compare_issues(result.issues, result.issues)
+
+        assert not changes.fixed
+        assert not changes.appeared
+        assert len(changes.remaining) == len(result.issues)
+
+    def test_меняющийся_заголовок_не_считается_новой_находкой(self) -> None:
+        """«Открывается за 4,2 с» и «за 5,1 с» — одно замечание, а не два."""
+        before = audit_page("https://example.com/", GOOD_PAGE, elapsed_ms=4200)
+        after = audit_page("https://example.com/", GOOD_PAGE, elapsed_ms=5100)
+
+        changes = compare_issues(before.issues, after.issues)
+
+        assert not changes.fixed
+        assert not changes.appeared
+
+    def test_у_каждой_находки_есть_ключ(self) -> None:
+        for html in (GOOD_PAGE, BARE_PAGE):
+            for issue in audit_page("https://example.com/", html, status_code=500).issues:
+                assert isinstance(issue.key, IssueKey)
+
+
+class TestВосстановлениеИзХранилища:
+    def test_записи_без_ключа_пропускаются(self) -> None:
+        """Иначе старые проверки выглядели бы полностью исправленными."""
+        stored = [
+            {"category": "technical", "severity": "warning", "title": "Старое", "action": "..."}
+        ]
+
+        assert issues_from_stored(stored) == ()
+
+    def test_незнакомая_проверка_не_роняет_историю(self) -> None:
+        stored = [
+            {"key": "проверка_из_будущего", "category": "technical", "severity": "warning",
+             "title": "?", "action": "..."},
+            {"key": "no_https", "category": "technical", "severity": "critical",
+             "title": "Нет HTTPS", "action": "Подключите сертификат."},
+        ]
+
+        restored = issues_from_stored(stored)
+
+        assert [i.key for i in restored] == [IssueKey.NO_HTTPS]
