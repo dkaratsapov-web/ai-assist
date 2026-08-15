@@ -370,6 +370,31 @@ class AuditIssueRead(BaseModel):
     action: str
 
 
+class AuditHistoryItem(BaseModel):
+    """Одна прошлая проверка.
+
+    Без списка находок: история отвечает на вопрос «стало лучше или хуже», а не
+    «что именно сломано». За подробностями — в последний результат.
+    """
+
+    id: uuid.UUID
+    status: ModuleStatus
+    score: int | None
+    verdict: str | None
+    can_launch: bool
+    error_reason: str | None
+    finished_at: datetime | None
+    created_at: datetime
+    #: Насколько балл изменился по сравнению с предыдущей завершённой проверкой.
+    #: None у самой первой и у незавершённых — сравнивать не с чем.
+    score_delta: int | None
+
+
+class AuditHistory(BaseModel):
+    items: list[AuditHistoryItem]
+    total: int
+
+
 class AuditRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, select
 
 from ...db.base import utcnow
@@ -15,7 +15,13 @@ from ...models.audit import ModuleStatus
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
-from ..schemas import AuditIssueRead, AuditRead, CategoryRead
+from ..schemas import (
+    AuditHistory,
+    AuditHistoryItem,
+    AuditIssueRead,
+    AuditRead,
+    CategoryRead,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +149,90 @@ async def get_audit(
     ).scalar_one_or_none()
 
     return _to_read(latest) if latest else None
+
+
+@router.get(
+    "/{project_id}/audits",
+    response_model=AuditHistory,
+    summary="История проверок сайта",
+)
+async def get_audit_history(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    ctx: TenantDep,
+    limit: int = Query(default=20, ge=1, le=100),
+) -> AuditHistory:
+    """История запусков (v0.3 §62).
+
+    Отвечает на один вопрос: помогли доработки сайта или нет. Поэтому рядом с
+    баллом показывается его изменение относительно прошлой завершённой
+    проверки — само по себе число «74» об этом ничего не говорит.
+    """
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    audits = AuditRepository(session, ctx)
+    rows = list(
+        (
+            await session.execute(
+                audits.scoped()
+                .where(SiteAudit.project_id == project_id)
+                .order_by(SiteAudit.created_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    return AuditHistory(items=_with_deltas(rows), total=len(rows))
+
+
+def _with_deltas(rows: list[SiteAudit]) -> list[AuditHistoryItem]:
+    """Считает изменение балла относительно предыдущей завершённой проверки.
+
+    Неудачные запуски в сравнении не участвуют: сайт, который не открылся, — не
+    повод показать падение на семьдесят пунктов.
+    """
+    items: list[AuditHistoryItem] = []
+
+    # Записи идут от новых к старым, поэтому предыдущая по времени — следующая
+    # в списке.
+    for index, audit in enumerate(rows):
+        previous = next(
+            (
+                other
+                for other in rows[index + 1 :]
+                if other.status is ModuleStatus.COMPLETED and other.score is not None
+            ),
+            None,
+        )
+
+        delta = (
+            audit.score - previous.score
+            if audit.status is ModuleStatus.COMPLETED
+            and audit.score is not None
+            and previous is not None
+            and previous.score is not None
+            else None
+        )
+
+        items.append(
+            AuditHistoryItem(
+                id=audit.id,
+                status=audit.status,
+                score=audit.score,
+                verdict=audit.verdict,
+                can_launch=not any(
+                    i.get("severity") == "critical" for i in (audit.issues or [])
+                ),
+                error_reason=audit.error_reason,
+                finished_at=audit.finished_at,
+                created_at=audit.created_at or utcnow(),
+                score_delta=delta,
+            )
+        )
+
+    return items
 
 
 def _to_read(audit: SiteAudit) -> AuditRead:

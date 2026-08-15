@@ -37,6 +37,8 @@ export type MemberUpdate = Schemas["MemberUpdate"];
 export type MemberRead = Schemas["MemberRead"];
 export type PlanRead = Schemas["PlanRead"];
 export type AuditRead = Schemas["AuditRead"];
+export type AuditHistory = Schemas["AuditHistory"];
+export type AuditHistoryItem = Schemas["AuditHistoryItem"];
 export type CompetitorRead = Schemas["CompetitorRead"];
 export type CompetitorList = Schemas["CompetitorList"];
 export type CompetitorCreate = Schemas["CompetitorCreate"];
@@ -281,6 +283,11 @@ export class ApiClient {
    */
   getAudit(projectId: string): Promise<AuditRead | null> {
     return this.request<AuditRead | null>(`/api/v1/projects/${projectId}/audit`);
+  }
+
+  /** История проверок: помогли доработки сайта или нет (v0.3 §62). */
+  getAuditHistory(projectId: string): Promise<AuditHistory> {
+    return this.request<AuditHistory>(`/api/v1/projects/${projectId}/audits`);
   }
 
   /**

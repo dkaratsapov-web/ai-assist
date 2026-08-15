@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   type ApiError,
+  type AuditHistoryItem,
   type AuditIssueRead,
   type AuditRead,
   type CategoryRead,
@@ -73,6 +74,7 @@ function SiteAuditScreen() {
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [audit, setAudit] = useState<AuditRead | null>(null);
+  const [history, setHistory] = useState<AuditHistoryItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [starting, setStarting] = useState(false);
@@ -114,15 +116,23 @@ function SiteAuditScreen() {
     if (projectRef.current !== selectedId) {
       projectRef.current = selectedId;
       setAudit(null);
+      setHistory([]);
       setLoaded(false);
     }
 
     const poll = async () => {
       try {
-        const result = await api.getAudit(selectedId);
+        // История читается вместе с последним результатом: они всегда
+        // показываются рядом, и второй запрос отдельным эффектом дал бы
+        // мигание — сначала новый результат, потом устаревшая история.
+        const [result, past] = await Promise.all([
+          api.getAudit(selectedId),
+          api.getAuditHistory(selectedId),
+        ]);
         if (ignore) return;
         setError(null);
         setAudit(result);
+        setHistory(past.items);
         setLoaded(true);
         if (isRunning(result)) {
           timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
@@ -306,6 +316,19 @@ function SiteAuditScreen() {
                 </div>
               </Card>
 
+              {/* История показывается только когда есть с чем сравнивать:
+                  одна строка «единственная проверка» пользы не несёт. */}
+              {history.length > 1 && (
+                <Card>
+                  <CardHeader title="История проверок" description="Помогли ли доработки сайта" />
+                  <div className="flex flex-col">
+                    {history.map((item) => (
+                      <HistoryRow key={item.id} item={item} />
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader title="Проверенная страница" />
                 <dl className="text-body-sm grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -376,6 +399,49 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex flex-col">
       <dt className="text-caption text-text-secondary">{label}</dt>
       <dd className="text-text-primary break-all">{value}</dd>
+    </div>
+  );
+}
+
+/**
+ * Строка истории.
+ *
+ * Балл сам по себе ничего не говорит: «74» — это лучше или хуже, чем было?
+ * Поэтому рядом всегда стоит изменение, и именно оно набрано заметнее.
+ */
+function HistoryRow({ item }: { item: AuditHistoryItem }) {
+  const when = new Date(item.finished_at ?? item.created_at).toLocaleString("ru-RU", {
+    day: "numeric",
+    month: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  return (
+    <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
+      <span className="text-body-sm text-text-secondary">{when}</span>
+
+      <div className="flex items-center gap-3">
+        {item.status === "completed" ? (
+          <>
+            <span className="text-body-sm text-text-primary tabular-nums">{item.score} из 100</span>
+            {item.score_delta !== null && item.score_delta !== undefined && (
+              <StatusBadge
+                tone={
+                  item.score_delta > 0 ? "success" : item.score_delta < 0 ? "critical" : "neutral"
+                }
+              >
+                {item.score_delta > 0 ? `+${item.score_delta}` : String(item.score_delta)}
+              </StatusBadge>
+            )}
+            {!item.can_launch && <StatusBadge tone="warning">Запуск закрыт</StatusBadge>}
+          </>
+        ) : (
+          <span className="text-body-sm text-text-secondary">
+            {item.error_reason ?? "Проверка не завершена"}
+          </span>
+        )}
+      </div>
     </div>
   );
 }
