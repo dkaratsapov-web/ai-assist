@@ -77,10 +77,15 @@ class TestСлужебные:
 
 
 class TestДоступ:
-    async def test_без_контекста_организации_запрет(self, client: AsyncClient) -> None:
+    async def test_без_входа_запрет(self, client: AsyncClient) -> None:
+        """401, а не 403: интерфейс по этому коду отправляет на страницу входа.
+
+        403 означал бы «вы вошли, но вам нельзя» — и человек остался бы на
+        экране ошибки вместо формы входа.
+        """
         response = await client.get("/api/v1/projects")
-        assert response.status_code == 403
-        assert response.json()["error_code"] == "forbidden"
+        assert response.status_code == 401
+        assert response.json()["error_code"] == "not_authenticated"
 
     async def test_роль_viewer_не_создаёт_проекты(
         self,

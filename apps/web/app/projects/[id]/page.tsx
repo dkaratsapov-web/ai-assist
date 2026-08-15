@@ -19,7 +19,7 @@ import {
 } from "@ads-os/ui";
 import { IconChart, IconGlobe, IconUsers } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
-import { createApiClient, isApiConfigured } from "@/lib/api";
+import { createApiClient } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
 
 /** Куда ведёт шаг. Шаги без готового экрана здесь не перечислены — и не
@@ -33,7 +33,6 @@ const STEP_LINKS = {
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const api = useMemo(() => createApiClient(), []);
-  const configured = isApiConfigured();
 
   const [project, setProject] = useState<ProjectRead | null>(null);
   const [progress, setProgress] = useState<ProgressRead | null>(null);
@@ -48,7 +47,6 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const router = useRouter();
 
   useEffect(() => {
-    if (!configured) return;
     let ignore = false;
 
     void (async () => {
@@ -72,7 +70,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     return () => {
       ignore = true;
     };
-  }, [api, configured, id, reloadToken]);
+  }, [api, id, reloadToken]);
 
   const openEditor = () => {
     if (!project) return;

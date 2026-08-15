@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,7 +34,22 @@ class User(UUIDPrimaryKey, Timestamps, SoftDelete, OrganizationScoped, Base):
     # с MFA (v0.3 §91). Поле-заглушка не заводится намеренно, чтобы не возникло
     # соблазна положить в него что-нибудь временное.
 
+    #: Идентификатор в Яндекс ID. Заполняется при первом входе.
+    #:
+    #: После этого сопоставление идёт по нему, а не по почте: почту в аккаунте
+    #: можно сменить, и привязка по ней однажды тихо перестанет работать.
+    yandex_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    #: Включена ли двухфакторная аутентификация. Вход идёт через Яндекс ID,
+    #: поэтому значение приходит оттуда и нами не устанавливается (v0.3 §91).
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    #: Отключённый участник не может войти, а его сессии отзываются. Удаление
+    #: не используется: история действий должна оставаться связанной с автором.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     organization: Mapped[Organization] = relationship(back_populates="users")

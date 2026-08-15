@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { AuthGate } from "@/components/AuthGate";
 
 /**
  * Один основной шрифт, без смешения семейств (v0.3 §120).
@@ -28,7 +29,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ru" className={inter.variable}>
-      <body>{children}</body>
+      <body>
+        {/* Вход проверяется один раз для всего приложения, а не на каждой
+            странице по отдельности: забыть обёртку на одной странице — значит
+            открыть её всем. */}
+        <AuthGate>{children}</AuthGate>
+      </body>
     </html>
   );
 }

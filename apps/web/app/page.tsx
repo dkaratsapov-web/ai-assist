@@ -16,7 +16,7 @@ import {
 } from "@ads-os/ui";
 import { IconFolder, IconInfo } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
-import { createApiClient, isApiConfigured } from "@/lib/api";
+import { createApiClient } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
 
 /**
@@ -33,14 +33,12 @@ import { toApiError } from "@/lib/errors";
  */
 export default function DashboardPage() {
   const api = useMemo(() => createApiClient(), []);
-  const configured = isApiConfigured();
 
   const [overview, setOverview] = useState<OverviewRead | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
   useEffect(() => {
-    if (!configured) return;
     let ignore = false;
 
     void (async () => {
@@ -58,7 +56,7 @@ export default function DashboardPage() {
     return () => {
       ignore = true;
     };
-  }, [api, configured, reloadToken]);
+  }, [api, reloadToken]);
 
   const projects = overview?.projects ?? [];
   const withSite = projects.filter((p) => p.website_url).length;
@@ -77,14 +75,7 @@ export default function DashboardPage() {
         </Link>
       }
     >
-      {!configured ? (
-        <Card>
-          <EmptyState
-            title="Стенд не настроен"
-            description="Не заданы NEXT_PUBLIC_DEMO_ORG_ID и NEXT_PUBLIC_DEMO_USER_ID. Запустите backend и скрипт seed_demo.py."
-          />
-        </Card>
-      ) : error ? (
+      {error ? (
         <Card>
           <ErrorState
             title="Не удалось загрузить сводку"

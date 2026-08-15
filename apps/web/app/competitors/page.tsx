@@ -24,7 +24,7 @@ import {
 } from "@ads-os/ui";
 import { IconUsers } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
-import { createApiClient, isApiConfigured } from "@/lib/api";
+import { createApiClient } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
 
 /** Как часто перечитывать, пока хоть один конкурент разбирается. */
@@ -46,7 +46,6 @@ export default function CompetitorsPage() {
 
 function CompetitorsScreen() {
   const api = useMemo(() => createApiClient(), []);
-  const configured = isApiConfigured();
   const requestedProject = useSearchParams().get("project");
 
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
@@ -61,7 +60,6 @@ function CompetitorsScreen() {
   const [draft, setDraft] = useState({ url: "", title: "" });
 
   useEffect(() => {
-    if (!configured) return;
     let ignore = false;
 
     void (async () => {
@@ -81,7 +79,7 @@ function CompetitorsScreen() {
     return () => {
       ignore = true;
     };
-  }, [api, configured, reloadToken, requestedProject]);
+  }, [api, reloadToken, requestedProject]);
 
   const projectRef = useRef<string | null>(null);
   useEffect(() => {
@@ -179,14 +177,7 @@ function CompetitorsScreen() {
         ) : undefined
       }
     >
-      {!configured ? (
-        <Card>
-          <EmptyState
-            title="Стенд не настроен"
-            description="Не заданы NEXT_PUBLIC_DEMO_ORG_ID и NEXT_PUBLIC_DEMO_USER_ID. Запустите backend и скрипт seed_demo.py."
-          />
-        </Card>
-      ) : error ? (
+      {error ? (
         <Card>
           <ErrorState
             title="Не удалось загрузить данные"

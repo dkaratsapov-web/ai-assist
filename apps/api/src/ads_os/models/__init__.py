@@ -8,6 +8,7 @@ from .audit import ModuleStatus, SiteAudit
 from .competitor import Competitor
 from .organization import Organization, OrganizationPlan
 from .project import MainConversion, Project, ProjectEconomics, ProjectStatus
+from .session import Session
 from .usage import UsageEvent, UsageService, UsageUnit
 from .user import User
 
@@ -20,6 +21,7 @@ __all__ = [
     "Project",
     "ProjectEconomics",
     "ProjectStatus",
+    "Session",
     "SiteAudit",
     "UsageEvent",
     "UsageService",

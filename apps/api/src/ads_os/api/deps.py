@@ -1,8 +1,13 @@
 """Зависимости запроса.
 
-Полноценная аутентификация с MFA (v0.3 §91) делается отдельным срезом. До этого
-контекст организации берётся из заголовков — и только вне production, чтобы
-такой режим невозможно было случайно включить на боевом стенде.
+Контекст организации берётся из сессии — то есть из того, что система выдала
+сама и может в любой момент отозвать.
+
+Заголовки как источник контекста остались только для локальной разработки и
+тестов. На любом развёрнутом стенде они не работают: заголовок присылает
+клиент, и доверять ему как основанию для авторизации нельзя (v0.3 §93). Раньше
+такой режим допускался и на staging — с появлением настоящего входа это больше
+не нужно.
 """
 
 from __future__ import annotations
@@ -11,12 +16,13 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings, get_settings
 from ..db.session import get_sessionmaker
-from ..errors import ForbiddenError
+from ..errors import AppError, ForbiddenError
+from ..services.auth import COOKIE_NAME, AuthenticatedUser, resolve_session, touch
 from ..tenancy.context import Role, TenantContext
 
 
@@ -34,26 +40,63 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
+class NotAuthenticatedError(AppError):
+    """Сессии нет, она истекла или была отозвана.
+
+    Отдельный код нужен интерфейсу: по нему он отправляет человека на страницу
+    входа, а не показывает общую ошибку.
+    """
+
+    status_code = 401
+    error_code = "not_authenticated"
+    message = "Требуется вход"
+
+
+async def get_current_user(
+    request: Request, db: SessionDep, settings: SettingsDep
+) -> AuthenticatedUser:
+    token = request.cookies.get(COOKIE_NAME)
+    if not token:
+        raise NotAuthenticatedError()
+
+    auth = await resolve_session(db, token)
+    if auth is None:
+        raise NotAuthenticatedError()
+
+    if touch(auth.session):
+        await db.flush()
+
+    return auth
+
+
+AuthDep = Annotated[AuthenticatedUser, Depends(get_current_user)]
+
+
 async def get_tenant_context(
+    request: Request,
+    db: SessionDep,
     settings: SettingsDep,
     x_organization_id: Annotated[uuid.UUID | None, Header()] = None,
     x_user_id: Annotated[uuid.UUID | None, Header()] = None,
     x_user_role: Annotated[str | None, Header()] = None,
 ) -> TenantContext:
-    """Временный способ установить контекст арендатора.
+    """Контекст арендатора: сначала сессия, затем — только в разработке — заголовки."""
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        auth = await resolve_session(db, token)
+        if auth is not None:
+            if touch(auth.session):
+                await db.flush()
+            return auth.context
+        raise NotAuthenticatedError()
 
-    Заголовкам нельзя доверять как источнику авторизации (v0.3 §93) — поэтому
-    режим работает только вне production и будет заменён на сессию с проверкой
-    прав. Ошибка здесь означала бы, что кто угодно может назначить себе любую
-    организацию, поэтому проверка окружения жёсткая и без исключений.
-    """
-    if settings.is_production:
-        raise ForbiddenError(
-            "Аутентификация ещё не подключена, работа в production запрещена"
-        )
+    if settings.app_env != "development":
+        # Единственная развилка, где ошибка стоила бы утечки между клиентами:
+        # проверка жёсткая и без исключений.
+        raise NotAuthenticatedError()
 
     if x_organization_id is None or x_user_id is None:
-        raise ForbiddenError("Не указан контекст организации")
+        raise NotAuthenticatedError()
 
     try:
         role = Role(x_user_role or Role.SPECIALIST)
@@ -74,3 +117,17 @@ def require_write(ctx: TenantDep) -> TenantContext:
 
 
 WriteDep = Annotated[TenantContext, Depends(require_write)]
+
+
+def require_owner(ctx: TenantDep) -> TenantContext:
+    """Управление участниками доступно только владельцу.
+
+    Специалист ведёт проекты, но не раздаёт доступы: иначе роль владельца
+    перестаёт что-либо значить.
+    """
+    if not ctx.is_owner:
+        raise ForbiddenError("Действие доступно только владельцу организации")
+    return ctx
+
+
+OwnerDep = Annotated[TenantContext, Depends(require_owner)]

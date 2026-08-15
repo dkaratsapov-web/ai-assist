@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -263,6 +264,36 @@ class ComparisonRead(BaseModel):
     rows: list[FeatureRowRead]
 
 
+class CurrentUserRead(BaseModel):
+    """Кто вошёл. Ответ на вопрос интерфейса «показывать приложение или вход»."""
+
+    id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+    organization_id: uuid.UUID
+    organization_name: str
+
+
+class MemberCreate(BaseModel):
+    """Добавление участника.
+
+    Пароля здесь нет и быть не может: вход идёт через Яндекс ID. Достаточно
+    почты — по ней человек и будет опознан при входе.
+    """
+
+    email: str = Field(min_length=3, max_length=320)
+    full_name: str = Field(min_length=1, max_length=200)
+    role: Literal["owner", "specialist", "viewer"] = "specialist"
+
+
+class MemberUpdate(BaseModel):
+    full_name: str | None = Field(default=None, min_length=1, max_length=200)
+    role: Literal["owner", "specialist", "viewer"] | None = None
+    #: Отключение участника закрывает вход и завершает все его сессии.
+    is_active: bool | None = None
+
+
 class MemberRead(BaseModel):
     """Участник организации.
 
@@ -274,8 +305,10 @@ class MemberRead(BaseModel):
     email: str
     full_name: str
     role: str
-    mfa_enabled: bool
     is_active: bool
+    #: Входил ли человек хоть раз. Пока нет — доступ выдан, но не использован.
+    has_logged_in: bool
+    last_login_at: datetime | None
 
 
 class PlanRead(BaseModel):

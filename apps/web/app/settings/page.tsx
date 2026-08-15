@@ -2,9 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ApiError, MemberRead, OrganizationRead } from "@ads-os/schemas";
-import { Card, CardHeader, EmptyState, ErrorState, Skeleton, StatusBadge } from "@ads-os/ui";
+import {
+  Button,
+  Card,
+  CardHeader,
+  ErrorState,
+  Input,
+  Modal,
+  Skeleton,
+  StatusBadge,
+} from "@ads-os/ui";
 import { AppShell } from "@/components/AppShell";
-import { createApiClient, isApiConfigured } from "@/lib/api";
+import { useCurrentUser } from "@/components/AuthGate";
+import { createApiClient } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -15,14 +25,18 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function SettingsPage() {
   const api = useMemo(() => createApiClient(), []);
-  const configured = isApiConfigured();
+  const me = useCurrentUser();
+  const isOwner = me.role === "owner";
 
   const [organization, setOrganization] = useState<OrganizationRead | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
+  const [adding, setAdding] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [draft, setDraft] = useState({ email: "", full_name: "", role: "specialist" });
+
   useEffect(() => {
-    if (!configured) return;
     let ignore = false;
 
     void (async () => {
@@ -40,18 +54,51 @@ export default function SettingsPage() {
     return () => {
       ignore = true;
     };
-  }, [api, configured, reloadToken]);
+  }, [api, reloadToken]);
+
+  const reload = () => setReloadToken((token) => token + 1);
+
+  const addMember = async () => {
+    setSaving(true);
+    try {
+      await api.addMember({
+        email: draft.email.trim(),
+        full_name: draft.full_name.trim(),
+        role: draft.role as "owner" | "specialist" | "viewer",
+      });
+      setAdding(false);
+      setDraft({ email: "", full_name: "", role: "specialist" });
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+      setAdding(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const setActive = async (member: MemberRead, isActive: boolean) => {
+    try {
+      await api.updateMember(member.id, { is_active: isActive });
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
 
   return (
-    <AppShell title="Настройки" subtitle="Организация, участники и режим работы">
-      {!configured ? (
-        <Card>
-          <EmptyState
-            title="Стенд не настроен"
-            description="Не заданы NEXT_PUBLIC_DEMO_ORG_ID и NEXT_PUBLIC_DEMO_USER_ID. Запустите backend и скрипт seed_demo.py."
-          />
-        </Card>
-      ) : error ? (
+    <AppShell
+      title="Настройки"
+      subtitle="Организация, участники и режим работы"
+      actions={
+        isOwner && organization ? (
+          <Button size="sm" onClick={() => setAdding(true)}>
+            Добавить участника
+          </Button>
+        ) : undefined
+      }
+    >
+      {error ? (
         <Card>
           <ErrorState
             title="Не удалось загрузить настройки"
@@ -119,10 +166,23 @@ export default function SettingsPage() {
           </Card>
 
           <Card>
-            <CardHeader title="Участники" description={`Всего: ${organization.members.length}`} />
+            <CardHeader
+              title="Участники"
+              description={
+                isOwner
+                  ? "Доступ выдаётся добавлением почты. Приглашение по ссылке не нужно: личность подтверждает Яндекс"
+                  : `Всего: ${organization.members.length}`
+              }
+            />
             <div className="flex flex-col">
               {organization.members.map((member) => (
-                <MemberRow key={member.id} member={member} />
+                <MemberRow
+                  key={member.id}
+                  member={member}
+                  isSelf={member.id === me.id}
+                  canManage={isOwner}
+                  onToggle={(next) => void setActive(member, next)}
+                />
               ))}
             </div>
           </Card>
@@ -156,6 +216,54 @@ export default function SettingsPage() {
           </Card>
         </>
       )}
+
+      <Modal
+        open={adding}
+        onClose={() => setAdding(false)}
+        title="Добавить участника"
+        description="Укажите почту того аккаунта Яндекса, под которым человек будет входить."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAdding(false)}>
+              Отмена
+            </Button>
+            <Button
+              onClick={() => void addMember()}
+              loading={saving}
+              disabled={draft.email.trim() === "" || draft.full_name.trim() === ""}
+            >
+              Добавить
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Input
+            label="Почта в Яндексе"
+            value={draft.email}
+            onChange={(e) => setDraft((d) => ({ ...d, email: e.target.value }))}
+            placeholder="ivan@yandex.ru"
+            hint="Должна совпадать с почтой аккаунта, иначе человек не будет опознан"
+          />
+          <Input
+            label="Имя"
+            value={draft.full_name}
+            onChange={(e) => setDraft((d) => ({ ...d, full_name: e.target.value }))}
+          />
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption text-text-secondary">Роль</span>
+            <select
+              value={draft.role}
+              onChange={(e) => setDraft((d) => ({ ...d, role: e.target.value }))}
+              className="border-border-input rounded-control text-body-sm text-text-primary bg-bg focus-visible:outline-focus h-10 border px-3 focus-visible:outline-2"
+            >
+              <option value="specialist">Специалист — ведёт проекты</option>
+              <option value="viewer">Просмотр — только читает</option>
+              <option value="owner">Владелец — управляет доступами</option>
+            </select>
+          </label>
+        </div>
+      </Modal>
     </AppShell>
   );
 }
@@ -191,20 +299,44 @@ function ModeRow({
   );
 }
 
-function MemberRow({ member }: { member: MemberRead }) {
+function MemberRow({
+  member,
+  isSelf,
+  canManage,
+  onToggle,
+}: {
+  member: MemberRead;
+  isSelf: boolean;
+  canManage: boolean;
+  onToggle: (isActive: boolean) => void;
+}) {
   return (
     <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
       <div className="flex flex-col">
-        <span className="text-body-sm text-text-primary">{member.full_name}</span>
+        <span className="text-body-sm text-text-primary">
+          {member.full_name}
+          {isSelf && <span className="text-text-secondary"> — это вы</span>}
+        </span>
         <span className="text-caption text-text-secondary break-all">{member.email}</span>
       </div>
       <div className="flex items-center gap-2">
         <StatusBadge tone="neutral">{ROLE_LABEL[member.role] ?? member.role}</StatusBadge>
-        {/* Второй фактор — требование к боевому контуру (v0.3 §91). Пока его
-            нет ни у кого, и молчать об этом на экране настроек неправильно. */}
-        <StatusBadge tone={member.mfa_enabled ? "success" : "warning"}>
-          {member.mfa_enabled ? "MFA включён" : "MFA выключен"}
-        </StatusBadge>
+
+        {/* Состояние второго фактора Яндекс нам не сообщает, поэтому его здесь
+            и нет: показывать догадку под видом факта хуже, чем не показывать
+            ничего. Вместо этого видно то, что мы действительно знаем, —
+            входил человек хоть раз или доступ пока не использован. */}
+        {!member.has_logged_in && member.is_active && (
+          <StatusBadge tone="neutral">Ещё не входил</StatusBadge>
+        )}
+
+        {!member.is_active && <StatusBadge tone="warning">Отключён</StatusBadge>}
+
+        {canManage && !isSelf && (
+          <Button size="sm" variant="ghost" onClick={() => onToggle(!member.is_active)}>
+            {member.is_active ? "Отключить" : "Включить"}
+          </Button>
+        )}
       </div>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { IconButton, SearchInput, cn } from "@ads-os/ui";
+import { UserMenu } from "./UserMenu";
 import { IconBell, IconHelp, IconMenu } from "@ads-os/ui/icons";
 
 export interface TopbarProps {
@@ -104,23 +105,7 @@ export function Topbar({
             а работа специалиста часто начинается именно с телефона. */}
         {action && <span className="inline-flex shrink-0">{action}</span>}
 
-        <button
-          type="button"
-          aria-label="Профиль пользователя: Иван Петров"
-          className={cn(
-            "rounded-pill hover:bg-surface-hover flex items-center gap-2 py-1 pr-2 pl-1",
-            "focus-visible:outline-focus focus-visible:outline-2 focus-visible:outline-offset-2",
-            "transition-colors duration-(--duration-fast) ease-out",
-          )}
-        >
-          <span
-            aria-hidden="true"
-            className="bg-bg-secondary text-text-secondary text-micro flex size-7 items-center justify-center rounded-full font-medium"
-          >
-            ИП
-          </span>
-          <span className="text-caption text-text-primary hidden lg:inline">Иван Петров</span>
-        </button>
+        <UserMenu />
       </div>
     </header>
   );

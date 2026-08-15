@@ -31,6 +31,9 @@ export type EconomicsSummaryRead = Schemas["EconomicsSummaryRead"];
 export type MetricRead = Schemas["MetricRead"];
 export type HealthResponse = Schemas["HealthResponse"];
 export type OrganizationRead = Schemas["OrganizationRead"];
+export type CurrentUserRead = Schemas["CurrentUserRead"];
+export type MemberCreate = Schemas["MemberCreate"];
+export type MemberUpdate = Schemas["MemberUpdate"];
 export type MemberRead = Schemas["MemberRead"];
 export type PlanRead = Schemas["PlanRead"];
 export type AuditRead = Schemas["AuditRead"];
@@ -100,6 +103,9 @@ export class ApiClient {
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
+      // Сессия живёт в куке, недоступной скриптам. Без credentials браузер её
+      // не отправит, и любой запрос вернёт «требуется вход».
+      credentials: "include",
       headers: {
         "Content-Type": "application/json",
         ...this.headers,
@@ -134,6 +140,7 @@ export class ApiClient {
   async requestNoContent(path: string, init: RequestInit = {}): Promise<void> {
     const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
       ...init,
+      credentials: "include",
       headers: { ...this.headers, ...init.headers },
     });
 
@@ -172,6 +179,37 @@ export class ApiClient {
 
   updateProject(projectId: string, payload: ProjectUpdate): Promise<ProjectRead> {
     return this.request<ProjectRead>(`/api/v1/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /**
+   * Кто вошёл. `null` означает «не вошёл» — это обычное состояние, а не сбой,
+   * поэтому оно не превращается в ошибку.
+   */
+  async getCurrentUser(): Promise<CurrentUserRead | null> {
+    try {
+      return await this.request<CurrentUserRead>("/api/v1/auth/me");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return null;
+      throw err;
+    }
+  }
+
+  async logout(): Promise<void> {
+    await this.requestNoContent("/api/v1/auth/logout", { method: "POST" });
+  }
+
+  addMember(payload: MemberCreate): Promise<MemberRead> {
+    return this.request<MemberRead>("/api/v1/organization/members", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  updateMember(memberId: string, payload: MemberUpdate): Promise<MemberRead> {
+    return this.request<MemberRead>(`/api/v1/organization/members/${memberId}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
