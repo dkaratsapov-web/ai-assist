@@ -200,3 +200,85 @@ class TestКраевыеСлучаи:
     def test_конверсия_вне_диапазона_отклоняется(self, value: Decimal) -> None:
         with pytest.raises(ValueError, match="от 0 до 1"):
             full_input(lead_to_sale_rate=value)
+
+
+class TestПрогнозЗаявок:
+    """Бюджет → клики → заявки. Не то же самое, что ёмкость бюджета."""
+
+    def test_прогноз_считается_по_цене_клика_и_конверсии(self) -> None:
+        result = evaluate(
+            EconomicsInput(
+                monthly_budget=Decimal("150000"),
+                average_order_value=Decimal("38000"),
+                main_conversion="lead",
+                expected_cpc=Decimal("50"),
+                site_conversion_rate=Decimal("0.03"),
+            )
+        )
+
+        # 150 000 / 50 = 3000 кликов, 3 % от них — 90 заявок.
+        assert result.expected_monthly_clicks.value == Decimal("3000.0000")
+        assert result.expected_monthly_leads.value == Decimal("90.0000")
+
+    def test_прогноз_расходится_с_ёмкостью_бюджета(self) -> None:
+        """Ради этого расхождения всё и делалось: числа разные, и это видно."""
+        result = evaluate(
+            EconomicsInput(
+                monthly_budget=Decimal("150000"),
+                average_order_value=Decimal("38000"),
+                main_conversion="lead",
+                margin_percent=Decimal("35"),
+                lead_to_sale_rate=Decimal("0.22"),
+                target_cpl=Decimal("900"),
+                expected_cpc=Decimal("45"),
+                site_conversion_rate=Decimal("0.03"),
+            )
+        )
+
+        assert result.monthly_leads_capacity.value is not None
+        assert result.expected_monthly_leads.value is not None
+        assert result.expected_monthly_leads.value < result.monthly_leads_capacity.value
+
+    def test_без_цены_клика_прогноза_нет(self) -> None:
+        """Отсутствие прогноза честнее, чем прогноз из воздуха."""
+        result = evaluate(
+            EconomicsInput(
+                monthly_budget=Decimal("150000"),
+                average_order_value=Decimal("38000"),
+                main_conversion="lead",
+                site_conversion_rate=Decimal("0.03"),
+            )
+        )
+
+        assert result.expected_monthly_leads.value is None
+        assert result.expected_monthly_leads.reason is not None
+        assert "цену клика" in result.expected_monthly_leads.reason
+
+    def test_без_конверсии_сайта_прогноза_нет(self) -> None:
+        result = evaluate(
+            EconomicsInput(
+                monthly_budget=Decimal("150000"),
+                average_order_value=Decimal("38000"),
+                main_conversion="lead",
+                expected_cpc=Decimal("50"),
+            )
+        )
+
+        assert result.expected_monthly_leads.value is None
+        assert result.expected_monthly_clicks.value is not None
+
+    def test_недостающие_поля_прогноза_перечислены(self) -> None:
+        result = evaluate(
+            EconomicsInput(
+                monthly_budget=Decimal("150000"),
+                average_order_value=Decimal("38000"),
+                main_conversion="lead",
+            )
+        )
+
+        assert "ожидаемая цена клика" in result.missing_forecast
+        assert "конверсия посадочной страницы" in result.missing_forecast
+
+    def test_неверная_конверсия_отклоняется(self) -> None:
+        with pytest.raises(ValueError, match="site_conversion_rate"):
+            EconomicsInput(monthly_budget=Decimal("1000"), site_conversion_rate=Decimal("1.5"))

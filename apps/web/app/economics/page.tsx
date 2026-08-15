@@ -41,8 +41,30 @@ const RECOMMENDED_FIELDS = [
   { key: "target_cpl", label: "Целевой CPL, ₽", hint: "Если не задан — считается по CAC" },
 ] as const;
 
+/**
+ * Поля прогноза.
+ *
+ * Без них известна только ёмкость бюджета — «на сколько заявок хватит денег,
+ * если цена окажется целевой». С ними считается то, что на самом деле нужно:
+ * сколько заявок будет при известной цене клика и конверсии страницы.
+ */
+const FORECAST_FIELDS = [
+  {
+    key: "expected_cpc",
+    label: "Ожидаемая цена клика, ₽",
+    hint: "Из прошлых кампаний или прогноза Директа",
+  },
+  {
+    key: "site_conversion_rate",
+    label: "Конверсия посадочной",
+    hint: "Доля от 0 до 1: 0.03 — это 3 %",
+  },
+] as const;
+
 type FieldKey =
-  (typeof REQUIRED_FIELDS)[number]["key"] | (typeof RECOMMENDED_FIELDS)[number]["key"];
+  | (typeof REQUIRED_FIELDS)[number]["key"]
+  | (typeof RECOMMENDED_FIELDS)[number]["key"]
+  | (typeof FORECAST_FIELDS)[number]["key"];
 
 export default function EconomicsPage() {
   // useSearchParams требует границы Suspense при пререндере страницы.
@@ -253,6 +275,20 @@ function EconomicsScreen() {
                   />
                 ))}
 
+                <p className="text-micro text-text-secondary mt-2 tracking-wide uppercase">
+                  Для прогноза заявок
+                </p>
+                {FORECAST_FIELDS.map((field) => (
+                  <Input
+                    key={field.key}
+                    label={field.label}
+                    hint={field.hint}
+                    inputMode="decimal"
+                    value={draft[field.key] ?? ""}
+                    onChange={(e) => setDraft((d) => ({ ...d, [field.key]: e.target.value }))}
+                  />
+                ))}
+
                 <Button onClick={save} loading={saving} fullWidth className="mt-2">
                   Сохранить
                 </Button>
@@ -290,11 +326,30 @@ function EconomicsScreen() {
 
               <Card>
                 <CardHeader
+                  title="Ожидаемый поток"
+                  description="Сколько заявок будет при вашей цене клика и конверсии страницы"
+                />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <MetricCard label="Кликов в месяц" metric={summary?.expected_monthly_clicks} />
+                  <MetricCard label="Заявок в месяц" metric={summary?.expected_monthly_leads} />
+                </div>
+              </Card>
+
+              <Card>
+                <CardHeader
                   title="Ёмкость бюджета"
-                  description="Сколько лидов и продаж даёт бюджет при целевых значениях"
+                  /* Формулировка правится намеренно. «Лидов в месяц» читалось
+                     как прогноз, хотя это верхняя граница: столько получится,
+                     только если цена заявки окажется целевой. На старте она
+                     почти всегда выше, и разница определяет, окупится кампания
+                     или нет. */
+                  description="Верхняя граница: столько получится, если цена окажется целевой"
                 />
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <MetricCard label="Лидов в месяц" metric={summary?.monthly_leads_capacity} />
+                  <MetricCard
+                    label="Заявок при целевой цене"
+                    metric={summary?.monthly_leads_capacity}
+                  />
                   <MetricCard label="Продаж в месяц" metric={summary?.monthly_sales_capacity} />
                   <MetricCard label="Прогноз выручки" metric={summary?.projected_revenue} money />
                 </div>

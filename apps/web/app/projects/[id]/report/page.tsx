@@ -247,7 +247,17 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
               label="Точка окупаемости, ROAS"
               metric={economics.summary.break_even_roas}
             />
-            <MetricLine label="Лидов в месяц" metric={economics.summary.monthly_leads_capacity} />
+            {/* Ожидаемый поток и ёмкость бюджета — разные утверждения, и в
+                отчёте для клиента путать их особенно нельзя: по этим числам
+                принимают решение о бюджете. */}
+            <MetricLine
+              label="Ожидается заявок"
+              metric={economics.summary.expected_monthly_leads}
+            />
+            <MetricLine
+              label="Заявок при целевой цене"
+              metric={economics.summary.monthly_leads_capacity}
+            />
             <MetricLine label="Продаж в месяц" metric={economics.summary.monthly_sales_capacity} />
             <MetricLine
               label="Ожидаемая прибыль"

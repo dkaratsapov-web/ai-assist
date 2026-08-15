@@ -183,6 +183,8 @@ class EconomicsRead(BaseModel):
     target_cac: Decimal | None
     target_cpl: Decimal | None
     target_marketing_share: Decimal | None
+    expected_cpc: Decimal | None
+    site_conversion_rate: Decimal | None
     version: int
 
 
@@ -192,6 +194,8 @@ class EconomicsSummaryRead(BaseModel):
     cta: str | None
     missing_required: list[str]
     missing_recommended: list[str]
+    #: Незаполненные поля прогноза. Без них известна только ёмкость бюджета.
+    missing_forecast: list[str]
 
     gross_profit_per_sale: MetricRead
     break_even_cac: MetricRead
@@ -201,6 +205,11 @@ class EconomicsSummaryRead(BaseModel):
     target_cpl: MetricRead
     target_roas: MetricRead
     monthly_leads_capacity: MetricRead
+    #: Сколько заявок ожидается на самом деле: бюджет → клики → заявки.
+    #: Отличается от ёмкости бюджета: та отвечает «на сколько заявок хватит
+    #: денег при целевой цене», а это — «сколько заявок будет».
+    expected_monthly_clicks: MetricRead
+    expected_monthly_leads: MetricRead
     monthly_sales_capacity: MetricRead
     projected_revenue: MetricRead
     projected_gross_profit: MetricRead

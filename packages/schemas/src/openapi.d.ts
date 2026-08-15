@@ -1316,6 +1316,8 @@ export interface components {
         EconomicsRead: {
             /** Average Order Value */
             average_order_value: string | null;
+            /** Expected Cpc */
+            expected_cpc: string | null;
             /** Expected Value */
             expected_value: string | null;
             /** Lead To Sale Rate */
@@ -1325,6 +1327,8 @@ export interface components {
             margin_percent: string | null;
             /** Monthly Budget */
             monthly_budget: string | null;
+            /** Site Conversion Rate */
+            site_conversion_rate: string | null;
             /** Target Cac */
             target_cac: string | null;
             /** Target Cpl */
@@ -1359,7 +1363,11 @@ export interface components {
             can_optimize_by_sales: boolean;
             /** Cta */
             cta: string | null;
+            expected_monthly_clicks: components["schemas"]["MetricRead"];
+            expected_monthly_leads: components["schemas"]["MetricRead"];
             gross_profit_per_sale: components["schemas"]["MetricRead"];
+            /** Missing Forecast */
+            missing_forecast: string[];
             /** Missing Recommended */
             missing_recommended: string[];
             /** Missing Required */

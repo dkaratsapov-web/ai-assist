@@ -91,6 +91,10 @@ class EconomicsInput:
     target_cac: Decimal | None = None
     target_cpl: Decimal | None = None
     target_marketing_share: Decimal | None = None
+    #: Ожидаемая цена клика и конверсия посадочной. Только вместе они дают
+    #: настоящий прогноз заявок: без них известна лишь ёмкость бюджета.
+    expected_cpc: Decimal | None = None
+    site_conversion_rate: Decimal | None = None
 
     def __post_init__(self) -> None:
         _require_positive("monthly_budget", self.monthly_budget)
@@ -98,6 +102,12 @@ class EconomicsInput:
         _require_positive("expected_value", self.expected_value)
         _require_positive("target_cac", self.target_cac)
         _require_positive("target_cpl", self.target_cpl)
+        _require_positive("expected_cpc", self.expected_cpc)
+
+        if self.site_conversion_rate is not None and not (
+            Decimal(0) < self.site_conversion_rate <= Decimal(1)
+        ):
+            raise ValueError("site_conversion_rate должен лежать в диапазоне от 0 до 1")
 
         if self.margin_percent is not None and not (
             Decimal(0) <= self.margin_percent <= Decimal(100)
@@ -127,6 +137,8 @@ class EconomicsSummary:
     missing_required: list[str] = field(default_factory=list)
     #: Незаполненные рекомендованные поля — без них недоступна часть метрик.
     missing_recommended: list[str] = field(default_factory=list)
+    #: Незаполненные поля прогноза. Без них известна только ёмкость бюджета.
+    missing_forecast: list[str] = field(default_factory=list)
 
     gross_profit_per_sale: Metric = Metric.unavailable("нет данных")
     break_even_cac: Metric = Metric.unavailable("нет данных")
@@ -136,6 +148,15 @@ class EconomicsSummary:
     target_cpl: Metric = Metric.unavailable("нет данных")
     target_roas: Metric = Metric.unavailable("нет данных")
     monthly_leads_capacity: Metric = Metric.unavailable("нет данных")
+    #: Сколько заявок ожидается на самом деле: бюджет → клики → заявки.
+    #:
+    #: Отличается от ёмкости бюджета принципиально. Ёмкость отвечает «на сколько
+    #: заявок хватит денег, если цена окажется целевой»; прогноз — «сколько
+    #: заявок будет при известной цене клика и конверсии сайта». На старте цена
+    #: почти всегда выше целевой, и путать эти два числа значит планировать по
+    #: лучшему из возможных исходов.
+    expected_monthly_clicks: Metric = Metric.unavailable("нет данных")
+    expected_monthly_leads: Metric = Metric.unavailable("нет данных")
     monthly_sales_capacity: Metric = Metric.unavailable("нет данных")
     projected_revenue: Metric = Metric.unavailable("нет данных")
     projected_gross_profit: Metric = Metric.unavailable("нет данных")
@@ -162,12 +183,19 @@ class EconomicsSummary:
 REQUIRED_FIELDS = ("monthly_budget", "order_value", "main_conversion")
 RECOMMENDED_FIELDS = ("margin_percent", "lead_to_sale_rate")
 
+#: Поля, без которых нет настоящего прогноза заявок. В обязательные они не
+#: вынесены намеренно: проект без них ведётся, просто вместо прогноза остаётся
+#: ёмкость бюджета — и она честно так и называется.
+FORECAST_FIELDS = ("expected_cpc", "site_conversion_rate")
+
 _FIELD_LABELS = {
     "monthly_budget": "месячный бюджет",
     "order_value": "средний чек или ожидаемая ценность",
     "main_conversion": "основная конверсия",
     "margin_percent": "маржинальность",
     "lead_to_sale_rate": "конверсия из лида в продажу",
+    "expected_cpc": "ожидаемая цена клика",
+    "site_conversion_rate": "конверсия посадочной страницы",
 }
 
 
@@ -175,12 +203,14 @@ def evaluate(data: EconomicsInput) -> EconomicsSummary:
     """Считает экономику проекта и достоверность каждой величины."""
     missing_required = [f for f in REQUIRED_FIELDS if getattr(data, f, None) is None]
     missing_recommended = [f for f in RECOMMENDED_FIELDS if getattr(data, f, None) is None]
+    missing_forecast = [f for f in FORECAST_FIELDS if getattr(data, f, None) is None]
 
     if missing_required:
         return EconomicsSummary(
             mode=EconomicsMode.INSUFFICIENT,
             missing_required=[_FIELD_LABELS[f] for f in missing_required],
             missing_recommended=[_FIELD_LABELS[f] for f in missing_recommended],
+            missing_forecast=[_FIELD_LABELS[f] for f in missing_forecast],
         )
 
     mode = EconomicsMode.LIMITED if missing_recommended else EconomicsMode.COMPLETE
@@ -276,6 +306,23 @@ def evaluate(data: EconomicsInput) -> EconomicsSummary:
     else:
         sales_capacity = Metric.unavailable(no_conversion)
 
+    # ── Ожидаемый поток: бюджет → клики → заявки ───────────────────────────
+    no_cpc = "укажите ожидаемую цену клика"
+    no_site_conversion = "укажите конверсию посадочной страницы"
+
+    if data.expected_cpc is not None and data.expected_cpc > 0:
+        clicks = _rate(budget / data.expected_cpc)
+        expected_clicks = Metric.available(clicks)
+    else:
+        expected_clicks = Metric.unavailable(no_cpc)
+
+    if expected_clicks.value is not None and data.site_conversion_rate is not None:
+        expected_leads = Metric.available(_rate(expected_clicks.value * data.site_conversion_rate))
+    else:
+        expected_leads = Metric.unavailable(
+            no_site_conversion if expected_clicks.value is not None else no_cpc
+        )
+
     # ── Прогноз ────────────────────────────────────────────────────────────
     if sales_capacity.value is not None:
         revenue = _money(sales_capacity.value * order_value)
@@ -299,6 +346,7 @@ def evaluate(data: EconomicsInput) -> EconomicsSummary:
         mode=mode,
         missing_required=[],
         missing_recommended=[_FIELD_LABELS[f] for f in missing_recommended],
+        missing_forecast=[_FIELD_LABELS[f] for f in missing_forecast],
         gross_profit_per_sale=gross_profit,
         break_even_cac=break_even_cac,
         break_even_cpl=break_even_cpl,
@@ -307,6 +355,8 @@ def evaluate(data: EconomicsInput) -> EconomicsSummary:
         target_cpl=target_cpl,
         target_roas=target_roas,
         monthly_leads_capacity=leads_capacity,
+        expected_monthly_clicks=expected_clicks,
+        expected_monthly_leads=expected_leads,
         monthly_sales_capacity=sales_capacity,
         projected_revenue=projected_revenue,
         projected_gross_profit=projected_gross_profit,

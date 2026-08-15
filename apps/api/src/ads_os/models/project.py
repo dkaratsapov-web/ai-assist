@@ -113,6 +113,16 @@ class ProjectEconomics(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
 
     #: Какая доля валовой прибыли готова уходить на привлечение. Нужна, чтобы
     #: вывести целевой CAC, когда пользователь его не задал.
+    #: Ожидаемая цена клика и конверсия посадочной страницы.
+    #:
+    #: Без них ёмкость бюджета считалась тавтологично: «бюджет ÷ целевая цена
+    #: лида» отвечает на вопрос, на сколько заявок хватит денег, если цена
+    #: окажется целевой, — а не сколько заявок будет. На старте реальная цена
+    #: почти всегда выше целевой, и разница между этими двумя утверждениями
+    #: определяет, окупится кампания или нет.
+    expected_cpc: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
+    site_conversion_rate: Mapped[Decimal | None] = mapped_column(Numeric(6, 4), nullable=True)
+
     target_marketing_share: Mapped[Decimal | None] = mapped_column(Numeric(4, 3), nullable=True)
 
     version: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

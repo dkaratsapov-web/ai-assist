@@ -92,12 +92,17 @@ class StrategyInput:
 
     economics_mode: EconomicsMode
     monthly_budget: Decimal | None = None
-    #: Ёмкость бюджета в конверсиях за месяц — берётся из расчёта экономики,
-    #: чтобы одно и то же число не считалось здесь по второму разу и не начало
+    #: Ожидаемое число заявок за месяц — берётся из расчёта экономики, чтобы
+    #: одно и то же число не считалось здесь по второму разу и не начало
     #: расходиться с экраном экономики.
     monthly_conversions: Decimal | None = None
-    #: Оценка ёмкости построена на допущении, а не на данных клиента.
+    #: Оценка построена на допущении, а не на данных клиента.
     conversions_are_proxy: bool = False
+    #: Откуда взято число заявок. Это не оттенок формулировки: ёмкость бюджета
+    #: отвечает «на сколько заявок хватит денег при целевой цене», а прогноз —
+    #: «сколько заявок будет». На старте реальная цена почти всегда выше
+    #: целевой, и планировать по ёмкости значит планировать по лучшему исходу.
+    conversions_are_forecast: bool = False
     #: Итог аудита сайта. None означает, что аудит не проводился, и это не то
     #: же самое, что «сайт в порядке».
     site_can_launch: bool | None = None
@@ -171,6 +176,14 @@ def build_plan(data: StrategyInput) -> LaunchPlan:
 
     strategy, reason, learning_ready = _choose_strategy(weekly)
 
+    if not data.conversions_are_forecast:
+        advice.append(
+            "Число заявок посчитано как ёмкость бюджета: столько получится, если "
+            "цена заявки окажется целевой. На старте она обычно выше. Укажите "
+            "ожидаемую цену клика и конверсию посадочной — тогда план будет "
+            "строиться на прогнозе, а не на лучшем исходе."
+        )
+
     if data.conversions_are_proxy:
         advice.append(
             "Ожидаемое число заявок посчитано по допущению, а не по вашим "
@@ -201,7 +214,12 @@ def build_plan(data: StrategyInput) -> LaunchPlan:
 
     status = (
         PlanStatus.READY
-        if learning_ready and not data.conversions_are_proxy and test_weeks is not None
+        if (
+            learning_ready
+            and data.conversions_are_forecast
+            and not data.conversions_are_proxy
+            and test_weeks is not None
+        )
         else PlanStatus.RISKY
     )
 

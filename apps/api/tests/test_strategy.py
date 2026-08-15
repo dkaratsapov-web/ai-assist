@@ -26,6 +26,7 @@ def plan_for(
     economics_mode: EconomicsMode = EconomicsMode.COMPLETE,
     monthly_budget: Decimal | None = Decimal("100000"),
     conversions_are_proxy: bool = False,
+    conversions_are_forecast: bool = True,
     site_can_launch: bool | None = True,
 ) -> LaunchPlan:
     """План при заданном месячном объёме конверсий и в остальном полных данных."""
@@ -35,6 +36,7 @@ def plan_for(
             monthly_budget=monthly_budget,
             monthly_conversions=Decimal(conversions) if conversions is not None else None,
             conversions_are_proxy=conversions_are_proxy,
+            conversions_are_forecast=conversions_are_forecast,
             site_can_launch=site_can_launch,
         )
     )
@@ -142,3 +144,34 @@ class TestЧестностьЦифр:
         plan = plan_for("8")
 
         assert any("микроцели" in note for note in plan.advice)
+
+
+class TestОткудаЧисло:
+    """Ёмкость бюджета и прогноз заявок — разные утверждения.
+
+    Ёмкость отвечает «на сколько заявок хватит денег, если цена окажется
+    целевой». Прогноз отвечает «сколько заявок будет». На старте реальная цена
+    почти всегда выше целевой, и подавать ёмкость как ожидание значит
+    планировать по лучшему из возможных исходов.
+    """
+
+    def test_ёмкость_не_даёт_статус_готовности(self) -> None:
+        plan = plan_for("87", conversions_are_forecast=False)
+
+        assert plan.status is PlanStatus.RISKY
+
+    def test_ёмкость_объясняется_вслух(self) -> None:
+        plan = plan_for("87", conversions_are_forecast=False)
+
+        assert any("ёмкость бюджета" in note for note in plan.advice)
+        assert any("цену клика" in note for note in plan.advice)
+
+    def test_прогноз_даёт_статус_готовности(self) -> None:
+        plan = plan_for("87", conversions_are_forecast=True)
+
+        assert plan.status is PlanStatus.READY
+
+    def test_прогноз_не_сопровождается_оговоркой_про_ёмкость(self) -> None:
+        plan = plan_for("87", conversions_are_forecast=True)
+
+        assert not any("ёмкость бюджета" in note for note in plan.advice)

@@ -209,21 +209,7 @@ async def get_progress(
 
     # План запуска существует ровно тогда, когда он не заблокирован. Отдельного
     # действия у него нет: он выводится из экономики и аудита.
-    plan = build_plan(
-        StrategyInput(
-            economics_mode=summary.mode,
-            monthly_budget=economics.monthly_budget if economics else None,
-            monthly_conversions=summary.monthly_leads_capacity.value,
-            conversions_are_proxy=(
-                summary.monthly_leads_capacity.availability is Availability.PROXY
-            ),
-            site_can_launch=(
-                not _has_blocking_issues(audit)
-                if audit is not None and audit.status is ModuleStatus.COMPLETED
-                else None
-            ),
-        )
-    )
+    plan = build_plan(_strategy_input(summary, economics, audit))
 
     progress = evaluate_progress(
         ProgressInput(
@@ -401,24 +387,7 @@ async def get_strategy(
     summary = evaluate(_to_input(economics))
 
     audit = await _latest_audit(session, ctx, project_id)
-    # Незавершённый аудит не считается ни успешным, ни провальным: его вывода
-    # ещё нет, и подставлять вместо него «сайт в порядке» нельзя.
-    site_can_launch = (
-        not _has_blocking_issues(audit)
-        if audit is not None and audit.status is ModuleStatus.COMPLETED
-        else None
-    )
-
-    capacity = summary.monthly_leads_capacity
-    plan = build_plan(
-        StrategyInput(
-            economics_mode=summary.mode,
-            monthly_budget=economics.monthly_budget if economics else None,
-            monthly_conversions=capacity.value,
-            conversions_are_proxy=capacity.availability is Availability.PROXY,
-            site_can_launch=site_can_launch,
-        )
-    )
+    plan = build_plan(_strategy_input(summary, economics, audit))
 
     return LaunchPlanRead(
         project_id=project_id,
@@ -456,6 +425,8 @@ def _to_input(economics: ProjectEconomics | None) -> EconomicsInput:
         target_cac=economics.target_cac,
         target_cpl=economics.target_cpl,
         target_marketing_share=economics.target_marketing_share,
+        expected_cpc=economics.expected_cpc,
+        site_conversion_rate=economics.site_conversion_rate,
     )
 
 
@@ -472,6 +443,7 @@ def _to_summary(summary: EconomicsSummary) -> EconomicsSummaryRead:
         cta=summary.cta,
         missing_required=summary.missing_required,
         missing_recommended=summary.missing_recommended,
+        missing_forecast=summary.missing_forecast,
         gross_profit_per_sale=_metric(summary.gross_profit_per_sale),
         break_even_cac=_metric(summary.break_even_cac),
         break_even_cpl=_metric(summary.break_even_cpl),
@@ -480,6 +452,8 @@ def _to_summary(summary: EconomicsSummary) -> EconomicsSummaryRead:
         target_cpl=_metric(summary.target_cpl),
         target_roas=_metric(summary.target_roas),
         monthly_leads_capacity=_metric(summary.monthly_leads_capacity),
+        expected_monthly_clicks=_metric(summary.expected_monthly_clicks),
+        expected_monthly_leads=_metric(summary.expected_monthly_leads),
         monthly_sales_capacity=_metric(summary.monthly_sales_capacity),
         projected_revenue=_metric(summary.projected_revenue),
         projected_gross_profit=_metric(summary.projected_gross_profit),
@@ -538,4 +512,39 @@ async def _ready_drafts(
             selling_points=points,
             region=project.primary_region,
         ).is_ready
+    )
+
+
+def _strategy_input(
+    summary: EconomicsSummary,
+    economics: ProjectEconomics | None,
+    audit: SiteAudit | None,
+) -> StrategyInput:
+    """Собирает входные данные плана запуска.
+
+    Один помощник на оба места, где план считается, — прогресс проекта и экран
+    стратегии. Разойдись они, человек увидел бы закрытый шаг «Стратегия» рядом
+    с планом, который говорит «запускаться рано».
+
+    Предпочитается прогноз заявок, а не ёмкость бюджета. Ёмкость отвечает «на
+    сколько заявок хватит денег при целевой цене», прогноз — «сколько заявок
+    будет». На старте реальная цена почти всегда выше целевой.
+    """
+    forecast = summary.expected_monthly_leads
+    capacity = summary.monthly_leads_capacity
+    source = forecast if forecast.value is not None else capacity
+
+    return StrategyInput(
+        economics_mode=summary.mode,
+        monthly_budget=economics.monthly_budget if economics else None,
+        monthly_conversions=source.value,
+        conversions_are_proxy=source.availability is Availability.PROXY,
+        conversions_are_forecast=forecast.value is not None,
+        # Незавершённый аудит не считается ни успешным, ни провальным: его
+        # вывода ещё нет, и подставлять «сайт в порядке» нельзя.
+        site_can_launch=(
+            not _has_blocking_issues(audit)
+            if audit is not None and audit.status is ModuleStatus.COMPLETED
+            else None
+        ),
     )
