@@ -161,6 +161,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/minus-word-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Наборы минус-слов */
+        get: operations["list_sets_api_v1_minus_word_sets_get"];
+        put?: never;
+        /**
+         * Сохранить набор
+         * @description Сохраняет набор — свой список либо минус-слова готового проекта.
+         *
+         *     Второй способ и есть основной: набор обычно рождается не из желания завести
+         *     набор, а из работы. Сначала минус-слова собираются в проекте, а потом
+         *     выясняется, что они пригодятся и в следующем.
+         */
+        post: operations["create_set_api_v1_minus_word_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/minus-word-sets/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Удалить набор
+         * @description Удаляет набор.
+         *
+         *     Уже применённые слова остаются в проектах: они стали частью работы над
+         *     ними, и снимать их вслед за удалением заготовки означало бы менять проекты,
+         *     которых человек в этот момент даже не открывал.
+         */
+        delete: operations["delete_set_api_v1_minus_word_sets__set_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -732,6 +781,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/minus-words/apply/{set_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Применить набор к проекту
+         * @description Добавляет слова набора к минус-словам проекта и перепроверяет ядро.
+         *
+         *     Слова добавляются, а не заменяют существующие: набор — это заготовка, а не
+         *     источник правды о проекте. Заменяя, система стёрла бы то, что специалист
+         *     нашёл именно здесь, — и восстановить это было бы неоткуда.
+         */
+        post: operations["apply_set_api_v1_projects__project_id__minus_words_apply__set_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/minus-words/{minus_word_id}": {
         parameters: {
             query?: never;
@@ -802,7 +875,7 @@ export interface components {
          *     похожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.
          * @enum {string}
          */
-        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "minus_word_added" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
+        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "minus_word_added" | "minus_set_saved" | "minus_set_applied" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
         /** ActivityList */
         ActivityList: {
             /** Items */
@@ -894,6 +967,16 @@ export interface components {
             /** Message */
             message: string;
             problem: components["schemas"]["Problem"];
+        };
+        /**
+         * ApplySetResult
+         * @description Итог применения набора к проекту.
+         */
+        ApplySetResult: {
+            /** Added */
+            added: number;
+            /** Already Present */
+            already_present: number;
         };
         /**
          * AuditChangesRead
@@ -1565,6 +1648,42 @@ export interface components {
             /** Word */
             word: string;
         };
+        /** MinusWordSetCreate */
+        MinusWordSetCreate: {
+            /** Name */
+            name: string;
+            /** Source Project Id */
+            source_project_id?: string | null;
+            /** Words */
+            words?: string[];
+        };
+        /** MinusWordSetList */
+        MinusWordSetList: {
+            /** Items */
+            items: components["schemas"]["MinusWordSetRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * MinusWordSetRead
+         * @description Именованный набор минус-слов, общий для всех проектов.
+         */
+        MinusWordSetRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Words */
+            words: string[];
+        };
         /** MinusWordSuggestionRead */
         MinusWordSuggestionRead: {
             /** Examples */
@@ -2131,6 +2250,109 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_sets_api_v1_minus_word_sets_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinusWordSetList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_set_api_v1_minus_word_sets_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MinusWordSetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinusWordSetRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_set_api_v1_minus_word_sets__set_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3352,6 +3574,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MinusWordRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_set_api_v1_projects__project_id__minus_words_apply__set_id__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApplySetResult"];
                 };
             };
             /** @description Validation Error */

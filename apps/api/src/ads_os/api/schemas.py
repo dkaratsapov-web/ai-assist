@@ -732,3 +732,35 @@ class AuditPageRead(BaseModel):
 class AuditPageList(BaseModel):
     items: list[AuditPageRead]
     total: int
+
+
+class MinusWordSetRead(BaseModel):
+    """Именованный набор минус-слов, общий для всех проектов."""
+
+    id: uuid.UUID
+    name: str
+    words: list[str]
+    created_at: datetime
+
+
+class MinusWordSetList(BaseModel):
+    items: list[MinusWordSetRead]
+    total: int
+
+
+class MinusWordSetCreate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
+    #: Слова набора. Пусто означает «взять текущие минус-слова проекта» —
+    #: именно так набор чаще всего и заводят: сначала собрали в работе, потом
+    #: решили сохранить.
+    words: list[str] = Field(default_factory=list)
+    source_project_id: uuid.UUID | None = None
+
+
+class ApplySetResult(BaseModel):
+    """Итог применения набора к проекту."""
+
+    added: int
+    #: Сколько слов уже были в проекте. Показывается отдельно: «добавлено 0»
+    #: без этого числа читается как сбой, хотя означает «всё уже на месте».
+    already_present: int

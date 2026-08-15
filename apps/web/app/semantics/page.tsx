@@ -9,6 +9,7 @@ import type {
   Intent,
   KeywordRead,
   MinusWordList,
+  MinusWordSetRead,
   ProjectRead,
 } from "@ads-os/schemas";
 import {
@@ -59,6 +60,9 @@ function SemanticsScreen() {
   const [keywords, setKeywords] = useState<KeywordRead[] | null>(null);
   const [clusters, setClusters] = useState<ClusterRead[]>([]);
   const [minus, setMinus] = useState<MinusWordList | null>(null);
+  const [sets, setSets] = useState<MinusWordSetRead[]>([]);
+  const [savingSet, setSavingSet] = useState(false);
+  const [setName, setSetName] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -95,16 +99,18 @@ function SemanticsScreen() {
 
     void (async () => {
       try {
-        const [list, groups, minusWords] = await Promise.all([
+        const [list, groups, minusWords, savedSets] = await Promise.all([
           api.listKeywords(selectedId),
           api.listClusters(selectedId),
           api.listMinusWords(selectedId),
+          api.listMinusWordSets(),
         ]);
         if (ignore) return;
         setError(null);
         setKeywords(list.items);
         setClusters(groups.items);
         setMinus(minusWords);
+        setSets(savedSets.items);
       } catch (err) {
         if (!ignore) setError(toApiError(err));
       }
@@ -137,6 +143,29 @@ function SemanticsScreen() {
     if (!selectedId) return;
     try {
       await api.updateKeyword(selectedId, keywordId, intent);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const saveSet = async () => {
+    if (!selectedId) return;
+    try {
+      await api.saveMinusWordSet(setName.trim(), selectedId);
+      setSavingSet(false);
+      setSetName("");
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+      setSavingSet(false);
+    }
+  };
+
+  const applySet = async (setId: string) => {
+    if (!selectedId) return;
+    try {
+      await api.applyMinusWordSet(selectedId, setId);
       reload();
     } catch (err) {
       setError(toApiError(err));
@@ -281,6 +310,28 @@ function SemanticsScreen() {
                       ))}
                     </div>
                   )}
+                  {(sets.length > 0 || minus.items.length > 0) && (
+                    <div className="border-border mb-3 flex flex-wrap items-center gap-2 border-t pt-3">
+                      {/* Набор — заготовка на будущие проекты. Применение
+                          добавляет слова, а не заменяет: своё в проекте важнее. */}
+                      <span className="text-caption text-text-secondary">Готовые наборы:</span>
+                      {sets.map((item) => (
+                        <Button
+                          key={item.id}
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => void applySet(item.id)}
+                        >
+                          {item.name} ({item.words.length})
+                        </Button>
+                      ))}
+                      {minus.items.length > 0 && (
+                        <Button size="sm" variant="ghost" onClick={() => setSavingSet(true)}>
+                          Сохранить свой
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   {minus.suggestions.length > 0 && (
                     <>
                       <p className="text-caption text-text-secondary mb-1">Предлагаются</p>
@@ -340,6 +391,30 @@ function SemanticsScreen() {
           )}
         </>
       )}
+
+      <Modal
+        open={savingSet}
+        onClose={() => setSavingSet(false)}
+        title="Сохранить набор минус-слов"
+        description="Набор общий для всех проектов. В следующем проекте той же ниши его останется применить одним нажатием."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setSavingSet(false)}>
+              Отмена
+            </Button>
+            <Button onClick={saveSet} disabled={setName.trim().length < 2}>
+              Сохранить
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label="Название набора"
+          value={setName}
+          onChange={(e) => setSetName(e.target.value)}
+          placeholder="Окна и остекление"
+        />
+      </Modal>
 
       <Modal
         open={importing}

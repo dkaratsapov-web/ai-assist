@@ -59,6 +59,9 @@ export type MinusWordList = Schemas["MinusWordList"];
 export type AdDraftRead = Schemas["AdDraftRead"];
 export type AdDraftList = Schemas["AdDraftList"];
 export type AdViolationRead = Schemas["AdViolationRead"];
+export type MinusWordSetRead = Schemas["MinusWordSetRead"];
+export type MinusWordSetList = Schemas["MinusWordSetList"];
+export type ApplySetResult = Schemas["ApplySetResult"];
 export type Intent = Schemas["Intent"];
 export type NotificationRead = Schemas["NotificationRead"];
 export type NotificationList = Schemas["NotificationList"];
@@ -370,6 +373,25 @@ export class ApiClient {
   /** Черновики объявлений по группам фраз. Ничего не сохраняется. */
   listAdDrafts(projectId: string): Promise<AdDraftList> {
     return this.request<AdDraftList>(`/api/v1/projects/${projectId}/ads`);
+  }
+
+  /** Наборы минус-слов организации: заготовки для новых проектов. */
+  listMinusWordSets(): Promise<MinusWordSetList> {
+    return this.request<MinusWordSetList>("/api/v1/minus-word-sets");
+  }
+
+  saveMinusWordSet(name: string, sourceProjectId: string): Promise<MinusWordSetRead> {
+    return this.request<MinusWordSetRead>("/api/v1/minus-word-sets", {
+      method: "POST",
+      body: JSON.stringify({ name, source_project_id: sourceProjectId, words: [] }),
+    });
+  }
+
+  applyMinusWordSet(projectId: string, setId: string): Promise<ApplySetResult> {
+    return this.request<ApplySetResult>(
+      `/api/v1/projects/${projectId}/minus-words/apply/${setId}`,
+      { method: "POST" },
+    );
   }
 
   listCompetitors(projectId: string): Promise<CompetitorList> {

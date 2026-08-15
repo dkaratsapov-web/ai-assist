@@ -13,6 +13,8 @@
           "issue_restored",
           "keywords_imported",
           "minus_word_added",
+          "minus_set_saved",
+          "minus_set_applied",
           "competitor_added",
           "competitor_removed",
           "member_added",
@@ -246,6 +248,25 @@
           "message"
         ],
         "title": "AdViolationRead",
+        "type": "object"
+      },
+      "ApplySetResult": {
+        "description": "Итог применения набора к проекту.",
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "already_present": {
+            "title": "Already Present",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added",
+          "already_present"
+        ],
+        "title": "ApplySetResult",
         "type": "object"
       },
       "AuditChangesRead": {
@@ -2179,6 +2200,95 @@
         "title": "MinusWordRead",
         "type": "object"
       },
+      "MinusWordSetCreate": {
+        "properties": {
+          "name": {
+            "maxLength": 120,
+            "minLength": 2,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Project Id"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Words",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "MinusWordSetCreate",
+        "type": "object"
+      },
+      "MinusWordSetList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MinusWordSetRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "MinusWordSetList",
+        "type": "object"
+      },
+      "MinusWordSetRead": {
+        "description": "Именованный набор минус-слов, общий для всех проектов.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Words",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "words",
+          "created_at"
+        ],
+        "title": "MinusWordSetRead",
+        "type": "object"
+      },
       "MinusWordSuggestionRead": {
         "properties": {
           "examples": {
@@ -3350,6 +3460,268 @@
         "summary": "Состояние сервиса",
         "tags": [
           "service"
+        ]
+      }
+    },
+    "/api/v1/minus-word-sets": {
+      "get": {
+        "operationId": "list_sets_api_v1_minus_word_sets_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinusWordSetList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Наборы минус-слов",
+        "tags": [
+          "minus-sets"
+        ]
+      },
+      "post": {
+        "description": "Сохраняет набор — свой список либо минус-слова готового проекта.\n\nВторой способ и есть основной: набор обычно рождается не из желания завести\nнабор, а из работы. Сначала минус-слова собираются в проекте, а потом\nвыясняется, что они пригодятся и в следующем.",
+        "operationId": "create_set_api_v1_minus_word_sets_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MinusWordSetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinusWordSetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Сохранить набор",
+        "tags": [
+          "minus-sets"
+        ]
+      }
+    },
+    "/api/v1/minus-word-sets/{set_id}": {
+      "delete": {
+        "description": "Удаляет набор.\n\nУже применённые слова остаются в проектах: они стали частью работы над\nними, и снимать их вслед за удалением заготовки означало бы менять проекты,\nкоторых человек в этот момент даже не открывал.",
+        "operationId": "delete_set_api_v1_minus_word_sets__set_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Set Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Удалить набор",
+        "tags": [
+          "minus-sets"
         ]
       }
     },
@@ -6689,6 +7061,110 @@
         "summary": "Добавить минус-слово",
         "tags": [
           "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/minus-words/apply/{set_id}": {
+      "post": {
+        "description": "Добавляет слова набора к минус-словам проекта и перепроверяет ядро.\n\nСлова добавляются, а не заменяют существующие: набор — это заготовка, а не\nисточник правды о проекте. Заменяя, система стёрла бы то, что специалист\nнашёл именно здесь, — и восстановить это было бы неоткуда.",
+        "operationId": "apply_set_api_v1_projects__project_id__minus_words_apply__set_id__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "set_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Set Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplySetResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Применить набор к проекту",
+        "tags": [
+          "minus-sets"
         ]
       }
     },

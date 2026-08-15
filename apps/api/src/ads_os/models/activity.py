@@ -47,6 +47,8 @@ class ActivityAction(StrEnum):
 
     KEYWORDS_IMPORTED = "keywords_imported"
     MINUS_WORD_ADDED = "minus_word_added"
+    MINUS_SET_SAVED = "minus_set_saved"
+    MINUS_SET_APPLIED = "minus_set_applied"
 
     COMPETITOR_ADDED = "competitor_added"
     COMPETITOR_REMOVED = "competitor_removed"
