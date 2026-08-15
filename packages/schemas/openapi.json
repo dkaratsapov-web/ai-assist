@@ -467,6 +467,92 @@
         "title": "AuditIssueRead",
         "type": "object"
       },
+      "AuditPageList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditPageRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AuditPageList",
+        "type": "object"
+      },
+      "AuditPageRead": {
+        "description": "Проверенная страница проекта.",
+        "properties": {
+          "can_launch": {
+            "title": "Can Launch",
+            "type": "boolean"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModuleStatus"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "url",
+          "is_primary",
+          "score",
+          "verdict",
+          "can_launch",
+          "status",
+          "checked_at"
+        ],
+        "title": "AuditPageRead",
+        "type": "object"
+      },
       "AuditRead": {
         "properties": {
           "can_launch": {
@@ -617,6 +703,25 @@
           "created_at"
         ],
         "title": "AuditRead",
+        "type": "object"
+      },
+      "AuditStart": {
+        "description": "Запуск проверки.\n\nБез адреса проверяется главная страница проекта. С адресом — другая\nстраница того же сайта.",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "AuditStart",
         "type": "object"
       },
       "Availability": {
@@ -4445,6 +4550,22 @@
             }
           },
           {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Url"
+            }
+          },
+          {
             "in": "header",
             "name": "x-organization-id",
             "required": false,
@@ -4531,6 +4652,7 @@
         ]
       },
       "post": {
+        "description": "Запускает проверку страницы.\n\nБез адреса проверяется главная страница проекта. С адресом — любая другая\nстраница того же сайта: в кампании посадочных обычно несколько, и оценивать\nвсе по главной значит не проверять их вовсе.\n\nОтдельного списка страниц нет намеренно. Страница попадает в проект тем, что\nеё проверили, — список страниц выводится из проверок. Отдельный справочник\nнеизбежно разошёлся бы с ним: в нём остались бы адреса, которые никто не\nпроверял, и он выглядел бы как охваченный объём.",
         "operationId": "start_audit_api_v1_projects__project_id__audit_post",
         "parameters": [
           {
@@ -4594,6 +4716,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AuditStart"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {
@@ -4907,6 +5046,100 @@
           }
         },
         "summary": "Вернуть замечание в список",
+        "tags": [
+          "audit"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/audit/pages": {
+      "get": {
+        "description": "Страницы, которые проверяли, с последним результатом по каждой.\n\nСписок выводится из проверок, а не из отдельного справочника: страница\nпопадает в проект тем, что её проверили. Справочник неизбежно разошёлся бы\nс реальностью — в нём остались бы адреса, которых никто не касался, и он\nвыглядел бы как охваченный объём.\n\nГлавная страница показывается всегда, даже если её ещё не проверяли: иначе\nу нового проекта список был бы пустым и непонятно было бы, с чего начать.",
+        "operationId": "list_pages_api_v1_projects__project_id__audit_pages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPageList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Проверенные страницы проекта",
         "tags": [
           "audit"
         ]

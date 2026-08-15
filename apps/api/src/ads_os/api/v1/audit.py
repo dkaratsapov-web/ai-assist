@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, select
@@ -29,7 +30,10 @@ from ..schemas import (
     AuditHistory,
     AuditHistoryItem,
     AuditIssueRead,
+    AuditPageList,
+    AuditPageRead,
     AuditRead,
+    AuditStart,
     CategoryRead,
     DismissalCreate,
     DismissalList,
@@ -80,6 +84,19 @@ class AuditRepository(TenantRepository[SiteAudit]):
         return select(self.model).where(self.model.organization_id == self.ctx.organization_id)
 
 
+class ForeignPageError(AppError):
+    """Попытка проверить страницу чужого сайта.
+
+    Проверка ограничена доменом проекта не из осторожности, а по смыслу: это
+    аудит посадочных страниц клиента. Без ограничения любой участник мог бы
+    гонять краулер по произвольным адресам от имени сервиса.
+    """
+
+    status_code = 422
+    error_code = "foreign_page"
+    message = "Страница должна принадлежать сайту проекта"
+
+
 class WebsiteMissingError(AppError):
     status_code = 422
     error_code = "website_missing"
@@ -119,17 +136,38 @@ class AuditAlreadyRunningError(AppError):
     status_code=status.HTTP_202_ACCEPTED,
     summary="Запустить аудит сайта",
 )
-async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep) -> AuditRead:
+async def start_audit(
+    project_id: uuid.UUID,
+    session: SessionDep,
+    ctx: WriteDep,
+    payload: AuditStart | None = None,
+) -> AuditRead:
+    """Запускает проверку страницы.
+
+    Без адреса проверяется главная страница проекта. С адресом — любая другая
+    страница того же сайта: в кампании посадочных обычно несколько, и оценивать
+    все по главной значит не проверять их вовсе.
+
+    Отдельного списка страниц нет намеренно. Страница попадает в проект тем, что
+    её проверили, — список страниц выводится из проверок. Отдельный справочник
+    неизбежно разошёлся бы с ним: в нём остались бы адреса, которые никто не
+    проверял, и он выглядел бы как охваченный объём.
+    """
     project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
     if not project.website_url:
         raise WebsiteMissingError()
+
+    url = (payload.url if payload else None) or project.website_url
+    if not _same_site(url, project.website_url):
+        raise ForeignPageError()
 
     audits = AuditRepository(session, ctx)
     running = (
         await session.execute(
             audits.scoped()
             .where(SiteAudit.project_id == project_id)
+            .where(SiteAudit.url == url)
             .where(SiteAudit.status.in_((ModuleStatus.QUEUED, ModuleStatus.RUNNING)))
         )
     ).scalars().first()
@@ -139,7 +177,7 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
 
     audit = SiteAudit(
         project_id=project_id,
-        url=project.website_url,
+        url=url,
         status=ModuleStatus.QUEUED,
         categories=[],
         issues=[],
@@ -150,7 +188,7 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
     # Задача ставится в очередь после записи: если поставить раньше, воркер
     # может начать раньше, чем запись станет видимой.
     try:
-        enqueue_site_audit(audit.id, project.website_url)
+        enqueue_site_audit(audit.id, url)
     except Exception as exc:
         # Запись удаляется явно, а не оставляется на откат транзакции. Аудит со
         # статусом «в очереди», которого в очереди нет, навсегда заблокировал бы
@@ -171,7 +209,7 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
         subject=project.name,
         actor_name=ctx.user_name,
         project_id=project_id,
-        details={"адрес": project.website_url},
+        details={"адрес": url},
     )
 
     return _to_read(audit)
@@ -183,9 +221,13 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
     summary="Последний аудит сайта",
 )
 async def get_audit(
-    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep, url: str | None = None
 ) -> AuditRead | None:
-    await ProjectRepository(session, ctx).get_or_404(project_id)
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    # Без адреса показывается главная страница: с неё начинают, и открывать
+    # экран на случайной из проверенных было бы неожиданно.
+    page = url or project.website_url
 
     audits = AuditRepository(session, ctx)
     # Читаются две последние записи, а не одна: свежий результат почти всегда
@@ -195,6 +237,7 @@ async def get_audit(
             await session.execute(
                 audits.scoped()
                 .where(SiteAudit.project_id == project_id)
+                .where(SiteAudit.url == page)
                 .order_by(SiteAudit.created_at.desc())
                 .limit(2)
             )
@@ -213,6 +256,80 @@ async def get_audit(
     )
 
     return _to_read(latest, previous, await _dismissals(session, ctx, project_id))
+
+
+@router.get(
+    "/{project_id}/audit/pages",
+    response_model=AuditPageList,
+    summary="Проверенные страницы проекта",
+)
+async def list_pages(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> AuditPageList:
+    """Страницы, которые проверяли, с последним результатом по каждой.
+
+    Список выводится из проверок, а не из отдельного справочника: страница
+    попадает в проект тем, что её проверили. Справочник неизбежно разошёлся бы
+    с реальностью — в нём остались бы адреса, которых никто не касался, и он
+    выглядел бы как охваченный объём.
+
+    Главная страница показывается всегда, даже если её ещё не проверяли: иначе
+    у нового проекта список был бы пустым и непонятно было бы, с чего начать.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = list(
+        (
+            await session.execute(
+                AuditRepository(session, ctx)
+                .scoped()
+                .where(SiteAudit.project_id == project_id)
+                .order_by(SiteAudit.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    latest: dict[str, SiteAudit] = {}
+    for row in rows:
+        latest.setdefault(row.url, row)
+
+    items: list[AuditPageRead] = []
+
+    if project.website_url and project.website_url not in latest:
+        items.append(
+            AuditPageRead(
+                url=project.website_url,
+                is_primary=True,
+                score=None,
+                verdict=None,
+                can_launch=False,
+                status=ModuleStatus.NOT_STARTED,
+                checked_at=None,
+            )
+        )
+
+    for url, audit in latest.items():
+        items.append(
+            AuditPageRead(
+                url=url,
+                is_primary=url == project.website_url,
+                score=audit.score,
+                verdict=audit.verdict,
+                can_launch=not any(
+                    i.get("severity") == "critical" for i in (audit.issues or [])
+                ),
+                status=audit.status,
+                checked_at=audit.finished_at or audit.created_at,
+            )
+        )
+
+    # Главная всегда первой, остальные — от худшей оценки к лучшей: работать
+    # начинают с той страницы, которая тянет вниз.
+    items.sort(key=lambda item: (not item.is_primary, item.score if item.score is not None else -1))
+
+    return AuditPageList(items=items, total=len(items))
 
 
 @router.get(
@@ -519,3 +636,18 @@ def _stored_issue(row: dict[str, object], dismissals: dict[str, IssueDismissal])
         dismissed_reason=dismissal.reason if dismissal else None,
         dismissed_by=dismissal.dismissed_by_name if dismissal else None,
     )
+
+
+def _same_site(url: str, site: str) -> bool:
+    """Один ли это сайт.
+
+    Сравниваются только домены, без учёта www и регистра: «example.ru» и
+    «www.example.ru» для человека одно и то же, и требовать угадать написание
+    было бы придиркой.
+    """
+    return _host(url) == _host(site) and urlsplit(url).scheme in ("http", "https")
+
+
+def _host(url: str) -> str:
+    host = (urlsplit(url).hostname or "").lower()
+    return host[4:] if host.startswith("www.") else host

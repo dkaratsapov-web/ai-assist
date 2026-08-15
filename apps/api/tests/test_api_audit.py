@@ -67,10 +67,9 @@ async def _make_audit(
     audit = SiteAudit(
         organization_id=org.id,
         project_id=project.id,
-        url="https://example.com/",
         status=status,
         # Значения по умолчанию, которые вызывающий может заменить своими.
-        **{"categories": [], "issues": [], **fields},
+        **{"url": "https://example.com/", "categories": [], "issues": [], **fields},
     )
     session.add(audit)
     await session.commit()
@@ -546,3 +545,149 @@ class TestСкрытыеЗамечания:
         )
 
         assert response.status_code == 404
+
+
+class TestНесколькоПосадочных:
+    """В кампании посадочных обычно несколько, и оценивать все по главной —
+    значит не проверять их вовсе."""
+
+    async def test_проверка_другой_страницы_того_же_сайта(
+        self, client: AsyncClient, project_with_site: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, project = project_with_site
+
+        with patch("ads_os.api.v1.audit.enqueue_site_audit"):
+            response = await client.post(
+                f"/api/v1/projects/{project.id}/audit",
+                json={"url": "https://example.com/okna-pvh"},
+                headers=headers(org, user),
+            )
+
+        assert response.status_code == 202
+        assert response.json()["url"] == "https://example.com/okna-pvh"
+
+    async def test_чужой_сайт_проверять_нельзя(
+        self, client: AsyncClient, project_with_site: tuple[Organization, User, Project]
+    ) -> None:
+        """Иначе краулер гоняли бы по произвольным адресам от имени сервиса."""
+        org, user, project = project_with_site
+
+        response = await client.post(
+            f"/api/v1/projects/{project.id}/audit",
+            json={"url": "https://чужой-сайт.ru/страница"},
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "foreign_page"
+
+    async def test_www_считается_тем_же_сайтом(
+        self, client: AsyncClient, project_with_site: tuple[Organization, User, Project]
+    ) -> None:
+        """Требовать угадать написание было бы придиркой."""
+        org, user, project = project_with_site
+
+        with patch("ads_os.api.v1.audit.enqueue_site_audit"):
+            response = await client.post(
+                f"/api/v1/projects/{project.id}/audit",
+                json={"url": "https://www.example.com/balkony"},
+                headers=headers(org, user),
+            )
+
+        assert response.status_code == 202
+
+    async def test_проверка_страницы_не_блокирует_другую(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Идущая проверка главной не должна мешать проверить соседнюю."""
+        org, user, project = project_with_site
+        await _make_audit(session, project_with_site, ModuleStatus.RUNNING)
+
+        with patch("ads_os.api.v1.audit.enqueue_site_audit"):
+            response = await client.post(
+                f"/api/v1/projects/{project.id}/audit",
+                json={"url": "https://example.com/other"},
+                headers=headers(org, user),
+            )
+
+        assert response.status_code == 202
+
+    async def test_результат_запрашивается_по_адресу(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+        await _make_audit(
+            session, project_with_site, ModuleStatus.COMPLETED, score=90, url="https://example.com/"
+        )
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=40,
+            url="https://example.com/other",
+        )
+
+        main = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit", headers=headers(org, user)
+            )
+        ).json()
+        other = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit?url=https://example.com/other",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert main["score"] == 90
+        assert other["score"] == 40
+
+    async def test_список_страниц_показывает_главную_даже_без_проверок(
+        self, client: AsyncClient, project_with_site: tuple[Organization, User, Project]
+    ) -> None:
+        """Иначе у нового проекта список пуст и непонятно, с чего начать."""
+        org, user, project = project_with_site
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit/pages", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["total"] == 1
+        assert body["items"][0]["is_primary"] is True
+        assert body["items"][0]["status"] == "not_started"
+
+    async def test_худшая_страница_идёт_первой_после_главной(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Работать начинают с той страницы, которая тянет вниз."""
+        org, user, project = project_with_site
+        await _make_audit(
+            session, project_with_site, ModuleStatus.COMPLETED, score=95, url="https://example.com/"
+        )
+        await _make_audit(
+            session, project_with_site, ModuleStatus.COMPLETED, score=80, url="https://example.com/a"
+        )
+        await _make_audit(
+            session, project_with_site, ModuleStatus.COMPLETED, score=30, url="https://example.com/b"
+        )
+
+        items = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit/pages", headers=headers(org, user)
+            )
+        ).json()["items"]
+
+        assert items[0]["is_primary"] is True
+        assert items[1]["score"] == 30
+        assert items[2]["score"] == 80

@@ -386,7 +386,19 @@ export interface paths {
         /** Последний аудит сайта */
         get: operations["get_audit_api_v1_projects__project_id__audit_get"];
         put?: never;
-        /** Запустить аудит сайта */
+        /**
+         * Запустить аудит сайта
+         * @description Запускает проверку страницы.
+         *
+         *     Без адреса проверяется главная страница проекта. С адресом — любая другая
+         *     страница того же сайта: в кампании посадочных обычно несколько, и оценивать
+         *     все по главной значит не проверять их вовсе.
+         *
+         *     Отдельного списка страниц нет намеренно. Страница попадает в проект тем, что
+         *     её проверили, — список страниц выводится из проверок. Отдельный справочник
+         *     неизбежно разошёлся бы с ним: в нём остались бы адреса, которые никто не
+         *     проверял, и он выглядел бы как охваченный объём.
+         */
         post: operations["start_audit_api_v1_projects__project_id__audit_post"];
         delete?: never;
         options?: never;
@@ -432,6 +444,34 @@ export interface paths {
         post?: never;
         /** Вернуть замечание в список */
         delete: operations["restore_issue_api_v1_projects__project_id__audit_dismissals__issue_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/audit/pages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Проверенные страницы проекта
+         * @description Страницы, которые проверяли, с последним результатом по каждой.
+         *
+         *     Список выводится из проверок, а не из отдельного справочника: страница
+         *     попадает в проект тем, что её проверили. Справочник неизбежно разошёлся бы
+         *     с реальностью — в нём остались бы адреса, которых никто не касался, и он
+         *     выглядел бы как охваченный объём.
+         *
+         *     Главная страница показывается всегда, даже если её ещё не проверяли: иначе
+         *     у нового проекта список был бы пустым и непонятно было бы, с чего начать.
+         */
+        get: operations["list_pages_api_v1_projects__project_id__audit_pages_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -941,6 +981,32 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** AuditPageList */
+        AuditPageList: {
+            /** Items */
+            items: components["schemas"]["AuditPageRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * AuditPageRead
+         * @description Проверенная страница проекта.
+         */
+        AuditPageRead: {
+            /** Can Launch */
+            can_launch: boolean;
+            /** Checked At */
+            checked_at: string | null;
+            /** Is Primary */
+            is_primary: boolean;
+            /** Score */
+            score: number | null;
+            status: components["schemas"]["ModuleStatus"];
+            /** Url */
+            url: string;
+            /** Verdict */
+            verdict: string | null;
+        };
         /** AuditRead */
         AuditRead: {
             /** Can Launch */
@@ -982,6 +1048,17 @@ export interface components {
             url: string;
             /** Verdict */
             verdict: string | null;
+        };
+        /**
+         * AuditStart
+         * @description Запуск проверки.
+         *
+         *     Без адреса проверяется главная страница проекта. С адресом — другая
+         *     страница того же сайта.
+         */
+        AuditStart: {
+            /** Url */
+            url?: string | null;
         };
         /**
          * Availability
@@ -2507,7 +2584,9 @@ export interface operations {
     };
     get_audit_api_v1_projects__project_id__audit_get: {
         parameters: {
-            query?: never;
+            query?: {
+                url?: string | null;
+            };
             header?: {
                 "x-organization-id"?: string | null;
                 "x-user-id"?: string | null;
@@ -2553,7 +2632,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AuditStart"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -2671,6 +2754,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pages_api_v1_projects__project_id__audit_pages_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditPageList"];
+                };
             };
             /** @description Validation Error */
             422: {

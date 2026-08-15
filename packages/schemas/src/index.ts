@@ -68,6 +68,8 @@ export type ActivityAction = Schemas["ActivityAction"];
 export type CategoryRead = Schemas["CategoryRead"];
 export type AuditIssueRead = Schemas["AuditIssueRead"];
 export type AuditChangesRead = Schemas["AuditChangesRead"];
+export type AuditPageRead = Schemas["AuditPageRead"];
+export type AuditPageList = Schemas["AuditPageList"];
 export type DismissalCreate = Schemas["DismissalCreate"];
 export type DismissalRead = Schemas["DismissalRead"];
 export type DismissalList = Schemas["DismissalList"];
@@ -403,8 +405,14 @@ export class ApiClient {
    * Последний аудит сайта. `null` означает, что аудит ещё ни разу не запускали —
    * это не ошибка и не пустой результат.
    */
-  getAudit(projectId: string): Promise<AuditRead | null> {
-    return this.request<AuditRead | null>(`/api/v1/projects/${projectId}/audit`);
+  getAudit(projectId: string, url?: string | null): Promise<AuditRead | null> {
+    const suffix = url ? `?url=${encodeURIComponent(url)}` : "";
+    return this.request<AuditRead | null>(`/api/v1/projects/${projectId}/audit${suffix}`);
+  }
+
+  /** Проверенные страницы проекта. Список выводится из проверок. */
+  listAuditPages(projectId: string): Promise<AuditPageList> {
+    return this.request<AuditPageList>(`/api/v1/projects/${projectId}/audit/pages`);
   }
 
   /** История проверок: помогли доработки сайта или нет (v0.3 §62). */
@@ -430,7 +438,11 @@ export class ApiClient {
     });
   }
 
-  startAudit(projectId: string): Promise<AuditRead> {
-    return this.request<AuditRead>(`/api/v1/projects/${projectId}/audit`, { method: "POST" });
+  /** Без адреса проверяется главная страница проекта. */
+  startAudit(projectId: string, url?: string | null): Promise<AuditRead> {
+    return this.request<AuditRead>(`/api/v1/projects/${projectId}/audit`, {
+      method: "POST",
+      body: JSON.stringify({ url: url ?? null }),
+    });
   }
 }

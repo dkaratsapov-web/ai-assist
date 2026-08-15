@@ -42,17 +42,14 @@ def recheck_sites() -> int:
 
 async def _recheck() -> int:
     async with session_scope() as session:
-        projects = await _due(session)
+        pages = await _due(session)
 
         queued = 0
-        for project in projects:
-            if not project.website_url:
-                continue
-
+        for project, url in pages:
             audit = SiteAudit(
                 organization_id=project.organization_id,
                 project_id=project.id,
-                url=project.website_url,
+                url=url,
                 status=ModuleStatus.QUEUED,
                 categories=[],
                 issues=[],
@@ -61,7 +58,7 @@ async def _recheck() -> int:
             await session.flush()
 
             try:
-                enqueue_site_audit(audit.id, project.website_url)
+                enqueue_site_audit(audit.id, url)
             except Exception as exc:
                 # Недоступная очередь — не повод оставить запись «в очереди»
                 # навсегда: она заблокировала бы и ручной запуск.
@@ -79,12 +76,16 @@ async def _recheck() -> int:
         return queued
 
 
-async def _due(session: AsyncSession) -> list[Project]:
-    """Проекты, которым пора на проверку.
+async def _due(session: AsyncSession) -> list[tuple[Project, str]]:
+    """Страницы, которым пора на проверку.
 
-    Берутся только активные и только с указанным сайтом. Приостановленный
-    проект специально выведен из работы — ходить по его сайту и тем более
-    беспокоить по нему уведомлениями незачем.
+    Перепроверяются все страницы, которые когда-либо проверяли, а не только
+    главная. Посадочных в кампании обычно несколько, и следить за одной значит
+    не заметить, что сломалась соседняя.
+
+    Берутся только активные проекты. Приостановленный специально выведен из
+    работы — ходить по его сайту и тем более беспокоить по нему уведомлениями
+    незачем.
     """
     projects = list(
         (
@@ -100,32 +101,37 @@ async def _due(session: AsyncSession) -> list[Project]:
     )
 
     threshold = utcnow() - RECHECK_INTERVAL
-    due: list[Project] = []
+    due: list[tuple[Project, str]] = []
 
     for project in projects:
-        latest = (
-            await session.execute(
-                select(SiteAudit)
-                .where(SiteAudit.project_id == project.id)
-                .order_by(SiteAudit.created_at.desc())
-                .limit(1)
+        audits = list(
+            (
+                await session.execute(
+                    select(SiteAudit)
+                    .where(SiteAudit.project_id == project.id)
+                    .order_by(SiteAudit.created_at.desc())
+                )
             )
-        ).scalar_one_or_none()
+            .scalars()
+            .all()
+        )
 
-        # Проект без единой проверки в план не попадает: первую человек
-        # запускает сам, осознанно. Иначе система пошла бы по сайту, о котором
-        # её ещё не просили.
-        if latest is None:
-            continue
+        # Последняя проверка по каждой странице. Страница, которую ни разу не
+        # проверяли, в план не попадает: первую проверку человек запускает сам,
+        # осознанно, иначе система пошла бы по адресу, о котором её не просили.
+        latest: dict[str, SiteAudit] = {}
+        for audit in audits:
+            latest.setdefault(audit.url, audit)
 
-        # Идущая проверка означает, что о проекте уже позаботились.
-        if latest.status in (ModuleStatus.QUEUED, ModuleStatus.RUNNING):
-            continue
+        for url, audit in latest.items():
+            # Идущая проверка означает, что об этой странице уже позаботились.
+            if audit.status in (ModuleStatus.QUEUED, ModuleStatus.RUNNING):
+                continue
 
-        if (latest.created_at or utcnow()) <= threshold:
-            due.append(project)
+            if (audit.created_at or utcnow()) <= threshold:
+                due.append((project, url))
 
-        if len(due) >= MAX_PER_RUN:
-            break
+            if len(due) >= MAX_PER_RUN:
+                return due
 
     return due

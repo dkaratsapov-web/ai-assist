@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import {
   type ApiError,
   type AuditChangesRead,
+  type AuditPageRead,
   type AuditHistoryItem,
   type AuditIssueRead,
   type AuditRead,
@@ -20,6 +21,7 @@ import {
   ErrorState,
   Input,
   KpiCard,
+  Modal,
   ModuleStatusBadge,
   ProjectSwitcher,
   Skeleton,
@@ -75,6 +77,12 @@ function SiteAuditScreen() {
 
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pages, setPages] = useState<AuditPageRead[]>([]);
+  // null означает «главная страница проекта»: её адрес знает backend, и
+  // дублировать это знание на фронте незачем.
+  const [page, setPage] = useState<string | null>(null);
+  const [addingPage, setAddingPage] = useState(false);
+  const [pageDraft, setPageDraft] = useState("");
   const [audit, setAudit] = useState<AuditRead | null>(null);
   const [history, setHistory] = useState<AuditHistoryItem[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -127,14 +135,16 @@ function SiteAuditScreen() {
         // История читается вместе с последним результатом: они всегда
         // показываются рядом, и второй запрос отдельным эффектом дал бы
         // мигание — сначала новый результат, потом устаревшая история.
-        const [result, past] = await Promise.all([
-          api.getAudit(selectedId),
+        const [result, past, pageList] = await Promise.all([
+          api.getAudit(selectedId, page),
           api.getAuditHistory(selectedId),
+          api.listAuditPages(selectedId),
         ]);
         if (ignore) return;
         setError(null);
         setAudit(result);
         setHistory(past.items);
+        setPages(pageList.items);
         setLoaded(true);
         if (isRunning(result)) {
           timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
@@ -152,17 +162,37 @@ function SiteAuditScreen() {
       ignore = true;
       if (timer) clearTimeout(timer);
     };
-  }, [api, selectedId, reloadToken]);
+  }, [api, selectedId, page, reloadToken]);
 
   const project = projects?.find((p) => p.id === selectedId) ?? null;
   const running = isRunning(audit);
+
+  const addPage = async () => {
+    if (!selectedId) return;
+    const url = pageDraft.trim();
+    setStarting(true);
+    setError(null);
+    try {
+      await api.startAudit(selectedId, url);
+      setAddingPage(false);
+      setPageDraft("");
+      // Переключаемся на добавленную страницу: человек только что попросил её
+      // проверить и ждёт результат именно по ней.
+      setPage(url);
+      setReloadToken((token) => token + 1);
+    } catch (err) {
+      setError(toApiError(err));
+    } finally {
+      setStarting(false);
+    }
+  };
 
   const start = async () => {
     if (!selectedId) return;
     setStarting(true);
     setError(null);
     try {
-      const result = await api.startAudit(selectedId);
+      const result = await api.startAudit(selectedId, page);
       setAudit(result);
       setLoaded(true);
       // Ответ приходит со статусом «в очереди» — опрос подхватит его сам.
@@ -240,6 +270,15 @@ function SiteAuditScreen() {
               </Button>
             </div>
           </section>
+
+          {pages.length > 0 && project?.website_url && (
+            <PagePicker
+              pages={pages}
+              selected={page ?? project.website_url}
+              onSelect={(url) => setPage(url === project.website_url ? null : url)}
+              onAdd={() => setAddingPage(true)}
+            />
+          )}
 
           {project && !project.website_url && (
             <Card>
@@ -407,8 +446,100 @@ function SiteAuditScreen() {
           )}
         </>
       )}
+      <Modal
+        open={addingPage}
+        onClose={() => setAddingPage(false)}
+        title="Проверить ещё одну страницу"
+        description="Адрес другой посадочной того же сайта. В кампании их обычно несколько, и оценивать все по главной — значит не проверять их вовсе."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setAddingPage(false)}>
+              Отмена
+            </Button>
+            <Button onClick={addPage} loading={starting} disabled={pageDraft.trim() === ""}>
+              Проверить
+            </Button>
+          </>
+        }
+      >
+        <Input
+          label="Адрес страницы"
+          value={pageDraft}
+          onChange={(e) => setPageDraft(e.target.value)}
+          placeholder={
+            project?.website_url ? `${project.website_url}okna-pvh` : "https://сайт.ру/страница"
+          }
+          hint="Только страницы вашего сайта — чужие адреса проверять нельзя"
+        />
+      </Modal>
     </AppShell>
   );
+}
+
+/**
+ * Переключатель проверенных страниц.
+ *
+ * Главная всегда первая и помечена, остальные — от худшей оценки к лучшей:
+ * работать начинают с той страницы, которая тянет вниз.
+ */
+function PagePicker({
+  pages,
+  selected,
+  onSelect,
+  onAdd,
+}: {
+  pages: AuditPageRead[];
+  selected: string;
+  onSelect: (url: string) => void;
+  onAdd: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title="Посадочные страницы"
+        description="Страница попадает сюда, когда её проверили"
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        {pages.map((item) => {
+          const active = item.url === selected;
+          return (
+            <button
+              key={item.url}
+              type="button"
+              aria-pressed={active}
+              onClick={() => onSelect(item.url)}
+              className={
+                "rounded-pill text-caption focus-visible:outline-focus inline-flex items-center gap-1.5 px-3 py-1.5 font-medium focus-visible:outline-2 " +
+                (active
+                  ? "bg-cta text-cta-text"
+                  : "bg-bg-secondary text-text-secondary hover:bg-surface-active")
+              }
+            >
+              <span className="max-w-64 truncate">
+                {item.is_primary ? "Главная" : shortPath(item.url)}
+              </span>
+              {item.score !== null && (
+                <span className={active ? "opacity-70" : "text-text-secondary"}>{item.score}</span>
+              )}
+            </button>
+          );
+        })}
+        <Button size="sm" variant="ghost" onClick={onAdd}>
+          + Ещё страница
+        </Button>
+      </div>
+    </Card>
+  );
+}
+
+/** Путь без домена: домен у всех страниц один, и повторять его негде. */
+function shortPath(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.pathname === "/" ? parsed.hostname : parsed.pathname;
+  } catch {
+    return url;
+  }
 }
 
 /**

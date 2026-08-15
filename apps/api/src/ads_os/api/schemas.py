@@ -695,3 +695,31 @@ class NotificationList(BaseModel):
     total: int
     #: Непрочитанных всего, а не в выдаче: это число показывается на колокольчике.
     unread: int
+
+
+class AuditStart(BaseModel):
+    """Запуск проверки.
+
+    Без адреса проверяется главная страница проекта. С адресом — другая
+    страница того же сайта.
+    """
+
+    url: str | None = Field(default=None, max_length=2048)
+
+
+class AuditPageRead(BaseModel):
+    """Проверенная страница проекта."""
+
+    url: str
+    #: Главная страница проекта. С неё начинают, и она открывается по умолчанию.
+    is_primary: bool
+    score: int | None
+    verdict: str | None
+    can_launch: bool
+    status: ModuleStatus
+    checked_at: datetime | None
+
+
+class AuditPageList(BaseModel):
+    items: list[AuditPageRead]
+    total: int
