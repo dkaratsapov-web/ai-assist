@@ -289,6 +289,35 @@ export interface paths {
         patch: operations["update_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/ads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Черновики объявлений по группам фраз
+         * @description Собирает по черновику на каждую группу фраз.
+         *
+         *     Текст берётся с посадочной страницы клиента — из последнего завершённого
+         *     аудита. Сочинять его система не будет: объявление, обещающее то, чего на
+         *     сайте нет, — это отказ на модерации в лучшем случае и претензия клиента в
+         *     худшем.
+         *
+         *     Ничего не сохраняется. Черновик выводится из фраз и содержимого страницы;
+         *     и то и другое меняется, а сохранённый черновик молча устарел бы и разошёлся
+         *     с тем, что человек видит на других экранах.
+         */
+        get: operations["list_ad_drafts_api_v1_projects__project_id__ads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/audit": {
         parameters: {
             query?: never;
@@ -687,6 +716,56 @@ export interface components {
             subject: string;
             /** User Name */
             user_name: string;
+        };
+        /** AdDraftList */
+        AdDraftList: {
+            /** Items */
+            items: components["schemas"]["AdDraftRead"][];
+            /** Ready */
+            ready: number;
+            /** Source Note */
+            source_note?: string | null;
+            /** Total */
+            total: number;
+        };
+        /**
+         * AdDraftRead
+         * @description Черновик объявления.
+         *
+         *     Именно черновик: система делает механическую часть — подставляет фразу,
+         *     собирает текст из фрагментов страницы и проверяет лимиты. Итоговый текст
+         *     пишет специалист, у которого есть контекст.
+         */
+        AdDraftRead: {
+            /** Callouts */
+            callouts: string[];
+            /** Cluster */
+            cluster: string;
+            /** Display Path */
+            display_path: string | null;
+            /** Is Ready */
+            is_ready: boolean;
+            /** Keywords */
+            keywords: string[];
+            /** Text */
+            text: string;
+            /** Title */
+            title: string;
+            /** Title 2 */
+            title_2: string | null;
+            /** Violations */
+            violations: components["schemas"]["AdViolationRead"][];
+        };
+        /**
+         * AdViolationRead
+         * @description Что помешает объявлению выйти на показы.
+         */
+        AdViolationRead: {
+            /** Field Name */
+            field_name: string;
+            /** Message */
+            message: string;
+            problem: components["schemas"]["Problem"];
         };
         /**
          * AuditChangesRead
@@ -1408,6 +1487,12 @@ export interface components {
          */
         PlanStatus: "ready" | "risky" | "blocked";
         /**
+         * Problem
+         * @description Что не так с черновиком.
+         * @enum {string}
+         */
+        Problem: "too_long" | "caps" | "unproven_superlative" | "nothing_to_say";
+        /**
          * ProgressRead
          * @description Где находится проект и что делать дальше.
          *
@@ -2128,6 +2213,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ad_drafts_api_v1_projects__project_id__ads_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdDraftList"];
                 };
             };
             /** @description Validation Error */

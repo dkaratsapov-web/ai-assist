@@ -175,6 +175,10 @@ class PageSignals:
     #: Сколько видимых полей в самой большой форме. Форма из десяти полей
     #: собирает заявок в разы меньше, чем форма из двух, — при том же бюджете.
     max_form_fields: int = 0
+    #: Короткие фрагменты предложения прямо со страницы: «Замер бесплатно»,
+    #: «Гарантия 5 лет», «Окно от 12 900 ₽». Из них собираются черновики
+    #: объявлений — так текст остаётся текстом клиента, а не выдумкой системы.
+    selling_points: list[str] = field(default_factory=list)
     #: Оформлен ли телефон ссылкой tel:. С телефона по ненажимаемому номеру не
     #: позвонить — его надо запоминать и набирать вручную, и часть посетителей
     #: этого просто не делает.
@@ -326,6 +330,9 @@ def collect_signals(html: str) -> PageSignals:
 
     signals.trust_words = [w for w in _TRUST_WORDS if w in lowered]
     signals.offer_words = [w for w in _OFFER_WORDS if w in lowered]
+    # Блоки разделяются переводом строки, а не пробелом: иначе заголовок
+    # склеивается со следующим абзацем в одну бессмысленную строку.
+    signals.selling_points = _selling_points(tree.text(separator="\n", strip=True))
 
     if match := _METRICA_RE.search(html):
         signals.metrica_counter = match.group(1) or match.group(2)
@@ -702,3 +709,50 @@ def issues_from_stored(rows: Iterable[dict[str, object]]) -> tuple[Issue, ...]:
             continue
 
     return tuple(restored)
+
+
+#: Предел длины фрагмента предложения. Ограничение идёт от объявления: во
+#: второй заголовок Директа помещается тридцать символов, и фрагмент длиннее
+#: годится разве что в текст.
+MAX_SELLING_POINT = 60
+
+_SENTENCE_RE = re.compile(r"[^.!?•·|\n]+")
+
+
+def _selling_points(text: str) -> list[str]:
+    """Короткие фрагменты предложения прямо со страницы.
+
+    Берутся куски собственного текста клиента, а не сочинённые формулировки.
+    Причина не в скромности: объявление, обещающее то, чего на странице нет, —
+    это отказ на модерации в лучшем случае и жалоба клиента в худшем.
+    """
+    found: list[str] = []
+    seen: set[str] = set()
+
+    pieces: list[str] = []
+    for raw in _SENTENCE_RE.findall(text):
+        sentence = " ".join(raw.split()).strip(" ,;:—-")
+        pieces.append(sentence)
+        # Длинное предложение дополнительно режется по запятым. «Гарантия 5
+        # лет, более 4000 отзывов, 11 лет на рынке» целиком не помещается во
+        # второй заголовок, а каждая часть по отдельности — помещается.
+        if len(sentence) > 30 and "," in sentence:
+            pieces.extend(part.strip() for part in sentence.split(","))
+
+    for fragment in pieces:
+        if not (3 < len(fragment) <= MAX_SELLING_POINT):
+            continue
+
+        lowered = fragment.lower()
+        if not any(w in lowered for w in _OFFER_WORDS + _TRUST_WORDS) and not _PRICE_RE.search(
+            fragment
+        ):
+            continue
+
+        key = lowered
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append(fragment)
+
+    return found[:12]

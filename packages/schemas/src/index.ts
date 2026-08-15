@@ -56,6 +56,9 @@ export type ClusterRead = Schemas["ClusterRead"];
 export type ClusterList = Schemas["ClusterList"];
 export type MinusWordRead = Schemas["MinusWordRead"];
 export type MinusWordList = Schemas["MinusWordList"];
+export type AdDraftRead = Schemas["AdDraftRead"];
+export type AdDraftList = Schemas["AdDraftList"];
+export type AdViolationRead = Schemas["AdViolationRead"];
 export type Intent = Schemas["Intent"];
 export type ActivityRead = Schemas["ActivityRead"];
 export type ActivityList = Schemas["ActivityList"];
@@ -331,6 +334,11 @@ export class ApiClient {
     await this.requestNoContent(`/api/v1/projects/${projectId}/minus-words/${minusWordId}`, {
       method: "DELETE",
     });
+  }
+
+  /** Черновики объявлений по группам фраз. Ничего не сохраняется. */
+  listAdDrafts(projectId: string): Promise<AdDraftList> {
+    return this.request<AdDraftList>(`/api/v1/projects/${projectId}/ads`);
   }
 
   listCompetitors(projectId: string): Promise<CompetitorList> {

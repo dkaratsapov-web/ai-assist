@@ -71,6 +71,12 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: текста находок, и любая правка формулировки молча ломала бы сравнение.
     features: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
+    #: Короткие фрагменты предложения со страницы: «Замер бесплатно», «Гарантия
+    #: 5 лет». Из них собираются черновики объявлений. Сохраняются вместе с
+    #: проверкой, а не вычитываются заново: страница меняется, а черновик должен
+    #: соответствовать той версии, которую проверяли.
+    selling_points: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

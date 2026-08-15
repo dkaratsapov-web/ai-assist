@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..models.activity import ActivityAction
 from ..models.audit import ModuleStatus
 from ..models.project import MainConversion, ProjectStatus
+from ..services.ads import Problem
 from ..services.competitors import FeatureKey
 from ..services.economics import Availability, EconomicsMode
 from ..services.progress import StepKey, StepState
@@ -631,3 +632,40 @@ class MinusWordList(BaseModel):
 
 class MinusWordCreate(BaseModel):
     word: str = Field(min_length=2, max_length=60)
+
+
+class AdViolationRead(BaseModel):
+    """Что помешает объявлению выйти на показы."""
+
+    problem: Problem
+    field_name: str
+    message: str
+
+
+class AdDraftRead(BaseModel):
+    """Черновик объявления.
+
+    Именно черновик: система делает механическую часть — подставляет фразу,
+    собирает текст из фрагментов страницы и проверяет лимиты. Итоговый текст
+    пишет специалист, у которого есть контекст.
+    """
+
+    cluster: str
+    title: str
+    title_2: str | None
+    text: str
+    display_path: str | None
+    callouts: list[str]
+    keywords: list[str]
+    violations: list[AdViolationRead]
+    #: Пройдёт ли модерацию по проверяемым правилам. Не «хорошее объявление».
+    is_ready: bool
+
+
+class AdDraftList(BaseModel):
+    items: list[AdDraftRead]
+    total: int
+    #: Сколько черновиков без нарушений.
+    ready: int
+    #: Пусто, если аудит не проводился: без него неоткуда взять текст.
+    source_note: str | None = None

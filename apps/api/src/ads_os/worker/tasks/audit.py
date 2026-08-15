@@ -110,10 +110,9 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         # Те же признаки, что собираются у конкурентов. Сохраняются здесь, а не
         # выводятся потом из текста находок: формулировку находки однажды
         # поправят, и сравнение молча начнёт врать.
-        audit.features = {
-            key.value: value
-            for key, value in extract_features(collect_signals(fetched["html"])).items()
-        }
+        signals = collect_signals(fetched["html"])
+        audit.features = {key.value: value for key, value in extract_features(signals).items()}
+        audit.selling_points = list(signals.selling_points)
 
         logger.info(
             "аудит завершён",

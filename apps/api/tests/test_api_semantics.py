@@ -10,7 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ads_os.api.deps import get_session
 from ads_os.main import create_app
-from ads_os.models import Organization, Project, User
+from ads_os.models import Organization, Project, SiteAudit, User
+from ads_os.models.audit import ModuleStatus
 
 from .conftest import make_user
 
@@ -258,3 +259,99 @@ class TestМинусСлова:
         ).json()
 
         assert "вакансии" not in {s["word"] for s in body["suggestions"]}
+
+
+class TestЧерновикиОбъявлений:
+    async def test_без_аудита_тексты_не_выдумываются(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Брать текст неоткуда — и это надо сказать, а не сочинить."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/ads", headers=headers(org, user))
+        ).json()
+
+        assert body["source_note"]
+        assert "аудит" in body["source_note"].lower()
+        assert all(item["text"] == "" for item in body["items"])
+
+    async def test_черновик_собирается_из_фрагментов_страницы(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        session.add(
+            SiteAudit(
+                organization_id=org.id,
+                project_id=row.id,
+                url="https://example.com/",
+                status=ModuleStatus.COMPLETED,
+                score=90,
+                categories=[],
+                issues=[],
+                selling_points=["Замер бесплатно", "Окно от 12 900 ₽", "Гарантия 5 лет"],
+            )
+        )
+        await session.commit()
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/ads", headers=headers(org, user))
+        ).json()
+
+        assert body["source_note"] is None
+        assert body["total"] > 0
+        first = body["items"][0]
+        assert "Замер бесплатно" in first["text"]
+        assert first["title"]
+
+    async def test_остаток_не_превращается_в_объявление(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Фразы без группы — это не группа под объявление."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/ads", headers=headers(org, user))
+        ).json()
+
+        assert all(item["cluster"] != "Остальные фразы" for item in body["items"])
+
+    async def test_чужие_черновики_недоступны(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        _, _, row = project
+        _, other_org = two_organizations
+        other_user = await make_user(session, other_org, "other@example.com")
+        await session.commit()
+
+        response = await client.get(
+            f"/api/v1/projects/{row.id}/ads", headers=headers(other_org, other_user)
+        )
+
+        assert response.status_code == 404

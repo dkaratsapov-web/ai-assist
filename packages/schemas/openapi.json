@@ -103,6 +103,143 @@
         "title": "ActivityRead",
         "type": "object"
       },
+      "AdDraftList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdDraftRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "integer"
+          },
+          "source_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Note"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "ready"
+        ],
+        "title": "AdDraftList",
+        "type": "object"
+      },
+      "AdDraftRead": {
+        "description": "Черновик объявления.\n\nИменно черновик: система делает механическую часть — подставляет фразу,\nсобирает текст из фрагментов страницы и проверяет лимиты. Итоговый текст\nпишет специалист, у которого есть контекст.",
+        "properties": {
+          "callouts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Callouts",
+            "type": "array"
+          },
+          "cluster": {
+            "title": "Cluster",
+            "type": "string"
+          },
+          "display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Path"
+          },
+          "is_ready": {
+            "title": "Is Ready",
+            "type": "boolean"
+          },
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title 2"
+          },
+          "violations": {
+            "items": {
+              "$ref": "#/components/schemas/AdViolationRead"
+            },
+            "title": "Violations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "cluster",
+          "title",
+          "title_2",
+          "text",
+          "display_path",
+          "callouts",
+          "keywords",
+          "violations",
+          "is_ready"
+        ],
+        "title": "AdDraftRead",
+        "type": "object"
+      },
+      "AdViolationRead": {
+        "description": "Что помешает объявлению выйти на показы.",
+        "properties": {
+          "field_name": {
+            "title": "Field Name",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "problem": {
+            "$ref": "#/components/schemas/Problem"
+          }
+        },
+        "required": [
+          "problem",
+          "field_name",
+          "message"
+        ],
+        "title": "AdViolationRead",
+        "type": "object"
+      },
       "AuditChangesRead": {
         "description": "Что изменилось с прошлой проверки.\n\nОтвечает на вопрос, ради которого повторную проверку и запускают. Изменение\nбалла на него не отвечает: балл мог вырасти, пока критическая проблема\nосталась на месте.",
         "properties": {
@@ -2107,6 +2244,17 @@
         "title": "PlanStatus",
         "type": "string"
       },
+      "Problem": {
+        "description": "Что не так с черновиком.",
+        "enum": [
+          "too_long",
+          "caps",
+          "unproven_superlative",
+          "nothing_to_say"
+        ],
+        "title": "Problem",
+        "type": "string"
+      },
       "ProgressRead": {
         "description": "Где находится проект и что делать дальше.\n\nСчитается на сервере, а не в интерфейсе: то же самое понадобится боту, и\nдва независимых расчёта неизбежно разошлись бы.",
         "properties": {
@@ -3802,6 +3950,100 @@
         "summary": "Изменить проект",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/ads": {
+      "get": {
+        "description": "Собирает по черновику на каждую группу фраз.\n\nТекст берётся с посадочной страницы клиента — из последнего завершённого\nаудита. Сочинять его система не будет: объявление, обещающее то, чего на\nсайте нет, — это отказ на модерации в лучшем случае и претензия клиента в\nхудшем.\n\nНичего не сохраняется. Черновик выводится из фраз и содержимого страницы;\nи то и другое меняется, а сохранённый черновик молча устарел бы и разошёлся\nс тем, что человек видит на других экранах.",
+        "operationId": "list_ad_drafts_api_v1_projects__project_id__ads_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdDraftList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Черновики объявлений по группам фраз",
+        "tags": [
+          "semantics"
         ]
       }
     },

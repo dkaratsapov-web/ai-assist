@@ -6,6 +6,8 @@
 не встречается ни в одном модуле бизнес-логики.
 """
 
+from collections.abc import Callable
+
 from .contracts import (
     AiProviderError,
     AiRequest,
@@ -33,6 +35,7 @@ __all__ = [
     "UntrustedContent",
     "build_prompt",
     "build_registry",
+    "parse_routes",
 ]
 
 
@@ -47,13 +50,7 @@ def build_registry() -> ProviderRegistry:
 
     settings = get_settings()
 
-    if settings.ai_provider == "stub":
-        default: AiProvider = StubProvider()
-    else:
-        raise NotImplementedError(
-            f"Провайдер {settings.ai_provider!r} ещё не подключён. "
-            "Выбор провайдера — открытое решение владельца продукта (v0.4 §25)."
-        )
+    default = _make(settings.ai_provider)
 
     # Для чувствительных данных провайдера нет по умолчанию: попытка отправить
     # персональные данные наружу должна падать, а не тихо проходить (v0.4 §2.3).
@@ -64,4 +61,55 @@ def build_registry() -> ProviderRegistry:
             "по обработке персональных данных (v0.4 §2.3)."
         )
 
-    return ProviderRegistry(default=default, sensitive=sensitive)
+    return ProviderRegistry(
+        default=default,
+        sensitive=sensitive,
+        by_task=parse_routes(settings.ai_provider_by_task),
+    )
+
+
+#: Известные провайдеры. Пока подключена только заглушка: выбор моделей —
+#: открытое решение владельца продукта (v0.4 §25). Каждый новый провайдер
+#: добавляется одной строкой здесь и не затрагивает ни один вызывающий модуль.
+_PROVIDERS: dict[str, Callable[[], AiProvider]] = {"stub": StubProvider}
+
+
+def _make(name: str) -> AiProvider:
+    factory = _PROVIDERS.get(name)
+    if factory is None:
+        raise NotImplementedError(
+            f"Провайдер {name!r} ещё не подключён. Доступны: "
+            f"{', '.join(sorted(_PROVIDERS))}."
+        )
+    return factory()
+
+
+def parse_routes(raw: str) -> dict[AiTask, AiProvider]:
+    """Разбирает маршруты вида «задача=провайдер» через запятую.
+
+    Ошибка в настройке роняет запуск, а не молча уводит задачу к провайдеру по
+    умолчанию. Тихая подмена здесь означала бы, что данные ушли не той модели,
+    которой их разрешили отправлять, — и заметить это было бы нечем.
+    """
+    routes: dict[AiTask, AiProvider] = {}
+
+    for chunk in raw.split(","):
+        chunk = chunk.strip()
+        if not chunk:
+            continue
+
+        task_name, _, provider_name = chunk.partition("=")
+        if not provider_name:
+            raise ValueError(f"Маршрут {chunk!r} должен иметь вид «задача=провайдер»")
+
+        try:
+            task = AiTask(task_name.strip())
+        except ValueError as exc:
+            raise ValueError(
+                f"Неизвестная задача {task_name.strip()!r}. Доступны: "
+                f"{', '.join(t.value for t in AiTask)}."
+            ) from exc
+
+        routes[task] = _make(provider_name.strip())
+
+    return routes

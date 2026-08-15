@@ -8,9 +8,11 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, select
 
 from ...errors import AppError
-from ...models import Keyword, MinusWord, Project
+from ...models import Keyword, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
+from ...models.audit import ModuleStatus
 from ...services.activity import record
+from ...services.ads import build_draft
 from ...services.semantics import (
     INTENT_LABELS,
     Intent,
@@ -23,6 +25,9 @@ from ...services.semantics import (
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
+    AdDraftList,
+    AdDraftRead,
+    AdViolationRead,
     ClusterList,
     ClusterRead,
     ImportSummary,
@@ -418,4 +423,94 @@ def _to_read(row: Keyword) -> KeywordRead:
         trigger=row.trigger,
         is_manual=row.is_manual,
         cluster_name=row.cluster_name,
+    )
+
+
+@router.get(
+    "/{project_id}/ads",
+    response_model=AdDraftList,
+    summary="Черновики объявлений по группам фраз",
+)
+async def list_ad_drafts(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> AdDraftList:
+    """Собирает по черновику на каждую группу фраз.
+
+    Текст берётся с посадочной страницы клиента — из последнего завершённого
+    аудита. Сочинять его система не будет: объявление, обещающее то, чего на
+    сайте нет, — это отказ на модерации в лучшем случае и претензия клиента в
+    худшем.
+
+    Ничего не сохраняется. Черновик выводится из фраз и содержимого страницы;
+    и то и другое меняется, а сохранённый черновик молча устарел бы и разошёлся
+    с тем, что человек видит на других экранах.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _keywords(session, ctx, project_id)
+    groups = cluster(_targeted(rows))
+
+    audit = (
+        await session.execute(
+            select(SiteAudit)
+            .where(SiteAudit.organization_id == ctx.organization_id)
+            .where(SiteAudit.project_id == project_id)
+            .where(SiteAudit.status == ModuleStatus.COMPLETED)
+            .order_by(SiteAudit.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    points: tuple[str, ...] = ()
+    note: str | None = None
+
+    if audit is None:
+        note = (
+            "Сайт ещё не проверяли, поэтому тексты пустые: брать их неоткуда. "
+            "Запустите аудит — черновики соберутся из предложения на странице."
+        )
+    else:
+        points = tuple(audit.selling_points or [])
+        if not points:
+            note = (
+                "На проверенной странице не нашлось ни цены, ни срока, ни гарантии — "
+                "собирать текст не из чего. Тексты придётся написать вручную."
+            )
+
+    drafts = [
+        build_draft(
+            cluster_name=group.name,
+            keywords=group.phrases,
+            selling_points=points,
+            region=project.primary_region,
+        )
+        for group in groups
+        # Остаток — это не группа под объявление, а фразы, которым не нашлось
+        # места. Собирать по ним объявление значило бы делать вид, что оно есть.
+        if group.core
+    ]
+
+    return AdDraftList(
+        items=[
+            AdDraftRead(
+                cluster=draft.cluster,
+                title=draft.title,
+                title_2=draft.title_2,
+                text=draft.text,
+                display_path=draft.display_path,
+                callouts=list(draft.callouts),
+                keywords=list(draft.keywords),
+                violations=[
+                    AdViolationRead(
+                        problem=v.problem, field_name=v.field_name, message=v.message
+                    )
+                    for v in draft.violations
+                ],
+                is_ready=draft.is_ready,
+            )
+            for draft in drafts
+        ],
+        total=len(drafts),
+        ready=sum(1 for draft in drafts if draft.is_ready),
+        source_note=note,
     )

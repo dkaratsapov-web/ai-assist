@@ -24,6 +24,7 @@ from ads_os.services.ai import (
     StubProvider,
     UntrustedContent,
     build_prompt,
+    parse_routes,
 )
 
 
@@ -184,3 +185,55 @@ class TestУчётПотребления:
                 reasoning_summary="",
                 usage=AiUsage(provider="stub", model="stub"),
             )
+
+
+class TestМаршрутизацияПоЗадачам:
+    """Разные задачи — разным моделям.
+
+    Замысел: генерация объявлений и разбор кампаний требуют разного. Первое —
+    сотни однотипных вызовов, где нужна дешёвая и быстрая модель. Второе —
+    редкие вызовы, где важно качество рассуждения. Отдельно от этого проходит
+    граница по данным: модель внутри страны и за её пределами — разные правовые
+    режимы для персональных данных.
+    """
+
+    def test_задача_уходит_назначенному_провайдеру(self) -> None:
+        hands = StubProvider()
+        hands.name = "руки"
+        head = StubProvider()
+        head.name = "голова"
+
+        registry = ProviderRegistry(default=head, by_task={AiTask.AD_GENERATION: hands})
+
+        assert (
+            registry.resolve(AiTask.AD_GENERATION, Sensitivity.SAFE_PUBLIC).name == "руки"
+        )
+        assert (
+            registry.resolve(AiTask.RECOMMENDATION, Sensitivity.SAFE_PUBLIC).name == "голова"
+        )
+
+    def test_маршруты_читаются_из_настроек(self) -> None:
+        routes = parse_routes("ad_generation=stub, clustering=stub")
+
+        assert set(routes) == {AiTask.AD_GENERATION, AiTask.CLUSTERING}
+
+    def test_пустая_настройка_маршрутов_не_ломается(self) -> None:
+        assert parse_routes("") == {}
+
+    def test_опечатка_в_задаче_роняет_запуск(self) -> None:
+        """Тихая подмена означала бы, что данные ушли не той модели."""
+        with pytest.raises(ValueError, match="Неизвестная задача"):
+            parse_routes("ad_генерация=stub")
+
+    def test_неподключённый_провайдер_роняет_запуск(self) -> None:
+        with pytest.raises(NotImplementedError, match="ещё не подключён"):
+            parse_routes("ad_generation=yandexgpt")
+
+    def test_маршрут_не_обходит_защиту_чувствительных_данных(self) -> None:
+        """Иначе маршрут по задаче стал бы способом обойти запрет на ПДн."""
+        hands = StubProvider()
+        hands.name = "руки"
+        registry = ProviderRegistry(default=hands, by_task={AiTask.AD_GENERATION: hands})
+
+        with pytest.raises(SensitiveDataNotAllowedError):
+            registry.resolve(AiTask.AD_GENERATION, Sensitivity.SENSITIVE)
