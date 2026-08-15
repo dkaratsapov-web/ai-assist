@@ -1,20 +1,11 @@
 import type { ComponentType } from "react";
 import {
-  IconBolt,
   IconChart,
   IconClock,
-  IconExperiment,
   IconFolder,
   IconGlobe,
   IconHome,
-  IconLayers,
-  IconMegaphone,
-  IconPlug,
-  IconReport,
-  IconSearch,
   IconSettings,
-  IconSparkles,
-  IconTarget,
   IconUsers,
   type IconProps,
 } from "@ads-os/ui/icons";
@@ -40,6 +31,13 @@ export interface NavGroup {
  *
  * Каждый пункт имеет иконку и текст: только иконки для ключевой навигации не
  * используются (v0.3 §145).
+ *
+ * В списке только те экраны, которые существуют. Раньше здесь было ещё
+ * двенадцать пунктов — шаблоны, отчёты, эксперименты, генератор объявлений,
+ * интеграции, — и каждый вёл на страницу «не найдено». Меню, половина которого
+ * не работает, хуже короткого меню: человек перестаёт доверять и остальным
+ * пунктам и не понимает, что сломалось, а что просто ещё не сделано. Пункты
+ * вернутся вместе со своими экранами, по одному.
  */
 export const globalNavigation: NavGroup[] = [
   {
@@ -49,58 +47,21 @@ export const globalNavigation: NavGroup[] = [
   {
     key: "projects",
     title: "Проекты",
-    items: [
-      { key: "projects", label: "Проекты", href: "/projects", icon: IconFolder },
-      // «Обзор всех проектов» временно убран. Его экрана ещё нет, а адрес
-      // /projects/overview теперь попадает в страницу проекта и открывает её с
-      // идентификатором «overview» — то есть с ошибкой. Пункт вернётся вместе с
-      // самим экраном, по адресу, который не спорит с карточкой проекта.
-      { key: "templates", label: "Шаблоны стратегий", href: "/templates", icon: IconLayers },
-    ],
+    items: [{ key: "projects", label: "Проекты", href: "/projects", icon: IconFolder }],
   },
   {
-    key: "analytics",
-    title: "Аналитика",
+    key: "research",
+    title: "Исследование",
     items: [
-      { key: "analytics", label: "Аналитика", href: "/analytics", icon: IconChart },
-      { key: "reports", label: "Отчёты", href: "/reports", icon: IconReport },
-      { key: "activity", label: "Журнал действий", href: "/activity", icon: IconClock },
-      { key: "experiments", label: "Эксперименты", href: "/experiments", icon: IconExperiment },
-    ],
-  },
-  {
-    key: "ai",
-    title: "AI-инструменты",
-    items: [
-      {
-        key: "recommendations",
-        label: "AI-рекомендации",
-        href: "/recommendations",
-        icon: IconSparkles,
-        // Счётчик убран: он показывал 12 при нуле рекомендаций. Вернётся, когда
-        // будет что считать.
-      },
-      { key: "quick-analysis", label: "Быстрый анализ", href: "/quick-analysis", icon: IconBolt },
-      {
-        key: "ad-generator",
-        label: "Генератор объявлений",
-        href: "/ad-generator",
-        icon: IconMegaphone,
-      },
-      { key: "semantics", label: "Подбор семантики", href: "/semantics", icon: IconSearch },
       { key: "site-audit", label: "Аудит сайта", href: "/site-audit", icon: IconGlobe },
       { key: "competitors", label: "Конкуренты", href: "/competitors", icon: IconUsers },
+      { key: "economics", label: "Экономика", href: "/economics", icon: IconChart },
     ],
   },
   {
-    key: "integrations",
-    title: "Интеграции",
-    items: [
-      { key: "direct", label: "Яндекс Директ", href: "/integrations/direct", icon: IconTarget },
-      { key: "metrica", label: "Яндекс Метрика", href: "/integrations/metrica", icon: IconChart },
-      { key: "crm", label: "CRM", href: "/integrations/crm", icon: IconUsers },
-      { key: "channels", label: "Telegram / MAX", href: "/integrations/channels", icon: IconPlug },
-    ],
+    key: "history",
+    title: "История",
+    items: [{ key: "activity", label: "Журнал действий", href: "/activity", icon: IconClock }],
   },
 ];
 
