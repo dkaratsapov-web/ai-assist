@@ -184,11 +184,11 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
             </ul>
           )}
 
-          {audit.issues.length > 0 && (
+          {reportIssues(audit).length > 0 && (
             <>
               <h3 className="text-body-sm mb-1 font-medium">Что исправить</h3>
               <ul className="flex flex-col gap-2">
-                {audit.issues.map((issue, index) => (
+                {reportIssues(audit).map((issue, index) => (
                   <li key={`${issue.title}-${index}`} className="text-body-sm">
                     <span className="text-text-secondary">
                       {SEVERITY_TEXT[issue.severity] ?? issue.severity}:{" "}
@@ -312,6 +312,17 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
       </footer>
     </main>
   );
+}
+
+/**
+ * Замечания для клиентского отчёта.
+ *
+ * Отмеченные неактуальными не попадают: для клиента это решение уже принято, и
+ * строка «цен нет, но мы решили, что это неважно» в отчёте только вызывает
+ * вопрос, на который отчёт не отвечает.
+ */
+function reportIssues(audit: AuditRead) {
+  return audit.issues.filter((issue) => !issue.dismissed);
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

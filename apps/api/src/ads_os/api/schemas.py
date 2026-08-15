@@ -421,6 +421,11 @@ class AuditIssueRead(BaseModel):
     severity: str
     title: str
     action: str
+    #: Отмечено человеком как неактуальное для этого проекта. На балл и вердикт
+    #: не влияет — скрытие меняет только то, что показывается в работе.
+    dismissed: bool = False
+    dismissed_reason: str | None = None
+    dismissed_by: str | None = None
 
 
 class AuditChangesRead(BaseModel):
@@ -518,3 +523,24 @@ class LaunchPlanRead(BaseModel):
     test_weeks: int | None
     test_budget: Decimal | None
     advice: list[str]
+
+
+class DismissalCreate(BaseModel):
+    """Отметка «замечание неактуально для этого проекта»."""
+
+    issue_key: str
+    #: Почему. Не обязательно, но именно это читает второй специалист через
+    #: полгода, когда сомневается в решении.
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class DismissalRead(BaseModel):
+    issue_key: str
+    reason: str | None
+    dismissed_by: str
+    created_at: datetime
+
+
+class DismissalList(BaseModel):
+    items: list[DismissalRead]
+    total: int

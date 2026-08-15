@@ -77,6 +77,21 @@ class Verdict(StrEnum):
     NOT_READY = "not_ready"
 
 
+#: Проверки, находки по которым всегда блокируют запуск. Список задан явно, а
+#: не выведен из результата: скрывать замечание человек решает до того, как
+#: очередная проверка отработает, и к этому моменту её severity ещё неизвестен.
+#: Согласованность списка с реальными находками проверяется тестом.
+BLOCKING_ISSUE_KEYS = frozenset(
+    {
+        IssueKey.SERVER_ERROR,
+        IssueKey.PAGE_UNAVAILABLE,
+        IssueKey.NO_HTTPS,
+        IssueKey.NO_CONTACTS,
+        IssueKey.NO_PRIVACY_POLICY,
+        IssueKey.NO_METRICA,
+    }
+)
+
 #: Потолок итогового балла при наличии блокирующей находки.
 MAX_SCORE_WITH_BLOCKING_ISSUE = 40
 

@@ -18,6 +18,7 @@ import {
   CardHeader,
   EmptyState,
   ErrorState,
+  Input,
   KpiCard,
   ModuleStatusBadge,
   ProjectSwitcher,
@@ -174,8 +175,33 @@ function SiteAuditScreen() {
   };
 
   const verdict = audit?.verdict ? VERDICT[audit.verdict] : null;
-  const critical = (audit?.issues ?? []).filter((i) => i.severity === "critical");
-  const rest = (audit?.issues ?? []).filter((i) => i.severity !== "critical");
+  const active = (audit?.issues ?? []).filter((i) => !i.dismissed);
+  const critical = active.filter((i) => i.severity === "critical");
+  const rest = active.filter((i) => i.severity !== "critical");
+  // Скрытые не исчезают, а уезжают вниз отдельным списком: проверка их
+  // по-прежнему находит, просто человек решил, что для этого проекта они не
+  // важны — и это решение должно оставаться видимым и обратимым.
+  const dismissed = (audit?.issues ?? []).filter((i) => i.dismissed);
+
+  const dismiss = async (issueKey: string, reason: string) => {
+    if (!selectedId) return;
+    try {
+      await api.dismissIssue(selectedId, { issue_key: issueKey, reason: reason || null });
+      setReloadToken((token) => token + 1);
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const restore = async (issueKey: string) => {
+    if (!selectedId) return;
+    try {
+      await api.restoreIssue(selectedId, issueKey);
+      setReloadToken((token) => token + 1);
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
 
   return (
     <AppShell title="Аудит сайта" subtitle="Проверка готовности посадочной страницы к рекламе">
@@ -304,22 +330,52 @@ function SiteAuditScreen() {
                 <CardHeader
                   title="Что делать"
                   description={
-                    audit.issues.length === 0
+                    active.length === 0
                       ? "Замечаний нет"
                       : "Сначала критические — они мешают запуску"
                   }
                 />
                 <div className="flex flex-col">
                   {[...critical, ...rest].map((issue, index) => (
-                    <IssueRow key={`${issue.category}-${index}`} issue={issue} />
+                    <IssueRow
+                      key={issue.key ?? `${issue.category}-${index}`}
+                      issue={issue}
+                      onDismiss={
+                        // Критическое замечание скрыть нельзя: блокировка,
+                        // которую можно спрятать, не является блокировкой.
+                        issue.key && issue.severity !== "critical"
+                          ? (reason) => void dismiss(issue.key as string, reason)
+                          : undefined
+                      }
+                    />
                   ))}
-                  {audit.issues.length === 0 && (
+                  {active.length === 0 && (
                     <p className="text-body-sm text-text-secondary">
-                      Сайт готов к рекламе, доработки не требуются.
+                      {audit.issues.length === 0
+                        ? "Сайт готов к рекламе, доработки не требуются."
+                        : "Все замечания отмечены неактуальными."}
                     </p>
                   )}
                 </div>
               </Card>
+
+              {dismissed.length > 0 && (
+                <Card>
+                  <CardHeader
+                    title="Отмечено как неактуальное"
+                    description="Проверка их по-прежнему находит, и на балл они влияют — скрыт только рабочий список"
+                  />
+                  <div className="flex flex-col">
+                    {dismissed.map((issue, index) => (
+                      <DismissedRow
+                        key={issue.key ?? `${issue.category}-${index}`}
+                        issue={issue}
+                        onRestore={() => void restore(issue.key as string)}
+                      />
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {/* История показывается только когда есть с чем сравнивать:
                   одна строка «единственная проверка» пользы не несёт. */}
@@ -386,7 +442,16 @@ function CategoryRow({ category }: { category: CategoryRead }) {
   );
 }
 
-function IssueRow({ issue }: { issue: AuditIssueRead }) {
+function IssueRow({
+  issue,
+  onDismiss,
+}: {
+  issue: AuditIssueRead;
+  onDismiss?: (reason: string) => void;
+}) {
+  const [asking, setAsking] = useState(false);
+  const [reason, setReason] = useState("");
+
   return (
     <div className="border-border flex flex-col gap-1 border-b py-3 last:border-b-0">
       <AlertCard
@@ -395,6 +460,58 @@ function IssueRow({ issue }: { issue: AuditIssueRead }) {
       />
       {/* Находка без действия бесполезна: рядом всегда стоит, что сделать. */}
       <p className="text-body-sm text-text-secondary pl-7">{issue.action}</p>
+
+      {onDismiss && !asking && (
+        <div className="pl-7">
+          <Button size="sm" variant="ghost" onClick={() => setAsking(true)}>
+            Неактуально для нас
+          </Button>
+        </div>
+      )}
+
+      {onDismiss && asking && (
+        <div className="flex flex-wrap items-end gap-2 pl-7">
+          <div className="min-w-48 flex-1">
+            <Input
+              label="Почему"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              hint="Не обязательно, но это прочитает тот, кто вернётся к проекту через полгода"
+              placeholder="Цены считаем индивидуально"
+            />
+          </div>
+          <Button
+            size="sm"
+            onClick={() => {
+              onDismiss(reason);
+              setAsking(false);
+              setReason("");
+            }}
+          >
+            Скрыть
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setAsking(false)}>
+            Отмена
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DismissedRow({ issue, onRestore }: { issue: AuditIssueRead; onRestore: () => void }) {
+  return (
+    <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0">
+      <div className="flex min-w-0 flex-col">
+        <span className="text-body-sm text-text-secondary">{issue.title}</span>
+        <span className="text-caption text-text-secondary">
+          {issue.dismissed_reason ? `${issue.dismissed_reason} · ` : ""}
+          скрыл(а) {issue.dismissed_by}
+        </span>
+      </div>
+      <Button size="sm" variant="ghost" onClick={onRestore}>
+        Вернуть
+      </Button>
     </div>
   );
 }

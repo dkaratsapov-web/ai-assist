@@ -69,9 +69,8 @@ async def _make_audit(
         project_id=project.id,
         url="https://example.com/",
         status=status,
-        categories=[],
-        issues=[],
-        **fields,
+        # Значения по умолчанию, которые вызывающий может заменить своими.
+        **{"categories": [], "issues": [], **fields},
     )
     session.add(audit)
     await session.commit()
@@ -355,3 +354,195 @@ class TestХранение:
             await session.execute(select(SiteAudit).where(SiteAudit.project_id == project.id))
         ).scalars().all()
         assert len(rows) == 3
+
+
+ISSUE_NO_PRICES = {
+    "key": "no_prices",
+    "category": "offer",
+    "severity": "recommendation",
+    "title": "На странице нет цен",
+    "action": "Покажите цены или диапазон.",
+}
+
+ISSUE_NO_METRICA = {
+    "key": "no_metrica",
+    "category": "tracking",
+    "severity": "critical",
+    "title": "Не установлена Яндекс Метрика",
+    "action": "Установите счётчик до запуска.",
+}
+
+
+class TestСкрытыеЗамечания:
+    """Система знает, чего на сайте нет. Почему — знает только человек."""
+
+    async def test_скрытое_замечание_помечается_а_не_исчезает(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=70,
+            issues=[ISSUE_NO_PRICES],
+        )
+
+        await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "no_prices", "reason": "цены считаем индивидуально"},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit", headers=headers(org, user)
+            )
+        ).json()
+
+        # Проверка по-прежнему находит это замечание — изменилось только то,
+        # как оно показывается.
+        assert len(body["issues"]) == 1
+        assert body["issues"][0]["dismissed"] is True
+        assert body["issues"][0]["dismissed_reason"] == "цены считаем индивидуально"
+
+    async def test_балл_от_скрытия_не_меняется(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Балл — это измерение, а не договорённость."""
+        org, user, project = project_with_site
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=70,
+            issues=[ISSUE_NO_PRICES],
+        )
+
+        await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "no_prices"},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["score"] == 70
+
+    async def test_критическое_замечание_скрыть_нельзя(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Блокировка, которую можно спрятать, не является блокировкой."""
+        org, user, project = project_with_site
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=30,
+            issues=[ISSUE_NO_METRICA],
+        )
+
+        response = await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "no_metrica"},
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "issue_is_blocking"
+
+    async def test_несуществующая_проверка_отклоняется(
+        self,
+        client: AsyncClient,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+
+        response = await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "выдуманная_проверка"},
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 404
+
+    async def test_повторное_скрытие_не_создаёт_второе_решение(
+        self,
+        client: AsyncClient,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+
+        for reason in ("первая формулировка", "уточнённая формулировка"):
+            await client.post(
+                f"/api/v1/projects/{project.id}/audit/dismissals",
+                json={"issue_key": "no_prices", "reason": reason},
+                headers=headers(org, user),
+            )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit/dismissals", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["total"] == 1
+        assert body["items"][0]["reason"] == "уточнённая формулировка"
+
+    async def test_замечание_возвращается_в_список(
+        self,
+        client: AsyncClient,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+        await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "no_prices"},
+            headers=headers(org, user),
+        )
+
+        response = await client.delete(
+            f"/api/v1/projects/{project.id}/audit/dismissals/no_prices",
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 204
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/audit/dismissals", headers=headers(org, user)
+            )
+        ).json()
+        assert body["total"] == 0
+
+    async def test_чужие_скрытия_недоступны(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        _, _, project = project_with_site
+        _, other_org = two_organizations
+        other_user = await make_user(session, other_org, "other@example.com")
+        await session.commit()
+
+        response = await client.post(
+            f"/api/v1/projects/{project.id}/audit/dismissals",
+            json={"issue_key": "no_prices"},
+            headers=headers(other_org, other_user),
+        )
+
+        assert response.status_code == 404

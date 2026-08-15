@@ -42,6 +42,8 @@ class ActivityAction(StrEnum):
     ECONOMICS_UPDATED = "economics_updated"
 
     AUDIT_STARTED = "audit_started"
+    ISSUE_DISMISSED = "issue_dismissed"
+    ISSUE_RESTORED = "issue_restored"
 
     COMPETITOR_ADDED = "competitor_added"
     COMPETITOR_REMOVED = "competitor_removed"

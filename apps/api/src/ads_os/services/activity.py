@@ -30,6 +30,8 @@ ACTION_LABELS: dict[ActivityAction, str] = {
     ActivityAction.PROJECT_DELETED: "удалил проект",
     ActivityAction.ECONOMICS_UPDATED: "изменил экономику проекта",
     ActivityAction.AUDIT_STARTED: "запустил проверку сайта",
+    ActivityAction.ISSUE_DISMISSED: "отметил замечание неактуальным",
+    ActivityAction.ISSUE_RESTORED: "вернул замечание в список",
     ActivityAction.COMPETITOR_ADDED: "добавил конкурента",
     ActivityAction.COMPETITOR_REMOVED: "удалил конкурента",
     ActivityAction.MEMBER_ADDED: "добавил участника",

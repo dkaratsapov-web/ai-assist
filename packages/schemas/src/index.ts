@@ -55,6 +55,9 @@ export type ActivityAction = Schemas["ActivityAction"];
 export type CategoryRead = Schemas["CategoryRead"];
 export type AuditIssueRead = Schemas["AuditIssueRead"];
 export type AuditChangesRead = Schemas["AuditChangesRead"];
+export type DismissalCreate = Schemas["DismissalCreate"];
+export type DismissalRead = Schemas["DismissalRead"];
+export type DismissalList = Schemas["DismissalList"];
 export type ModuleStatus = Schemas["ModuleStatus"];
 export type Availability = Schemas["Availability"];
 export type EconomicsMode = Schemas["EconomicsMode"];
@@ -328,6 +331,20 @@ export class ApiClient {
    * Запускает аудит. Ответ приходит сразу со статусом «в очереди»: работа идёт в
    * фоне, потому что обход чужого сайта занимает десятки секунд (v0.3 §6).
    */
+  /** Отметить замечание неактуальным для проекта. Балл при этом не меняется. */
+  dismissIssue(projectId: string, payload: DismissalCreate): Promise<DismissalRead> {
+    return this.request<DismissalRead>(`/api/v1/projects/${projectId}/audit/dismissals`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async restoreIssue(projectId: string, issueKey: string): Promise<void> {
+    await this.requestNoContent(`/api/v1/projects/${projectId}/audit/dismissals/${issueKey}`, {
+      method: "DELETE",
+    });
+  }
+
   startAudit(projectId: string): Promise<AuditRead> {
     return this.request<AuditRead>(`/api/v1/projects/${projectId}/audit`, { method: "POST" });
   }

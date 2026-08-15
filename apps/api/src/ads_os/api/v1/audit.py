@@ -10,11 +10,17 @@ from sqlalchemy import Select, select
 
 from ...db.base import utcnow
 from ...errors import AppError
-from ...models import Project, SiteAudit
+from ...models import IssueDismissal, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import record
-from ...services.audit import Issue, compare_issues, issues_from_stored
+from ...services.audit import (
+    BLOCKING_ISSUE_KEYS,
+    Issue,
+    IssueKey,
+    compare_issues,
+    issues_from_stored,
+)
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
@@ -25,6 +31,9 @@ from ..schemas import (
     AuditIssueRead,
     AuditRead,
     CategoryRead,
+    DismissalCreate,
+    DismissalList,
+    DismissalRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -34,6 +43,32 @@ router = APIRouter(prefix="/projects", tags=["audit"])
 
 class ProjectRepository(TenantRepository[Project]):
     model = Project
+
+
+class DismissalRepository(TenantRepository[IssueDismissal]):
+    model = IssueDismissal
+
+    def scoped(self, *, include_deleted: bool = False) -> Select[tuple[IssueDismissal]]:
+        return select(self.model).where(self.model.organization_id == self.ctx.organization_id)
+
+
+class BlockingIssueError(AppError):
+    """Попытка скрыть критическое замечание.
+
+    Блокировка, которую можно спрятать, не является блокировкой. Если бы
+    критическое замечание удавалось убрать с глаз, единственное, что мешает
+    сжечь бюджет на неработающем сайте, снималось бы одним нажатием.
+    """
+
+    status_code = 422
+    error_code = "issue_is_blocking"
+    message = "Критическое замечание нельзя отметить неактуальным"
+
+
+class UnknownIssueError(AppError):
+    status_code = 404
+    error_code = "unknown_issue"
+    message = "Такой проверки не существует"
 
 
 class AuditRepository(TenantRepository[SiteAudit]):
@@ -177,7 +212,7 @@ async def get_audit(
         None,
     )
 
-    return _to_read(latest, previous)
+    return _to_read(latest, previous, await _dismissals(session, ctx, project_id))
 
 
 @router.get(
@@ -214,6 +249,141 @@ async def get_audit_history(
     )
 
     return AuditHistory(items=_with_deltas(rows), total=len(rows))
+
+
+@router.get(
+    "/{project_id}/audit/dismissals",
+    response_model=DismissalList,
+    summary="Скрытые замечания проекта",
+)
+async def list_dismissals(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> DismissalList:
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _dismissals(session, ctx, project_id)
+
+    return DismissalList(
+        items=[
+            DismissalRead(
+                issue_key=row.issue_key,
+                reason=row.reason,
+                dismissed_by=row.dismissed_by_name,
+                created_at=row.created_at or utcnow(),
+            )
+            for row in rows.values()
+        ],
+        total=len(rows),
+    )
+
+
+@router.post(
+    "/{project_id}/audit/dismissals",
+    response_model=DismissalRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Отметить замечание неактуальным",
+)
+async def dismiss_issue(
+    project_id: uuid.UUID, payload: DismissalCreate, session: SessionDep, ctx: WriteDep
+) -> DismissalRead:
+    """Скрывает замечание из рабочего списка.
+
+    Балл и вердикт при этом не меняются. Балл — это измерение, а не
+    договорённость: если бы его можно было поднять, отметив замечание
+    неактуальным, он перестал бы что-либо значить, в том числе для клиента,
+    которому его показывают.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    try:
+        key = IssueKey(payload.issue_key)
+    except ValueError as exc:
+        raise UnknownIssueError() from exc
+
+    if key in BLOCKING_ISSUE_KEYS:
+        raise BlockingIssueError()
+
+    existing = await _dismissals(session, ctx, project_id)
+    row = existing.get(key.value)
+
+    if row is None:
+        row = IssueDismissal(
+            project_id=project_id,
+            issue_key=key.value,
+            reason=payload.reason,
+            dismissed_by_id=ctx.user_id,
+            dismissed_by_name=ctx.user_name,
+        )
+        await DismissalRepository(session, ctx).add(row)
+        await session.flush()
+    else:
+        # Повторное скрытие того же замечания — то же решение, а не второе.
+        # Обновляется только пояснение: человек мог сформулировать точнее.
+        row.reason = payload.reason
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.ISSUE_DISMISSED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details={"замечание": key.value, "причина": payload.reason or "не указана"},
+    )
+
+    return DismissalRead(
+        issue_key=row.issue_key,
+        reason=row.reason,
+        dismissed_by=row.dismissed_by_name,
+        created_at=row.created_at or utcnow(),
+    )
+
+
+@router.delete(
+    "/{project_id}/audit/dismissals/{issue_key}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Вернуть замечание в список",
+)
+async def restore_issue(
+    project_id: uuid.UUID, issue_key: str, session: SessionDep, ctx: WriteDep
+) -> None:
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    existing = await _dismissals(session, ctx, project_id)
+    row = existing.get(issue_key)
+
+    if row is None:
+        raise UnknownIssueError()
+
+    await session.delete(row)
+    await session.flush()
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.ISSUE_RESTORED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details={"замечание": issue_key},
+    )
+
+
+async def _dismissals(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> dict[str, IssueDismissal]:
+    rows = (
+        (
+            await session.execute(
+                DismissalRepository(session, ctx)
+                .scoped()
+                .where(IssueDismissal.project_id == project_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return {row.issue_key: row for row in rows}
 
 
 def _with_deltas(rows: list[SiteAudit]) -> list[AuditHistoryItem]:
@@ -275,7 +445,11 @@ def _with_deltas(rows: list[SiteAudit]) -> list[AuditHistoryItem]:
     return items
 
 
-def _to_read(audit: SiteAudit, previous: SiteAudit | None = None) -> AuditRead:
+def _to_read(
+    audit: SiteAudit,
+    previous: SiteAudit | None = None,
+    dismissals: dict[str, IssueDismissal] | None = None,
+) -> AuditRead:
     changes: AuditChangesRead | None = None
 
     if audit.status is ModuleStatus.COMPLETED:
@@ -306,7 +480,7 @@ def _to_read(audit: SiteAudit, previous: SiteAudit | None = None) -> AuditRead:
         metrica_counter=audit.metrica_counter,
         error_reason=audit.error_reason,
         categories=[CategoryRead(**c) for c in (audit.categories or [])],
-        issues=[AuditIssueRead(**i) for i in (audit.issues or [])],
+        issues=[_stored_issue(i, dismissals or {}) for i in (audit.issues or [])],
         can_launch=not any(i.get("severity") == "critical" for i in (audit.issues or [])),
         changes=changes,
         started_at=audit.started_at,
@@ -322,4 +496,26 @@ def _issue(issue: Issue) -> AuditIssueRead:
         severity=issue.severity.value,
         title=issue.title,
         action=issue.action,
+    )
+
+
+def _stored_issue(row: dict[str, object], dismissals: dict[str, IssueDismissal]) -> AuditIssueRead:
+    """Находка из хранилища вместе с отметкой о скрытии.
+
+    Скрытые находки не вырезаются из ответа, а помечаются. Убрать их совсем
+    значило бы, что проверка их больше не находит, — а она находит, просто
+    человек решил, что для этого проекта они не важны.
+    """
+    key = str(row.get("key") or "") or None
+    dismissal = dismissals.get(key) if key else None
+
+    return AuditIssueRead(
+        key=key,
+        category=str(row["category"]),
+        severity=str(row["severity"]),
+        title=str(row["title"]),
+        action=str(row["action"]),
+        dismissed=dismissal is not None,
+        dismissed_reason=dismissal.reason if dismissal else None,
+        dismissed_by=dismissal.dismissed_by_name if dismissal else None,
     )

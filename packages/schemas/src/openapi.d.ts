@@ -307,6 +307,49 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/audit/dismissals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Скрытые замечания проекта */
+        get: operations["list_dismissals_api_v1_projects__project_id__audit_dismissals_get"];
+        put?: never;
+        /**
+         * Отметить замечание неактуальным
+         * @description Скрывает замечание из рабочего списка.
+         *
+         *     Балл и вердикт при этом не меняются. Балл — это измерение, а не
+         *     договорённость: если бы его можно было поднять, отметив замечание
+         *     неактуальным, он перестал бы что-либо значить, в том числе для клиента,
+         *     которому его показывают.
+         */
+        post: operations["dismiss_issue_api_v1_projects__project_id__audit_dismissals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/audit/dismissals/{issue_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Вернуть замечание в список */
+        delete: operations["restore_issue_api_v1_projects__project_id__audit_dismissals__issue_key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/audits": {
         parameters: {
             query?: never;
@@ -471,7 +514,7 @@ export interface components {
          *     похожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.
          * @enum {string}
          */
-        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
+        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
         /** ActivityList */
         ActivityList: {
             /** Items */
@@ -584,6 +627,15 @@ export interface components {
             action: string;
             /** Category */
             category: string;
+            /**
+             * Dismissed
+             * @default false
+             */
+            dismissed: boolean;
+            /** Dismissed By */
+            dismissed_by?: string | null;
+            /** Dismissed Reason */
+            dismissed_reason?: string | null;
             /** Key */
             key?: string | null;
             /** Severity */
@@ -739,6 +791,37 @@ export interface components {
             organization_name: string;
             /** Role */
             role: string;
+        };
+        /**
+         * DismissalCreate
+         * @description Отметка «замечание неактуально для этого проекта».
+         */
+        DismissalCreate: {
+            /** Issue Key */
+            issue_key: string;
+            /** Reason */
+            reason?: string | null;
+        };
+        /** DismissalList */
+        DismissalList: {
+            /** Items */
+            items: components["schemas"]["DismissalRead"][];
+            /** Total */
+            total: number;
+        };
+        /** DismissalRead */
+        DismissalRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Dismissed By */
+            dismissed_by: string;
+            /** Issue Key */
+            issue_key: string;
+            /** Reason */
+            reason: string | null;
         };
         /**
          * EconomicsMode
@@ -1860,6 +1943,114 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuditRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_dismissals_api_v1_projects__project_id__audit_dismissals_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_issue_api_v1_projects__project_id__audit_dismissals_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissalCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DismissalRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_issue_api_v1_projects__project_id__audit_dismissals__issue_key__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                issue_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

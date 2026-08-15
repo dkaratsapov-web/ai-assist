@@ -5,7 +5,7 @@
 """
 
 from .activity import ActivityAction, ActivityLog
-from .audit import ModuleStatus, SiteAudit
+from .audit import IssueDismissal, ModuleStatus, SiteAudit
 from .competitor import Competitor
 from .organization import Organization, OrganizationPlan
 from .project import MainConversion, Project, ProjectEconomics, ProjectStatus
@@ -17,6 +17,7 @@ __all__ = [
     "ActivityAction",
     "ActivityLog",
     "Competitor",
+    "IssueDismissal",
     "MainConversion",
     "ModuleStatus",
     "Organization",

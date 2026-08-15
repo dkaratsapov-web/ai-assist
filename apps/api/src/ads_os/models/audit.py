@@ -84,3 +84,46 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     @property
     def is_finished(self) -> bool:
         return self.status in (ModuleStatus.COMPLETED, ModuleStatus.FAILED)
+
+
+class IssueDismissal(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
+    """Замечание, отмеченное как неактуальное для этого проекта.
+
+    Система знает, чего на странице нет. Она не знает, почему: «цен нет» — это
+    и недоработка, и осознанная позиция компании, которая считает стоимость
+    индивидуально. Отличить одно от другого может только человек, поэтому
+    решение принимает он, а система его запоминает.
+
+    Скрытие не меняет ни балл, ни вердикт. Балл — это измерение, а не
+    договорённость: если бы его можно было поднять, отметив замечание
+    неактуальным, он перестал бы что-либо значить, в том числе для клиента,
+    которому этот балл показывают.
+
+    Критические замечания скрывать нельзя вовсе — блокировка, которую можно
+    спрятать, не является блокировкой. Это проверяется на уровне API.
+    """
+
+    __tablename__ = "issue_dismissals"
+    __table_args__ = (
+        # Одно решение на замечание в проекте: повторное скрытие того же
+        # замечания — это то же самое решение, а не второе.
+        Index("uq_issue_dismissal", "project_id", "issue_key", unique=True),
+    )
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+    #: Устойчивое имя проверки из IssueKey. Хранится строкой, а не ссылкой на
+    #: перечисление: набор проверок меняется, и удалённая проверка не должна
+    #: ломать чтение старых решений.
+    issue_key: Mapped[str] = mapped_column(String(60), nullable=False)
+
+    #: Почему сочли неактуальным. Не обязательно, но именно это читает второй
+    #: специалист через полгода, когда сомневается в решении.
+    reason: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+    dismissed_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    #: Имя копией — по той же причине, что и в журнале действий.
+    dismissed_by_name: Mapped[str] = mapped_column(String(200), nullable=False)

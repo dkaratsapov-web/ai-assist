@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from ads_os.services.audit import (
+    BLOCKING_ISSUE_KEYS,
     Category,
     IssueKey,
     Severity,
@@ -308,3 +309,30 @@ class TestВосстановлениеИзХранилища:
         restored = issues_from_stored(stored)
 
         assert [i.key for i in restored] == [IssueKey.NO_HTTPS]
+
+
+class TestБлокирующиеПроверки:
+    def test_список_блокирующих_согласован_с_находками(self) -> None:
+        """Иначе критическое замечание однажды окажется скрываемым.
+
+        Список задан руками — вывести его из результата нельзя, потому что
+        скрывать замечание человек решает до очередной проверки. Значит, за
+        согласованностью следит тест.
+        """
+        pages = (
+            GOOD_PAGE,
+            BARE_PAGE,
+            GOOD_PAGE.replace('<a href="/privacy">Политика конфиденциальности</a>', ""),
+            GOOD_PAGE.replace("<script>ym(12345678, 'init', {});</script>", ""),
+        )
+
+        for html in pages:
+            for status in (200, 404, 503):
+                for url in ("https://example.com/", "http://example.com/"):
+                    for issue in audit_page(url, html, status_code=status).issues:
+                        blocking = issue.key in BLOCKING_ISSUE_KEYS
+                        critical = issue.severity is Severity.CRITICAL
+                        assert blocking == critical, (
+                            f"{issue.key}: в списке блокирующих {blocking}, "
+                            f"а severity критический {critical}"
+                        )
