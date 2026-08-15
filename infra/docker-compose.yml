@@ -1,0 +1,122 @@
+# Стенд ADS OS для Яндекс Облака.
+#
+# Это staging-стенд, а не production. Различие принципиальное: аутентификация
+# ещё не подключена, контекст организации приходит заголовками, и backend
+# намеренно отказывается работать так при APP_ENV=production (см. api/deps.py).
+# Поэтому здесь APP_ENV=staging, а доступ к стенду закрыт паролем на прокси.
+#
+# Запуск:
+#   cd infra && docker compose --env-file .env up -d --build
+
+name: ads-os
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+      BASIC_AUTH_USER: ${BASIC_AUTH_USER}
+      BASIC_AUTH_HASH: ${BASIC_AUTH_HASH}
+    depends_on:
+      - web
+      - api
+
+  web:
+    build:
+      context: ..
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Пустой адрес API означает относительные пути: браузер обращается к
+        # тому же домену, запросы проксирует Caddy. Так исчезает и CORS, и
+        # необходимость публиковать backend отдельным адресом.
+        NEXT_PUBLIC_API_URL: ""
+        NEXT_PUBLIC_DEMO_ORG_ID: ${NEXT_PUBLIC_DEMO_ORG_ID}
+        NEXT_PUBLIC_DEMO_USER_ID: ${NEXT_PUBLIC_DEMO_USER_ID}
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  api:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      APP_ENV: staging
+      APP_BASE_URL: https://${DOMAIN}
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      # Провайдер AI не выбран — работает детерминированная заглушка.
+      AI_PROVIDER: stub
+      AI_SENSITIVE_PROVIDER: none
+      # Рекламный кабинет не подключается до прохождения проверок безопасности
+      # (v0.4 §2.1), даже если токен уже получен.
+      AD_PLATFORM_ADAPTER: mock
+      AUTOPILOT_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  migrate:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    # Порт наружу не публикуется: база не должна быть доступна из интернета
+    # (v0.3 §104).
+    expose:
+      - "5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    expose:
+      - "6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
+  redis-data:
+  caddy-data:
+  caddy-config:

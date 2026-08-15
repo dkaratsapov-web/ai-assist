@@ -1,0 +1,40 @@
+# Обратный прокси стенда ADS OS.
+#
+# Caddy сам получает и продлевает сертификат Let's Encrypt для домена, поэтому
+# отдельного шага с сертификатами нет.
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	# Стенд закрыт паролем целиком. Аутентификация продукта ещё не реализована,
+	# а контекст организации приходит заголовками — открытый доступ к такому
+	# стенду означал бы, что данные может смотреть кто угодно.
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	# Заголовки безопасности (v0.3 §102). Backend выставляет свои, здесь —
+	# общие для всего домена.
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# API живёт на том же домене: браузер ходит по относительным путям, CORS
+	# не участвует вовсе.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# Обращение по IP или другому имени не должно отдавать стенд: домен один.
+:80 {
+	respond "Not found" 404
+}

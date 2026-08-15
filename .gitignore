@@ -45,3 +45,6 @@ test-results/
 # локальное окружение backend
 .venv/
 apps/api/src/*.egg-info/
+
+# конфигурация стенда — заполняется на сервере
+infra/.env
