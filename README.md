@@ -42,22 +42,38 @@ docs/
 infra/          окружения, деплой, CI
 ```
 
-На текущем этапе наполнены `packages/tokens`, `packages/ui`, `apps/web` и `docs` —
-это первый срез «UI-каркас и дизайн-система». Остальные директории зафиксированы
-структурно и наполняются в следующих срезах.
+На текущем этапе наполнены `packages/tokens`, `packages/ui`, `packages/schemas`,
+`apps/web`, `apps/api` и `docs`. Остальные директории зафиксированы структурно и
+наполняются в следующих срезах.
+
+Продуктовый домен — **ai-helper.pro**. Он определяет CORS-allowlist, домен
+cookie, CSP и допустимые redirect URI OAuth, поэтому задаётся конфигурацией, а не
+зашивается в код.
 
 ## Требования
 
 - Node.js >= 22
 - pnpm >= 10
+- Python >= 3.11
+- PostgreSQL >= 16
 
 ## Запуск
 
 ```bash
 pnpm install
 cp .env.example .env
-pnpm dev            # http://localhost:3000
+
+python3 -m venv .venv
+.venv/bin/pip install -e "apps/api[dev]"
+
+pnpm api:migrate    # миграции
+pnpm api:dev        # backend: http://localhost:8000/docs
+pnpm dev            # frontend: http://localhost:3000
 ```
+
+Демонстрационные данные (v0.3 §76) — `apps/api/scripts/seed_demo.py`. Скрипт
+печатает идентификаторы организации и пользователя для `apps/web/.env.local`:
+пока не подключена аутентификация, контекст передаётся заголовками.
 
 Полезные команды:
 
@@ -67,7 +83,16 @@ pnpm build              # production-сборка web
 pnpm typecheck          # проверка типов по всем пакетам
 pnpm lint               # линтеры
 pnpm storybook          # изолированный превью компонентов
+pnpm api:test           # тесты backend
+pnpm codegen            # перегенерировать OpenAPI и типы
+pnpm check:contract     # проверить расхождение контракта
 ```
+
+## Контракт API
+
+Источник правды — Pydantic-схемы в `apps/api`. OpenAPI генерируется FastAPI,
+TypeScript-типы и клиент — в `packages/schemas`. Ручное дублирование DTO
+запрещено, расхождение ловится проверкой `pnpm check:contract` (v0.4 §18).
 
 ## Дизайн-токены
 

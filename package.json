@@ -17,7 +17,12 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
     "storybook": "pnpm tokens && pnpm --filter @ads-os/web storybook",
-    "build-storybook": "pnpm tokens && pnpm --filter @ads-os/web build-storybook"
+    "build-storybook": "pnpm tokens && pnpm --filter @ads-os/web build-storybook",
+    "codegen": "python3 -c \"import subprocess;subprocess.run(['.venv/bin/python','apps/api/scripts/export_openapi.py'],check=True)\" && pnpm --filter @ads-os/schemas generate",
+    "check:contract": "bash scripts/check-openapi-drift.sh",
+    "api:dev": ".venv/bin/uvicorn ads_os.main:app --app-dir apps/api/src --reload --port 8000",
+    "api:test": ".venv/bin/python -m pytest apps/api/tests -q",
+    "api:migrate": "cd apps/api && ../../.venv/bin/alembic upgrade head"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

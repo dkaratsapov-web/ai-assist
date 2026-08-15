@@ -4,4 +4,9 @@ dist
 build
 storybook-static
 pnpm-lock.yaml
+
+# Сгенерированные файлы. Их формат задаёт генератор; переформатирование
+# prettier'ом ломает проверку расхождения контракта — она сравнивает содержимое.
 packages/tokens/dist
+packages/schemas/openapi.json
+packages/schemas/src/openapi.d.ts
