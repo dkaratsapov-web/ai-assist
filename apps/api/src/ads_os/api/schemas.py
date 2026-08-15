@@ -263,6 +263,49 @@ class ComparisonRead(BaseModel):
     rows: list[FeatureRowRead]
 
 
+class MemberRead(BaseModel):
+    """Участник организации.
+
+    Пароля и способов входа здесь нет: аутентификация появится отдельным срезом
+    вместе с MFA (v0.3 §91).
+    """
+
+    id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+    mfa_enabled: bool
+    is_active: bool
+
+
+class PlanRead(BaseModel):
+    """Лимиты организации (v0.4 §13).
+
+    Платёжная система в MVP не подключается, но потолки существуют с первого
+    дня — иначе их некуда будет добавить, когда появится биллинг.
+    """
+
+    max_projects: int
+    max_users: int
+    ai_usage_limit: int
+    crawler_pages_limit: int
+    retention_days: int
+
+
+class OrganizationRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    slug: str
+    projects_count: int
+    members: list[MemberRead]
+    plan: PlanRead | None
+    #: Режим работы стенда. Показывается прямо: на заглушках результаты не
+    #: являются выводами настоящей модели и не касаются рекламного кабинета.
+    app_env: str
+    ai_provider: str
+    ad_platform_adapter: str
+
+
 class HealthResponse(BaseModel):
     status: str
     app_env: str

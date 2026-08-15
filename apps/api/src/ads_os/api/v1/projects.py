@@ -131,6 +131,22 @@ async def update_project(
     return ProjectRead.model_validate(project)
 
 
+@router.delete(
+    "/{project_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить проект",
+)
+async def delete_project(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep) -> None:
+    """Мягкое удаление (v0.3 §61).
+
+    Запись остаётся в базе и перестаёт появляться в выборках. Так удалённый по
+    ошибке проект можно вернуть, а история аудитов и конкурентов не исчезает
+    вместе с ним в тот же миг. Окончательное удаление — отдельная процедура по
+    истечении срока хранения.
+    """
+    await ProjectRepository(session, ctx).soft_delete(project_id)
+
+
 @router.get(
     "/{project_id}/progress",
     response_model=ProgressRead,

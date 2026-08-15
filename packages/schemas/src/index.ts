@@ -30,6 +30,9 @@ export type EconomicsResponse = Schemas["EconomicsResponse"];
 export type EconomicsSummaryRead = Schemas["EconomicsSummaryRead"];
 export type MetricRead = Schemas["MetricRead"];
 export type HealthResponse = Schemas["HealthResponse"];
+export type OrganizationRead = Schemas["OrganizationRead"];
+export type MemberRead = Schemas["MemberRead"];
+export type PlanRead = Schemas["PlanRead"];
 export type AuditRead = Schemas["AuditRead"];
 export type CompetitorRead = Schemas["CompetitorRead"];
 export type CompetitorList = Schemas["CompetitorList"];
@@ -122,6 +125,32 @@ export class ApiClient {
     return (await response.json()) as T;
   }
 
+  /**
+   * Запрос к эндпоинту, который отвечает без тела (204).
+   *
+   * Обычный request тут не подходит: он всегда разбирает JSON и падает на
+   * пустом ответе.
+   */
+  async requestNoContent(path: string, init: RequestInit = {}): Promise<void> {
+    const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
+      ...init,
+      headers: { ...this.headers, ...init.headers },
+    });
+
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as ErrorBody | null;
+      throw new ApiError(
+        response.status,
+        body ?? {
+          error_code: "unexpected_response",
+          message: "Сервис недоступен",
+          request_id: "-",
+          retryable: true,
+        },
+      );
+    }
+  }
+
   health(): Promise<HealthResponse> {
     return this.request<HealthResponse>("/api/v1/health");
   }
@@ -146,6 +175,16 @@ export class ApiClient {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  }
+
+  /** Своя организация: состав, лимиты и режим работы стенда. */
+  getOrganization(): Promise<OrganizationRead> {
+    return this.request<OrganizationRead>("/api/v1/organization");
+  }
+
+  /** Мягкое удаление проекта (v0.3 §61). */
+  async deleteProject(projectId: string): Promise<void> {
+    await this.requestNoContent(`/api/v1/projects/${projectId}`, { method: "DELETE" });
   }
 
   /** Сводка по всем проектам для главного экрана. */
@@ -188,24 +227,9 @@ export class ApiClient {
   }
 
   async deleteCompetitor(projectId: string, competitorId: string): Promise<void> {
-    // Ответ 204 не содержит тела, поэтому общий request тут не подходит: он
-    // всегда разбирает JSON и упал бы на пустом ответе.
-    const response = await this.fetchImpl(
-      `${this.baseUrl}/api/v1/projects/${projectId}/competitors/${competitorId}`,
-      { method: "DELETE", headers: this.headers },
-    );
-    if (!response.ok) {
-      const body = (await response.json().catch(() => null)) as ErrorBody | null;
-      throw new ApiError(
-        response.status,
-        body ?? {
-          error_code: "unexpected_response",
-          message: "Сервис недоступен",
-          request_id: "-",
-          retryable: true,
-        },
-      );
-    }
+    await this.requestNoContent(`/api/v1/projects/${projectId}/competitors/${competitorId}`, {
+      method: "DELETE",
+    });
   }
 
   /** Сравнение своего сайта с конкурентами (v0.3 §16). */

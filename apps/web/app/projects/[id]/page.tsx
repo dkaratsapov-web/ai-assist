@@ -2,11 +2,13 @@
 
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { type ApiError, type ProgressRead, type ProjectRead, type StepRead } from "@ads-os/schemas";
 import {
   Button,
   Card,
   CardHeader,
+  ConfirmationDialog,
   ErrorState,
   Input,
   Modal,
@@ -41,6 +43,9 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState({ name: "", website: "", region: "" });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     if (!configured) return;
@@ -101,15 +106,36 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
     }
   };
 
+  const remove = async () => {
+    if (!project) return;
+    setDeleting(true);
+    try {
+      await api.deleteProject(project.id);
+      // Возврат к списку: оставаться на странице удалённого проекта незачем,
+      // а следующий же запрос вернул бы 404 и экран ошибки.
+      router.push("/projects");
+    } catch (err) {
+      setError(toApiError(err));
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <AppShell
       title={project?.name ?? "Проект"}
       subtitle={project?.website_url ?? undefined}
       actions={
         project ? (
-          <Button size="sm" variant="secondary" onClick={openEditor}>
-            Изменить
-          </Button>
+          <span className="flex items-center gap-2">
+            <Button size="sm" variant="secondary" onClick={openEditor}>
+              Изменить
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(true)}>
+              Удалить
+            </Button>
+          </span>
         ) : undefined
       }
     >
@@ -226,6 +252,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           />
         </div>
       </Modal>
+      <ConfirmationDialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={() => void remove()}
+        title="Удалить проект"
+        description="Проект и его результаты перестанут отображаться. Данные не стираются сразу — восстановить проект можно обращением в поддержку."
+        confirmLabel={deleting ? "Удаляем…" : "Удалить"}
+        destructive
+      />
     </AppShell>
   );
 }

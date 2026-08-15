@@ -907,6 +907,46 @@
         "title": "MainConversion",
         "type": "string"
       },
+      "MemberRead": {
+        "description": "Участник организации.\n\nПароля и способов входа здесь нет: аутентификация появится отдельным срезом\nвместе с MFA (v0.3 §91).",
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "full_name": {
+            "title": "Full Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "mfa_enabled": {
+            "title": "Mfa Enabled",
+            "type": "boolean"
+          },
+          "role": {
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "full_name",
+          "role",
+          "mfa_enabled",
+          "is_active"
+        ],
+        "title": "MemberRead",
+        "type": "object"
+      },
       "MetricRead": {
         "description": "Значение метрики вместе с оценкой достоверности.\n\nСостояния совпадают с состояниями карточки KPI в интерфейсе: одно и то же\nпонятие не должно называться по-разному на разных концах системы.",
         "properties": {
@@ -958,6 +998,69 @@
         "title": "ModuleStatus",
         "type": "string"
       },
+      "OrganizationRead": {
+        "properties": {
+          "ad_platform_adapter": {
+            "title": "Ad Platform Adapter",
+            "type": "string"
+          },
+          "ai_provider": {
+            "title": "Ai Provider",
+            "type": "string"
+          },
+          "app_env": {
+            "title": "App Env",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/MemberRead"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "projects_count": {
+            "title": "Projects Count",
+            "type": "integer"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "slug",
+          "projects_count",
+          "members",
+          "plan",
+          "app_env",
+          "ai_provider",
+          "ad_platform_adapter"
+        ],
+        "title": "OrganizationRead",
+        "type": "object"
+      },
       "OverviewRead": {
         "description": "Сводка по всем проектам.\n\nНамеренно не содержит расходов, лидов и продаж: рекламный кабинет не\nподключён, и любые цифры здесь были бы выдуманными. Поле\n`ad_platform_connected` существует ровно для того, чтобы интерфейс сказал\nоб этом прямо, а не рисовал нули (v0.3 §140).",
         "properties": {
@@ -988,6 +1091,40 @@
           "ad_platform_connected"
         ],
         "title": "OverviewRead",
+        "type": "object"
+      },
+      "PlanRead": {
+        "description": "Лимиты организации (v0.4 §13).\n\nПлатёжная система в MVP не подключается, но потолки существуют с первого\nдня — иначе их некуда будет добавить, когда появится биллинг.",
+        "properties": {
+          "ai_usage_limit": {
+            "title": "Ai Usage Limit",
+            "type": "integer"
+          },
+          "crawler_pages_limit": {
+            "title": "Crawler Pages Limit",
+            "type": "integer"
+          },
+          "max_projects": {
+            "title": "Max Projects",
+            "type": "integer"
+          },
+          "max_users": {
+            "title": "Max Users",
+            "type": "integer"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_projects",
+          "max_users",
+          "ai_usage_limit",
+          "crawler_pages_limit",
+          "retention_days"
+        ],
+        "title": "PlanRead",
         "type": "object"
       },
       "ProgressRead": {
@@ -1477,6 +1614,90 @@
         ]
       }
     },
+    "/api/v1/organization": {
+      "get": {
+        "description": "Сведения о своей организации.\n\nИдентификатор берётся из контекста, а не из адреса запроса: организация,\nкоторую можно указать параметром, — это готовый способ заглянуть в чужую\n(v0.3 §93).",
+        "operationId": "get_organization_api_v1_organization_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Моя организация",
+        "tags": [
+          "organization"
+        ]
+      }
+    },
     "/api/v1/overview": {
       "get": {
         "operationId": "get_overview_api_v1_overview_get",
@@ -1758,6 +1979,91 @@
       }
     },
     "/api/v1/projects/{project_id}": {
+      "delete": {
+        "description": "Мягкое удаление (v0.3 §61).\n\nЗапись остаётся в базе и перестаёт появляться в выборках. Так удалённый по\nошибке проект можно вернуть, а история аудитов и конкурентов не исчезает\nвместе с ним в тот же миг. Окончательное удаление — отдельная процедура по\nистечении срока хранения.",
+        "operationId": "delete_project_api_v1_projects__project_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Удалить проект",
+        "tags": [
+          "projects"
+        ]
+      },
       "get": {
         "operationId": "get_project_api_v1_projects__project_id__get",
         "parameters": [

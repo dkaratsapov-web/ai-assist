@@ -28,6 +28,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Моя организация
+         * @description Сведения о своей организации.
+         *
+         *     Идентификатор берётся из контекста, а не из адреса запроса: организация,
+         *     которую можно указать параметром, — это готовый способ заглянуть в чужую
+         *     (v0.3 §93).
+         */
+        get: operations["get_organization_api_v1_organization_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/overview": {
         parameters: {
             query?: never;
@@ -74,7 +98,16 @@ export interface paths {
         get: operations["get_project_api_v1_projects__project_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Удалить проект
+         * @description Мягкое удаление (v0.3 §61).
+         *
+         *     Запись остаётся в базе и перестаёт появляться в выборках. Так удалённый по
+         *     ошибке проект можно вернуть, а история аудитов и конкурентов не исчезает
+         *     вместе с ним в тот же миг. Окончательное удаление — отдельная процедура по
+         *     истечении срока хранения.
+         */
+        delete: operations["delete_project_api_v1_projects__project_id__delete"];
         options?: never;
         head?: never;
         /** Изменить проект */
@@ -489,6 +522,30 @@ export interface components {
          */
         MainConversion: "lead" | "call" | "message" | "order" | "purchase";
         /**
+         * MemberRead
+         * @description Участник организации.
+         *
+         *     Пароля и способов входа здесь нет: аутентификация появится отдельным срезом
+         *     вместе с MFA (v0.3 §91).
+         */
+        MemberRead: {
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Mfa Enabled */
+            mfa_enabled: boolean;
+            /** Role */
+            role: string;
+        };
+        /**
          * MetricRead
          * @description Значение метрики вместе с оценкой достоверности.
          *
@@ -515,6 +572,29 @@ export interface components {
          * @enum {string}
          */
         ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
+        /** OrganizationRead */
+        OrganizationRead: {
+            /** Ad Platform Adapter */
+            ad_platform_adapter: string;
+            /** Ai Provider */
+            ai_provider: string;
+            /** App Env */
+            app_env: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Members */
+            members: components["schemas"]["MemberRead"][];
+            /** Name */
+            name: string;
+            plan: components["schemas"]["PlanRead"] | null;
+            /** Projects Count */
+            projects_count: number;
+            /** Slug */
+            slug: string;
+        };
         /**
          * OverviewRead
          * @description Сводка по всем проектам.
@@ -533,6 +613,25 @@ export interface components {
             projects: components["schemas"]["ProjectSummaryRead"][];
             /** Total */
             total: number;
+        };
+        /**
+         * PlanRead
+         * @description Лимиты организации (v0.4 §13).
+         *
+         *     Платёжная система в MVP не подключается, но потолки существуют с первого
+         *     дня — иначе их некуда будет добавить, когда появится биллинг.
+         */
+        PlanRead: {
+            /** Ai Usage Limit */
+            ai_usage_limit: number;
+            /** Crawler Pages Limit */
+            crawler_pages_limit: number;
+            /** Max Projects */
+            max_projects: number;
+            /** Max Users */
+            max_users: number;
+            /** Retention Days */
+            retention_days: number;
         };
         /**
          * ProgressRead
@@ -731,6 +830,39 @@ export interface operations {
             };
         };
     };
+    get_organization_api_v1_organization_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_overview_api_v1_overview_get: {
         parameters: {
             query?: never;
@@ -860,6 +992,39 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_api_v1_projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
