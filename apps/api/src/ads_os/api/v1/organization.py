@@ -13,9 +13,17 @@ from ...models import Organization, Project, User
 from ...models.activity import ActivityAction
 from ...services.activity import changed_fields, record
 from ...services.auth import revoke_all_for_user
+from ...services.usage import summarize as summarize_usage
 from ...tenancy.context import Role
 from ..deps import OwnerDep, SessionDep, SettingsDep, TenantDep
-from ..schemas import MemberCreate, MemberRead, MemberUpdate, OrganizationRead, PlanRead
+from ..schemas import (
+    MemberCreate,
+    MemberRead,
+    MemberUpdate,
+    OrganizationRead,
+    PlanRead,
+    UsageRead,
+)
 
 router = APIRouter(tags=["organization"])
 
@@ -67,6 +75,7 @@ async def get_organization(
     )
 
     plan = organization.plan
+    usage = await summarize_usage(session, ctx.organization_id)
 
     return OrganizationRead(
         id=organization.id,
@@ -76,6 +85,12 @@ async def get_organization(
         members=[
             _to_member(user) for user in members
         ],
+        usage=UsageRead(
+            crawler_pages=usage.crawler_pages,
+            crawler_pages_limit=usage.crawler_pages_limit,
+            ai_tokens=usage.ai_tokens,
+            ai_tokens_limit=usage.ai_tokens_limit,
+        ),
         plan=(
             PlanRead(
                 max_projects=plan.max_projects,

@@ -354,6 +354,19 @@ class PlanRead(BaseModel):
     retention_days: int
 
 
+class UsageRead(BaseModel):
+    """Потребление за последние 30 дней вместе с лимитом.
+
+    Окно скользящее, а не календарный месяц: лимит, обнуляющийся первого
+    числа, позволяет израсходовать двойную норму за два дня на стыке.
+    """
+
+    crawler_pages: int
+    crawler_pages_limit: int
+    ai_tokens: int
+    ai_tokens_limit: int
+
+
 class OrganizationRead(BaseModel):
     id: uuid.UUID
     name: str
@@ -361,6 +374,7 @@ class OrganizationRead(BaseModel):
     projects_count: int
     members: list[MemberRead]
     plan: PlanRead | None
+    usage: UsageRead
     #: Режим работы стенда. Показывается прямо: на заглушках результаты не
     #: являются выводами настоящей модели и не касаются рекламного кабинета.
     app_env: str

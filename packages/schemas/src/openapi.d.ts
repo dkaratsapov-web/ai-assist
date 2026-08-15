@@ -1781,6 +1781,7 @@ export interface components {
             projects_count: number;
             /** Slug */
             slug: string;
+            usage: components["schemas"]["UsageRead"];
         };
         /**
          * OverviewRead
@@ -2037,6 +2038,23 @@ export interface components {
          * @enum {string}
          */
         StepState: "completed" | "active" | "waiting" | "blocked" | "error";
+        /**
+         * UsageRead
+         * @description Потребление за последние 30 дней вместе с лимитом.
+         *
+         *     Окно скользящее, а не календарный месяц: лимит, обнуляющийся первого
+         *     числа, позволяет израсходовать двойную норму за два дня на стыке.
+         */
+        UsageRead: {
+            /** Ai Tokens */
+            ai_tokens: number;
+            /** Ai Tokens Limit */
+            ai_tokens_limit: number;
+            /** Crawler Pages */
+            crawler_pages: number;
+            /** Crawler Pages Limit */
+            crawler_pages_limit: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */

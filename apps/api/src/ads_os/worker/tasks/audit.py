@@ -26,6 +26,7 @@ from ...db.base import utcnow
 from ...db.session import session_scope
 from ...models.audit import ModuleStatus, SiteAudit
 from ...models.project import Project
+from ...models.usage import UsageService, UsageUnit
 from ...services.audit import (
     audit_page,
     collect_signals,
@@ -35,6 +36,7 @@ from ...services.audit import (
 from ...services.competitors import extract_features
 from ...services.crawler.fetcher import CrawlLimits, FetchError, fetch_page
 from ...services.notifications import evaluate_audit, push
+from ...services.usage import record as record_usage
 from ..app import celery_app
 from ..runtime import run_task
 
@@ -123,6 +125,20 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         audit.features = {key.value: value for key, value in extract_features(signals).items()}
         audit.selling_points = list(signals.selling_points)
         audit.internal_links = [[text, href] for text, href in signals.internal_links]
+
+        # Учёт ведётся по факту разбора, а не по факту постановки в очередь:
+        # задача может не дойти до воркера, и записанная заранее страница
+        # оказалась бы потреблением, которого не было.
+        await record_usage(
+            session,
+            organization_id=audit.organization_id,
+            service=UsageService.CRAWLER,
+            operation="site_audit",
+            quantity=1,
+            unit=UsageUnit.PAGES,
+            project_id=audit.project_id,
+            meta={"url": audit.url[:200]},
+        )
 
         await _notify(session, audit)
 

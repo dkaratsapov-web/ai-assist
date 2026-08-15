@@ -2483,6 +2483,9 @@
           "slug": {
             "title": "Slug",
             "type": "string"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/UsageRead"
           }
         },
         "required": [
@@ -2492,6 +2495,7 @@
           "projects_count",
           "members",
           "plan",
+          "usage",
           "app_env",
           "ai_provider",
           "ad_platform_adapter"
@@ -3103,6 +3107,35 @@
         ],
         "title": "StepState",
         "type": "string"
+      },
+      "UsageRead": {
+        "description": "Потребление за последние 30 дней вместе с лимитом.\n\nОкно скользящее, а не календарный месяц: лимит, обнуляющийся первого\nчисла, позволяет израсходовать двойную норму за два дня на стыке.",
+        "properties": {
+          "ai_tokens": {
+            "title": "Ai Tokens",
+            "type": "integer"
+          },
+          "ai_tokens_limit": {
+            "title": "Ai Tokens Limit",
+            "type": "integer"
+          },
+          "crawler_pages": {
+            "title": "Crawler Pages",
+            "type": "integer"
+          },
+          "crawler_pages_limit": {
+            "title": "Crawler Pages Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "crawler_pages",
+          "crawler_pages_limit",
+          "ai_tokens",
+          "ai_tokens_limit"
+        ],
+        "title": "UsageRead",
+        "type": "object"
       },
       "ValidationError": {
         "properties": {

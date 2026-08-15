@@ -38,6 +38,7 @@ export type MemberRead = Schemas["MemberRead"];
 export type SessionRead = Schemas["SessionRead"];
 export type SessionList = Schemas["SessionList"];
 export type PlanRead = Schemas["PlanRead"];
+export type UsageRead = Schemas["UsageRead"];
 export type AuditRead = Schemas["AuditRead"];
 export type AuditHistory = Schemas["AuditHistory"];
 export type AuditHistoryItem = Schemas["AuditHistoryItem"];

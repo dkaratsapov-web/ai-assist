@@ -22,6 +22,7 @@ from ...services.audit import (
     compare_issues,
     issues_from_stored,
 )
+from ...services.usage import crawler_limit_reached
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
@@ -97,6 +98,19 @@ class ForeignPageError(AppError):
     message = "Страница должна принадлежать сайту проекта"
 
 
+class UsageLimitError(AppError):
+    """Исчерпан лимит страниц краулера.
+
+    Проверяется до запуска, а не после: смысл лимита в том, чтобы работа не
+    началась, а не в том, чтобы её посчитать и всё равно выполнить.
+    """
+
+    status_code = 429
+    error_code = "crawler_limit_reached"
+    message = "Исчерпан лимит проверок страниц за 30 дней"
+    retryable = True
+
+
 class WebsiteMissingError(AppError):
     status_code = 422
     error_code = "website_missing"
@@ -161,6 +175,9 @@ async def start_audit(
     url = (payload.url if payload else None) or project.website_url
     if not _same_site(url, project.website_url):
         raise ForeignPageError()
+
+    if await crawler_limit_reached(session, ctx.organization_id):
+        raise UsageLimitError()
 
     audits = AuditRepository(session, ctx)
     running = (

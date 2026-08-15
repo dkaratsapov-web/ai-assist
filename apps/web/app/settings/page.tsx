@@ -212,6 +212,25 @@ export default function SettingsPage() {
 
           <Card>
             <CardHeader
+              title="Потребление за 30 дней"
+              description="Окно скользящее: лимит не обнуляется первого числа, иначе на стыке месяцев тратится двойная норма"
+            />
+            <div className="flex flex-col gap-3">
+              <UsageBar
+                label="Проверено страниц"
+                used={organization.usage.crawler_pages}
+                limit={organization.usage.crawler_pages_limit}
+              />
+              <UsageBar
+                label="Токенов нейросети"
+                used={organization.usage.ai_tokens}
+                limit={organization.usage.ai_tokens_limit}
+              />
+            </div>
+          </Card>
+
+          <Card>
+            <CardHeader
               title="Лимиты"
               description="Платёжная система не подключена, но потолки существуют с первого дня"
             />
@@ -288,6 +307,36 @@ export default function SettingsPage() {
         </div>
       </Modal>
     </AppShell>
+  );
+}
+
+/**
+ * Расход с потолком.
+ *
+ * Полоса показывается только при заданном лимите. Без него доля неопределена,
+ * а полоса на всю ширину читалась бы как «всё израсходовано» — то есть ровно
+ * наоборот тому, что происходит.
+ */
+function UsageBar({ label, used, limit }: { label: string; used: number; limit: number }) {
+  const share = limit > 0 ? Math.min(used / limit, 1) : null;
+  const tone =
+    share === null ? "" : share >= 1 ? "bg-critical" : share >= 0.8 ? "bg-warning" : "bg-success";
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-body-sm text-text-primary">{label}</span>
+        <span className="text-caption text-text-secondary tabular-nums">
+          {used}
+          {limit > 0 ? ` из ${limit}` : " · лимит не задан"}
+        </span>
+      </div>
+      {share !== null && (
+        <div className="bg-surface-hover h-1.5 w-full overflow-hidden rounded-full">
+          <div className={`h-full rounded-full ${tone}`} style={{ width: `${share * 100}%` }} />
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -21,8 +21,10 @@ from ...db.base import utcnow
 from ...db.session import session_scope
 from ...models.audit import ModuleStatus
 from ...models.competitor import Competitor
+from ...models.usage import UsageService, UsageUnit
 from ...services.audit import collect_signals
 from ...services.competitors import extract_features
+from ...services.usage import record as record_usage
 from ..app import celery_app
 from ..runtime import run_task
 from .audit import fetch_site_page
@@ -63,6 +65,20 @@ async def _process(competitor_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         competitor.status = ModuleStatus.COMPLETED
         competitor.error_reason = None
         competitor.features = {key.value: value for key, value in extract_features(signals).items()}
+
+        # Страница конкурента — такой же расход, как своя: тот же трафик и то же
+        # время воркера. Считать только свои значило бы занижать потребление там,
+        # где его больше всего.
+        await record_usage(
+            session,
+            organization_id=competitor.organization_id,
+            service=UsageService.CRAWLER,
+            operation="competitor_check",
+            quantity=1,
+            unit=UsageUnit.PAGES,
+            project_id=competitor.project_id,
+            meta={"url": competitor.url[:200]},
+        )
 
         # Название, введённое пользователем, важнее заголовка страницы: он его
         # писал для себя и по нему узнаёт конкурента в таблице.
