@@ -1,305 +1,212 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import type { ApiError, OverviewRead, ProjectSummaryRead } from "@ads-os/schemas";
 import {
-  AiAvatar,
-  AlertCard,
   Button,
   Card,
   CardHeader,
-  ChatComposer,
-  ConfirmationDialog,
-  Drawer,
-  IntegrationCard,
+  EmptyState,
+  ErrorState,
   KpiCard,
-  LineChart,
-  WorkflowStepper,
-  RecommendationCard,
-  formatCurrency,
-  formatNumber,
+  ProjectStatusBadge,
+  Skeleton,
+  StatusBadge,
 } from "@ads-os/ui";
-import { IconArrowRight, IconChart, IconPlug, IconTarget, IconUsers } from "@ads-os/ui/icons";
+import { IconFolder, IconInfo } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
-import {
-  chartLabels,
-  chartSeriesData,
-  chatSuggestions,
-  demoNow,
-  integrations,
-  kpis,
-  notifications,
-  recommendations,
-  workflowSteps,
-  type RecommendationData,
-} from "@/lib/mock-data";
-
-const integrationIcons: Record<string, React.ReactNode> = {
-  direct: <IconTarget size={22} />,
-  metrica: <IconChart size={22} />,
-  crm: <IconUsers size={22} />,
-  telegram: <IconPlug size={22} />,
-  max: <IconPlug size={22} />,
-};
+import { createApiClient, isApiConfigured } from "@/lib/api";
+import { toApiError } from "@/lib/errors";
 
 /**
- * Главный дашборд (v0.3 §125).
+ * Главный экран (v0.3 §125).
  *
  * Отвечает на три вопроса: что происходит, что требует внимания, что делать
- * дальше — и умещается в полтора экрана десктопа.
+ * дальше.
  *
- * Данные пока приходят из mock-модуля, но поток «рекомендация → подробности →
- * согласование» собран целиком: именно он, а не таблицы, является сутью
- * продукта, и проверять его на макете бессмысленно.
+ * До этого экран был собран на выдуманных данных: расход, лиды, продажи,
+ * AI-рекомендации. Выглядело убедительно и означало ровно обратное тому, что
+ * есть на самом деле, — будто реклама идёт и приносит результат. Пока
+ * рекламный кабинет не подключён, показывать нечего, и сказать об этом нужно
+ * прямо (v0.3 §140).
  */
 export default function DashboardPage() {
-  const [detailsFor, setDetailsFor] = useState<RecommendationData | null>(null);
-  const [confirmFor, setConfirmFor] = useState<RecommendationData | null>(null);
-  const [applying, setApplying] = useState(false);
+  const api = useMemo(() => createApiClient(), []);
+  const configured = isApiConfigured();
 
-  const handleApply = (recommendation: RecommendationData) => {
-    // Рискованное действие никогда не выполняется по одному нажатию: сначала
-    // показывается точный состав изменения (v0.3 §88, §113).
-    if (recommendation.requiresApproval) {
-      setConfirmFor(recommendation);
-      return;
-    }
-    setApplying(true);
-    window.setTimeout(() => setApplying(false), 900);
-  };
+  const [overview, setOverview] = useState<OverviewRead | null>(null);
+  const [error, setError] = useState<ApiError | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
+
+  useEffect(() => {
+    if (!configured) return;
+    let ignore = false;
+
+    void (async () => {
+      try {
+        const result = await api.getOverview();
+        if (ignore) return;
+        setError(null);
+        setOverview(result);
+      } catch (err) {
+        if (ignore) return;
+        setError(toApiError(err));
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [api, configured, reloadToken]);
+
+  const projects = overview?.projects ?? [];
+  const withSite = projects.filter((p) => p.website_url).length;
+  const checked = projects.filter((p) => p.audit_status === "completed").length;
+  const readyEconomics = projects.filter((p) => p.economics_mode === "complete").length;
 
   return (
     <AppShell
-      title="Добро пожаловать, Иван"
-      subtitle="AI-помощник по контекстной рекламе"
-      notifications={3}
+      title="Главная"
+      subtitle="Состояние проектов и ближайшие действия"
+      actions={
+        <Link href="/projects">
+          <Button size="sm" variant="secondary">
+            Все проекты
+          </Button>
+        </Link>
+      }
     >
-      {/* ── Уровень 1: KPI ─────────────────────────────────────────────── */}
-      <section aria-labelledby="kpi-heading">
-        <h2 id="kpi-heading" className="sr-only">
-          Ключевые показатели по всем проектам
-        </h2>
-        {/* Пять колонок только на действительно широких экранах: на 1440 пять
-            карточек ломают значение на две строки, а KPI должен читаться
-            одним взглядом. */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-6 2xl:grid-cols-5">
-          {kpis.map((kpi, index) => (
-            <KpiCard
-              key={kpi.key}
-              className={
-                index < 3 ? "lg:col-span-2 2xl:col-span-1" : "lg:col-span-3 2xl:col-span-1"
-              }
-              label={kpi.label}
-              value={kpi.value}
-              delta={kpi.delta}
-              polarity={kpi.polarity}
-              period="за 7 дней"
-              trend={kpi.trend}
-              seriesColor={kpi.seriesColor}
-            />
-          ))}
+      {!configured ? (
+        <Card>
+          <EmptyState
+            title="Стенд не настроен"
+            description="Не заданы NEXT_PUBLIC_DEMO_ORG_ID и NEXT_PUBLIC_DEMO_USER_ID. Запустите backend и скрипт seed_demo.py."
+          />
+        </Card>
+      ) : error ? (
+        <Card>
+          <ErrorState
+            title="Не удалось загрузить сводку"
+            description={error.message}
+            requestId={error.requestId}
+            onRetry={() => setReloadToken((token) => token + 1)}
+          />
+        </Card>
+      ) : overview === null ? (
+        <div className="flex flex-col gap-4">
+          <Skeleton shape="card" />
+          <Skeleton shape="card" />
         </div>
-      </section>
-
-      {/* ── Уровень 2: динамика и рекомендации ─────────────────────────── */}
-      <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
-        <Card className="xl:col-span-2">
-          <CardHeader
-            title="Динамика за 7 дней"
-            action={
-              <Button variant="ghost" size="sm" iconRight={<IconArrowRight size={16} />}>
-                Подробнее
-              </Button>
-            }
-          />
-          <LineChart
-            series={chartSeriesData.map((series) => ({
-              ...series,
-              format: (value: number) =>
-                series.axis === "left" ? formatCurrency(value) : formatNumber(value),
-            }))}
-            labels={chartLabels}
-            caption="Расходы в рублях (левая ось), лиды и продажи в штуках (правая ось) по дням за последние 7 дней"
+      ) : overview.total === 0 ? (
+        <Card>
+          <EmptyState
+            icon={<IconFolder size={24} />}
+            title="Проектов пока нет"
+            description="Создайте первый проект — дальше система подскажет, что делать на каждом шаге."
           />
         </Card>
-
-        <Card>
-          <CardHeader
-            title="AI-рекомендации"
-            action={
-              <Button variant="ghost" size="sm" iconRight={<IconArrowRight size={16} />}>
-                Все 12
-              </Button>
-            }
-          />
-          <div className="flex flex-col gap-2">
-            {recommendations.map((recommendation) => (
-              <RecommendationCard
-                key={recommendation.id}
-                level={recommendation.level}
-                title={recommendation.title}
-                reason={recommendation.reason}
-                reasons={recommendation.reasons}
-                createdAt={recommendation.createdAt}
-                now={demoNow}
-                requiresApproval={recommendation.requiresApproval}
-                applying={applying}
-                onApply={() => handleApply(recommendation)}
-                onDetails={() => setDetailsFor(recommendation)}
+      ) : (
+        <>
+          {/* Счётчики считают то, что система действительно знает: сколько
+              проектов заведено и на каком они шаге. Денежных показателей здесь
+              нет и не будет, пока не подключён рекламный кабинет. */}
+          <section aria-labelledby="counters">
+            <h2 id="counters" className="sr-only">
+              Состояние проектов
+            </h2>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <KpiCard label="Проектов" value={String(overview.total)} />
+              <KpiCard label="Требуют действия" value={String(overview.needs_attention)} />
+              <KpiCard label="Сайт проверен" value={`${checked} из ${withSite || 0}`} />
+              <KpiCard
+                label="Экономика заполнена"
+                value={`${readyEconomics} из ${overview.total}`}
               />
-            ))}
-          </div>
-        </Card>
-      </section>
-
-      {/* ── Уровень 3: цепочка этапов проекта ──────────────────────────── */}
-      <section>
-        <Card>
-          <CardHeader
-            title="Логическая цепочка работы с проектом"
-            description="Apple Service Тверь"
-          />
-          <WorkflowStepper steps={workflowSteps} className="scrollbar-slim" />
-        </Card>
-      </section>
-
-      {/* ── Нижний уровень ─────────────────────────────────────────────── */}
-      <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <Card>
-          <CardHeader
-            title="Интеграции"
-            action={
-              <span className="text-caption text-text-secondary">
-                {integrations.filter((item) => item.status === "connected").length} из{" "}
-                {integrations.length}
-              </span>
-            }
-          />
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-3">
-            {integrations.map((integration) => (
-              <IntegrationCard
-                key={integration.key}
-                name={integration.name}
-                status={integration.status}
-                icon={integrationIcons[integration.key]}
-              />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader title="AI-помощник" />
-          <div className="flex flex-col gap-4">
-            <div className="flex items-center gap-3">
-              <AiAvatar size={52} />
-              <p className="text-caption text-text-secondary">
-                Задайте вопрос по проектам — отвечу по данным, а не догадками.
-              </p>
             </div>
-            <ChatComposer
-              onSubmit={() => undefined}
-              projectContext="Apple Service Тверь"
-              suggestions={chatSuggestions.slice(0, 2)}
+          </section>
+
+          {!overview.ad_platform_connected && (
+            <Card>
+              <div className="flex items-start gap-3">
+                <span className="text-text-secondary mt-0.5">
+                  <IconInfo size={18} />
+                </span>
+                <div className="flex flex-col gap-1">
+                  <p className="text-body-sm text-text-primary font-medium">
+                    Рекламный кабинет не подключён
+                  </p>
+                  <p className="text-body-sm text-text-secondary">
+                    Поэтому здесь нет расходов, лидов и продаж. Появятся они только вместе с
+                    настоящими данными из Яндекс Директа и Метрики — до тех пор любые цифры на этом
+                    месте были бы выдуманными.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader
+              title="Проекты"
+              description="Что нужно сделать в каждом — по порядку работы"
             />
-          </div>
-        </Card>
-
-        <Card>
-          <CardHeader
-            title="Уведомления"
-            action={
-              <Button variant="ghost" size="sm" iconRight={<IconArrowRight size={16} />}>
-                Все 3
-              </Button>
-            }
-          />
-          <div className="divide-border flex flex-col divide-y">
-            {notifications.map((notification) => (
-              <AlertCard
-                key={notification.id}
-                level={notification.level}
-                message={notification.message}
-                createdAt={notification.createdAt}
-                now={demoNow}
-                onClick={() => undefined}
-              />
-            ))}
-          </div>
-        </Card>
-      </section>
-
-      {/* ── Подробности рекомендации ───────────────────────────────────── */}
-      <Drawer
-        open={detailsFor !== null}
-        onClose={() => setDetailsFor(null)}
-        title={detailsFor?.title ?? ""}
-        description="Основание, метрики и ожидаемый эффект"
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setDetailsFor(null)}>
-              Закрыть
-            </Button>
-            {detailsFor && (
-              <Button
-                onClick={() => {
-                  const target = detailsFor;
-                  setDetailsFor(null);
-                  handleApply(target);
-                }}
-              >
-                {detailsFor.requiresApproval ? "На согласование" : "Применить"}
-              </Button>
-            )}
-          </>
-        }
-      >
-        {detailsFor && (
-          <div className="flex flex-col gap-6">
-            <section>
-              <h3 className="text-h3 mb-2">Что обнаружено</h3>
-              <p className="text-body-sm text-text-secondary">{detailsFor.reason}</p>
-            </section>
-
-            <section>
-              <h3 className="text-h3 mb-2">Основание</h3>
-              <ul className="text-body-sm text-text-secondary flex list-none flex-col gap-1.5">
-                {(detailsFor.reasons ?? ["Данные кампании за последние 3 дня"]).map((item) => (
-                  <li key={item} className="flex gap-2">
-                    <span aria-hidden="true">•</span>
-                    <span>{item}</span>
-                  </li>
-                ))}
-              </ul>
-              {/* Вывод AI всегда отделён от данных и от действия (v0.3 §140). */}
-              <p className="text-caption text-text-secondary mt-3">
-                Источник: отчёт по поисковым запросам, данные Метрики. Уверенность модели: средняя —
-                рекомендуем проверить перед применением.
-              </p>
-            </section>
-          </div>
-        )}
-      </Drawer>
-
-      {/* ── Согласование действия ──────────────────────────────────────── */}
-      <ConfirmationDialog
-        open={confirmFor !== null}
-        onClose={() => setConfirmFor(null)}
-        onConfirm={() => setConfirmFor(null)}
-        title="Отправить изменение на согласование"
-        description="Действие затрагивает рекламный бюджет, поэтому выполняется только после подтверждения."
-        changes={[
-          { label: "Дневной бюджет кампании", before: "4 500 ₽", after: "3 800 ₽" },
-          { label: "Активных ключевых фраз", before: "1 284", after: "1 160" },
-        ]}
-        affectedCount={124}
-        affectedNoun={["ключевая фраза", "ключевые фразы", "ключевых фраз"]}
-        confirmLabel="Отправить"
-        ttlMs={5 * 60_000}
-      >
-        <p className="text-caption text-text-secondary">
-          После подтверждения изменение попадёт в журнал и будет применено, когда согласование
-          пройдёт проверку политик.
-        </p>
-      </ConfirmationDialog>
+            <div className="flex flex-col">
+              {projects.map((project) => (
+                <ProjectRow key={project.id} project={project} />
+              ))}
+            </div>
+          </Card>
+        </>
+      )}
     </AppShell>
+  );
+}
+
+const ECONOMICS_LABEL: Record<string, string> = {
+  complete: "Экономика заполнена",
+  limited: "Экономика частично",
+  insufficient: "Экономика не заполнена",
+};
+
+function ProjectRow({ project }: { project: ProjectSummaryRead }) {
+  return (
+    <Link
+      href={`/projects/${project.id}`}
+      className="border-border focus-visible:outline-focus hover:bg-surface-hover -mx-2 flex flex-col gap-2 border-b px-2 py-3 last:border-b-0 focus-visible:outline-2 focus-visible:outline-offset-2"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-body text-text-primary font-medium">{project.name}</span>
+        <div className="flex items-center gap-2">
+          <ProjectStatusBadge status={project.status} />
+          <StatusBadge tone="neutral">
+            {project.completed_count} из {project.total_count}
+          </StatusBadge>
+        </div>
+      </div>
+
+      {/* Одна строка о том, что делать дальше, вместо набора метрик: пока
+          рекламных данных нет, полезен именно следующий шаг. */}
+      <p className="text-body-sm text-text-secondary">
+        {project.next_action ?? `Шаг «${project.current_step_label}» — всё сделано`}
+      </p>
+
+      <div className="text-caption text-text-secondary flex flex-wrap items-center gap-x-4 gap-y-1">
+        <span>
+          {project.audit_status === "completed"
+            ? `Сайт: ${project.audit_score} из 100`
+            : project.audit_status === "failed"
+              ? "Сайт: проверить не удалось"
+              : project.website_url
+                ? "Сайт: не проверялся"
+                : "Сайт не указан"}
+        </span>
+        <span>Конкурентов: {project.competitors_checked}</span>
+        <span>{ECONOMICS_LABEL[project.economics_mode]}</span>
+        {!project.can_launch && (
+          <span className="text-critical">Запуск закрыт: критические замечания</span>
+        )}
+      </div>
+    </Link>
   );
 }

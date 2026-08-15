@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api.v1 import audit, competitors, health, projects
+from .api.v1 import audit, competitors, health, overview, projects
 from .config import get_settings
 from .db.session import dispose_engine
 from .errors import register_error_handlers
@@ -109,6 +109,7 @@ def create_app() -> FastAPI:
     app.include_router(projects.router, prefix="/api/v1")
     app.include_router(audit.router, prefix="/api/v1")
     app.include_router(competitors.router, prefix="/api/v1")
+    app.include_router(overview.router, prefix="/api/v1")
 
     return app
 

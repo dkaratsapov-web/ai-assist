@@ -18,6 +18,8 @@ export type ProjectList = Schemas["ProjectList"];
 export type ProjectCreate = Schemas["ProjectCreate"];
 export type ProjectUpdate = Schemas["ProjectUpdate"];
 export type ProgressRead = Schemas["ProgressRead"];
+export type OverviewRead = Schemas["OverviewRead"];
+export type ProjectSummaryRead = Schemas["ProjectSummaryRead"];
 export type StepRead = Schemas["StepRead"];
 export type StepKey = Schemas["StepKey"];
 export type StepState = Schemas["StepState"];
@@ -144,6 +146,11 @@ export class ApiClient {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+  }
+
+  /** Сводка по всем проектам для главного экрана. */
+  getOverview(): Promise<OverviewRead> {
+    return this.request<OverviewRead>("/api/v1/overview");
   }
 
   /** Где находится проект по каноническому циклу и что делать дальше (v0.4 §3). */

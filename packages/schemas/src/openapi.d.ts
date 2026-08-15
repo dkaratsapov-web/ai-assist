@@ -28,6 +28,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Сводка по проектам */
+        get: operations["get_overview_api_v1_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -499,6 +516,25 @@ export interface components {
          */
         ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
         /**
+         * OverviewRead
+         * @description Сводка по всем проектам.
+         *
+         *     Намеренно не содержит расходов, лидов и продаж: рекламный кабинет не
+         *     подключён, и любые цифры здесь были бы выдуманными. Поле
+         *     `ad_platform_connected` существует ровно для того, чтобы интерфейс сказал
+         *     об этом прямо, а не рисовал нули (v0.3 §140).
+         */
+        OverviewRead: {
+            /** Ad Platform Connected */
+            ad_platform_connected: boolean;
+            /** Needs Attention */
+            needs_attention: number;
+            /** Projects */
+            projects: components["schemas"]["ProjectSummaryRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
          * ProgressRead
          * @description Где находится проект и что делать дальше.
          *
@@ -574,6 +610,43 @@ export interface components {
          * @enum {string}
          */
         ProjectStatus: "draft" | "active" | "paused" | "archived" | "error";
+        /**
+         * ProjectSummaryRead
+         * @description Строка проекта на главном экране.
+         *
+         *     Собирается на сервере одним запросом на все проекты. Собирать её в браузере
+         *     значило бы дёргать по четыре запроса на каждый проект — и показывать
+         *     страницу, которая тем медленнее, чем больше клиентов у агентства.
+         */
+        ProjectSummaryRead: {
+            /** Audit Score */
+            audit_score: number | null;
+            audit_status: components["schemas"]["ModuleStatus"] | null;
+            /** Can Launch */
+            can_launch: boolean;
+            /** Competitors Checked */
+            competitors_checked: number;
+            /** Completed Count */
+            completed_count: number;
+            current_step: components["schemas"]["StepKey"];
+            /** Current Step Label */
+            current_step_label: string;
+            economics_mode: components["schemas"]["EconomicsMode"];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Next Action */
+            next_action: string | null;
+            status: components["schemas"]["ProjectStatus"];
+            /** Total Count */
+            total_count: number;
+            /** Website Url */
+            website_url: string | null;
+        };
         /**
          * ProjectUpdate
          * @description Изменение проекта.
@@ -654,6 +727,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    get_overview_api_v1_overview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OverviewRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

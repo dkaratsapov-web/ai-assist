@@ -958,6 +958,38 @@
         "title": "ModuleStatus",
         "type": "string"
       },
+      "OverviewRead": {
+        "description": "Сводка по всем проектам.\n\nНамеренно не содержит расходов, лидов и продаж: рекламный кабинет не\nподключён, и любые цифры здесь были бы выдуманными. Поле\n`ad_platform_connected` существует ровно для того, чтобы интерфейс сказал\nоб этом прямо, а не рисовал нули (v0.3 §140).",
+        "properties": {
+          "ad_platform_connected": {
+            "title": "Ad Platform Connected",
+            "type": "boolean"
+          },
+          "needs_attention": {
+            "title": "Needs Attention",
+            "type": "integer"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/ProjectSummaryRead"
+            },
+            "title": "Projects",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "projects",
+          "total",
+          "needs_attention",
+          "ad_platform_connected"
+        ],
+        "title": "OverviewRead",
+        "type": "object"
+      },
       "ProgressRead": {
         "description": "Где находится проект и что делать дальше.\n\nСчитается на сервере, а не в интерфейсе: то же самое понадобится боту, и\nдва независимых расчёта неизбежно разошлись бы.",
         "properties": {
@@ -1142,6 +1174,110 @@
         ],
         "title": "ProjectStatus",
         "type": "string"
+      },
+      "ProjectSummaryRead": {
+        "description": "Строка проекта на главном экране.\n\nСобирается на сервере одним запросом на все проекты. Собирать её в браузере\nзначило бы дёргать по четыре запроса на каждый проект — и показывать\nстраницу, которая тем медленнее, чем больше клиентов у агентства.",
+        "properties": {
+          "audit_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audit Score"
+          },
+          "audit_status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModuleStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_launch": {
+            "title": "Can Launch",
+            "type": "boolean"
+          },
+          "competitors_checked": {
+            "title": "Competitors Checked",
+            "type": "integer"
+          },
+          "completed_count": {
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "current_step": {
+            "$ref": "#/components/schemas/StepKey"
+          },
+          "current_step_label": {
+            "title": "Current Step Label",
+            "type": "string"
+          },
+          "economics_mode": {
+            "$ref": "#/components/schemas/EconomicsMode"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "website_url",
+          "status",
+          "current_step",
+          "current_step_label",
+          "completed_count",
+          "total_count",
+          "next_action",
+          "audit_status",
+          "audit_score",
+          "can_launch",
+          "economics_mode",
+          "competitors_checked"
+        ],
+        "title": "ProjectSummaryRead",
+        "type": "object"
       },
       "ProjectUpdate": {
         "description": "Изменение проекта.\n\nВсе поля необязательные: приходит только то, что меняют. Отличить\n«не передано» от «очищено» позволяет `exclude_unset` при разборе.",
@@ -1338,6 +1474,89 @@
         "summary": "Состояние сервиса",
         "tags": [
           "service"
+        ]
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "operationId": "get_overview_api_v1_overview_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Сводка по проектам",
+        "tags": [
+          "overview"
         ]
       }
     },

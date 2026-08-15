@@ -75,7 +75,8 @@ export const globalNavigation: NavGroup[] = [
         label: "AI-рекомендации",
         href: "/recommendations",
         icon: IconSparkles,
-        badge: 12,
+        // Счётчик убран: он показывал 12 при нуле рекомендаций. Вернётся, когда
+        // будет что считать.
       },
       { key: "quick-analysis", label: "Быстрый анализ", href: "/quick-analysis", icon: IconBolt },
       {

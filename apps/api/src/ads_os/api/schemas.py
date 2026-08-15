@@ -85,6 +85,49 @@ class ProgressRead(BaseModel):
     next_action: str | None
 
 
+class ProjectSummaryRead(BaseModel):
+    """Строка проекта на главном экране.
+
+    Собирается на сервере одним запросом на все проекты. Собирать её в браузере
+    значило бы дёргать по четыре запроса на каждый проект — и показывать
+    страницу, которая тем медленнее, чем больше клиентов у агентства.
+    """
+
+    id: uuid.UUID
+    name: str
+    website_url: str | None
+    status: ProjectStatus
+
+    current_step: StepKey
+    current_step_label: str
+    completed_count: int
+    total_count: int
+    next_action: str | None
+
+    audit_status: ModuleStatus | None
+    audit_score: int | None
+    #: Можно ли запускать рекламу. Критические находки это запрещают (v0.3 §15).
+    can_launch: bool
+    economics_mode: EconomicsMode
+    competitors_checked: int
+
+
+class OverviewRead(BaseModel):
+    """Сводка по всем проектам.
+
+    Намеренно не содержит расходов, лидов и продаж: рекламный кабинет не
+    подключён, и любые цифры здесь были бы выдуманными. Поле
+    `ad_platform_connected` существует ровно для того, чтобы интерфейс сказал
+    об этом прямо, а не рисовал нули (v0.3 §140).
+    """
+
+    projects: list[ProjectSummaryRead]
+    total: int
+    #: Сколько проектов ждут действия специалиста.
+    needs_attention: int
+    ad_platform_connected: bool
+
+
 class EconomicsUpdate(BaseModel):
     """Ввод экономики.
 
