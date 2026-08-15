@@ -1,0 +1,26 @@
+{
+  "name": "ads-os",
+  "private": true,
+  "version": "0.0.0",
+  "description": "ADS OS — мультиканальная операционная система для специалиста по контекстной рекламе",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "tokens": "pnpm --filter @ads-os/tokens build",
+    "dev": "pnpm tokens && pnpm --filter @ads-os/web dev",
+    "build": "pnpm tokens && pnpm --filter @ads-os/web build",
+    "start": "pnpm --filter @ads-os/web start",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md,css}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md,css}\"",
+    "storybook": "pnpm tokens && pnpm --filter @ads-os/web storybook",
+    "build-storybook": "pnpm tokens && pnpm --filter @ads-os/web build-storybook"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}

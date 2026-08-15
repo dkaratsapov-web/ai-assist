@@ -1,0 +1,20 @@
+{
+  "name": "@ads-os/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Единый источник дизайн-токенов ADS OS (v0.4 §19)",
+  "exports": {
+    ".": "./dist/tokens.ts",
+    "./tokens.css": "./dist/tokens.css",
+    "./design-tokens.json": "./design-tokens.json"
+  },
+  "types": "./dist/tokens.ts",
+  "files": ["dist", "design-tokens.json"],
+  "scripts": {
+    "build": "node build.mjs",
+    "check:contrast": "node check-contrast.mjs",
+    "lint": "node check-contrast.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

@@ -1,0 +1,43 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+.next/
+out/
+dist/
+build/
+storybook-static/
+*.tsbuildinfo
+
+# generated design tokens (source of truth is design-tokens.json)
+packages/tokens/dist/
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# env & secrets — никогда не коммитим (v0.3 §59, §94)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# editors / os
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# logs & local artifacts
+*.log
+npm-debug.log*
+pnpm-debug.log*
+coverage/
+playwright-report/
+test-results/

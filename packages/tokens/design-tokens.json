@@ -1,0 +1,218 @@
+{
+  "meta": {
+    "name": "ADS OS Design Tokens",
+    "version": "0.1.0",
+    "source": "ADS OS Master ТЗ v0.3 §119–122, §141 · Addendum v0.4 §19",
+    "note": "Единственный источник правды для визуальных параметров. Raw-значения в компонентах запрещены. Изменения вносятся только здесь; CSS-переменные и константы для ботов генерируются скриптом build.mjs."
+  },
+
+  "color": {
+    "bg": "#FFFFFF",
+    "bg-secondary": "#F7F7F8",
+
+    "surface": "#FFFFFF",
+    "surface-hover": "#F2F2F4",
+    "surface-active": "#EDEDF0",
+    "surface-inverse": "#0A0A0A",
+
+    "text-primary": "#0A0A0A",
+    "text-secondary": "#6B6B6B",
+    "text-disabled": "#9A9AA0",
+    "text-inverse": "#FFFFFF",
+
+    "border": "#E9E9EB",
+    "border-strong": "#D6D6DA",
+    "border-input": "#8E8E95",
+
+    "cta": "#0A0A0A",
+    "cta-hover": "#232326",
+    "cta-active": "#000000",
+    "cta-text": "#FFFFFF",
+
+    "focus": "#4B49B8",
+
+    "success": "#157F4A",
+    "success-bg": "#ECF6F1",
+    "success-border": "#CBE7DA",
+
+    "warning": "#9A6205",
+    "warning-bg": "#FBF2E3",
+    "warning-border": "#EFDCB8",
+
+    "critical": "#B3261E",
+    "critical-bg": "#FBECEA",
+    "critical-border": "#F0CFCB",
+
+    "info": "#4B49B8",
+    "info-bg": "#EFEFFB",
+    "info-border": "#D5D4F2",
+
+    "neutral": "#6B6B6B",
+    "neutral-bg": "#F2F2F4",
+    "neutral-border": "#E1E1E5",
+
+    "chart-1": "#0A0A0A",
+    "chart-2": "#6E68DE",
+    "chart-3": "#C97230",
+    "chart-4": "#2F8F63",
+    "chart-grid": "#EEEEF0",
+    "chart-axis": "#85858B"
+  },
+
+  "_colorNotes": {
+    "text-disabled": "Только для отключённых контролов. Отключённые элементы освобождены от требований контраста WCAG; для любого читаемого текста использовать text-secondary.",
+    "border": "Декоративные разделители и границы карточек. Держится светлым намеренно (v0.3 §121): карточка опознаётся по фону и тени, а не по границе, поэтому порог 3:1 к ней неприменим.",
+    "border-input": "Границы полей ввода и других контролов, которые опознаются именно по границе. Здесь WCAG 1.4.11 требует 3:1, поэтому цвет заметно темнее декоративного border.",
+    "chart-axis": "Линии и засечки осей (графический объект, порог 3:1). Подписи осей — это текст, для них используется text-secondary.",
+    "chart-1..4": "Палитра серий графиков — единственное разрешённое отступление от монохрома (v0.4 §19). Одна метрика имеет один цвет во всём продукте. Статусные цвета с серийными не смешиваются.",
+    "focus": "Приглушённый фиолетовый: единственный цвет, различимый и на белом фоне, и на чёрной CTA-кнопке."
+  },
+
+  "font": {
+    "sans": "\"Inter\", \"Manrope\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif",
+    "mono": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, monospace"
+  },
+
+  "fontWeight": {
+    "regular": "400",
+    "medium": "500",
+    "semibold": "600"
+  },
+
+  "text": {
+    "display": { "size": "36px", "lineHeight": "1.15", "weight": "600", "tracking": "-0.02em" },
+    "h1": { "size": "30px", "lineHeight": "1.2", "weight": "600", "tracking": "-0.02em" },
+    "h2": { "size": "23px", "lineHeight": "1.25", "weight": "600", "tracking": "-0.01em" },
+    "h3": { "size": "17px", "lineHeight": "1.35", "weight": "600", "tracking": "-0.01em" },
+    "metric": { "size": "28px", "lineHeight": "1.15", "weight": "600", "tracking": "-0.02em" },
+    "body": { "size": "15px", "lineHeight": "1.55", "weight": "400", "tracking": "0" },
+    "body-sm": { "size": "14px", "lineHeight": "1.5", "weight": "400", "tracking": "0" },
+    "caption": { "size": "13px", "lineHeight": "1.45", "weight": "400", "tracking": "0" },
+    "micro": { "size": "12px", "lineHeight": "1.4", "weight": "500", "tracking": "0.01em" }
+  },
+
+  "spacing": {
+    "micro": "4px",
+    "xs": "8px",
+    "sm": "12px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "32px",
+    "2xl": "48px"
+  },
+
+  "radius": {
+    "control": "12px",
+    "small-card": "16px",
+    "card": "20px",
+    "hero-card": "24px",
+    "pill": "999px"
+  },
+
+  "shadow": {
+    "card": "0 1px 2px rgba(10, 10, 10, 0.04), 0 1px 3px rgba(10, 10, 10, 0.03)",
+    "raised": "0 2px 8px rgba(10, 10, 10, 0.06), 0 1px 2px rgba(10, 10, 10, 0.04)",
+    "overlay": "0 8px 32px rgba(10, 10, 10, 0.12), 0 2px 8px rgba(10, 10, 10, 0.06)"
+  },
+
+  "duration": {
+    "fast": "140ms",
+    "normal": "200ms",
+    "panel": "280ms"
+  },
+
+  "ease": {
+    "out": "cubic-bezier(0.22, 1, 0.36, 1)",
+    "standard": "cubic-bezier(0.2, 0, 0, 1)"
+  },
+
+  "breakpoint": {
+    "sm": "640px",
+    "md": "768px",
+    "lg": "1024px",
+    "xl": "1280px",
+    "2xl": "1536px"
+  },
+
+  "z": {
+    "base": "0",
+    "sticky": "100",
+    "drawer": "200",
+    "modal": "300",
+    "toast": "400"
+  },
+
+  "layout": {
+    "sidebar-width": "248px",
+    "sidebar-width-collapsed": "68px",
+    "topbar-height": "64px",
+    "content-max-width": "1440px",
+    "touch-target-min": "44px"
+  },
+
+  "vocabulary": {
+    "note": "Общий словарь статусов для Web и сообщений ботов (v0.4 §19). Цвет — только один из носителей смысла; текстовая метка обязательна всегда (v0.3 §139).",
+
+    "severity": {
+      "critical": { "label": "Критично", "tone": "critical", "description": "Проблема, требующая срочного внимания" },
+      "warning": { "label": "Важно", "tone": "warning", "description": "Рекомендация с высоким потенциалом или риск без немедленной остановки" },
+      "recommendation": { "label": "Рекомендация", "tone": "success", "description": "Идея, гипотеза или возможность роста" },
+      "info": { "label": "Информация", "tone": "neutral", "description": "Отчёты, завершение анализа, системные события" }
+    },
+
+    "workflowStepState": {
+      "completed": { "label": "Готово", "tone": "success" },
+      "active": { "label": "В процессе", "tone": "info" },
+      "waiting": { "label": "Ожидает", "tone": "neutral" },
+      "blocked": { "label": "Заблокировано", "tone": "warning" },
+      "error": { "label": "Ошибка", "tone": "critical" }
+    },
+
+    "projectStatus": {
+      "draft": { "label": "Черновик", "tone": "neutral" },
+      "active": { "label": "Активен", "tone": "success" },
+      "paused": { "label": "На паузе", "tone": "warning" },
+      "archived": { "label": "Архив", "tone": "neutral" },
+      "error": { "label": "Ошибка", "tone": "critical" }
+    },
+
+    "moduleStatus": {
+      "not_started": { "label": "Не начато", "tone": "neutral" },
+      "queued": { "label": "В очереди", "tone": "neutral" },
+      "running": { "label": "Выполняется", "tone": "info" },
+      "needs_review": { "label": "Нужна проверка", "tone": "warning" },
+      "completed": { "label": "Завершено", "tone": "success" },
+      "failed": { "label": "Ошибка", "tone": "critical" }
+    },
+
+    "integrationStatus": {
+      "connected": { "label": "Подключено", "tone": "success" },
+      "degraded": { "label": "Работает с ошибками", "tone": "warning" },
+      "disconnected": { "label": "Не подключено", "tone": "neutral" },
+      "error": { "label": "Ошибка", "tone": "critical" }
+    },
+
+    "metricAvailability": {
+      "note": "Состояние KPI по допущению B: метрика достоверна, является временным proxy или недоступна из-за неподключённого источника.",
+      "available": { "label": "Доступно", "tone": "neutral" },
+      "proxy": { "label": "Оценка", "tone": "warning" },
+      "unavailable": { "label": "Нет данных", "tone": "neutral" }
+    },
+
+    "lifecycle": {
+      "note": "Канонический жизненный цикл проекта (v0.4 §3). Десять шагов, заменяют разрозненные 8/10/12-шаговые представления v0.3.",
+      "steps": [
+        { "key": "onboarding", "label": "Онбординг", "description": "Создаём проект, заполняем бриф и цели." },
+        { "key": "research", "label": "Исследование", "description": "Аудит сайта и анализ конкурентов." },
+        { "key": "economics", "label": "Экономика", "description": "Считаем маржу, CAC, целевой CPL и точку безубыточности." },
+        { "key": "strategy", "label": "Стратегия", "description": "Каналы, структура, бюджеты и гипотезы." },
+        { "key": "build", "label": "Сборка", "description": "Семантика, кластеры, структура кампаний и объявления." },
+        { "key": "validate", "label": "Проверка", "description": "Предмодерация, аналитика, URL и ограничения площадки." },
+        { "key": "launch", "label": "Запуск", "description": "Публикуем кампании и подключаем аналитику." },
+        { "key": "measure", "label": "Измерение", "description": "Собираем расходы, конверсии, лиды и продажи." },
+        { "key": "optimize", "label": "Оптимизация", "description": "Поисковые запросы, бюджеты, посадочные и качество лидов." },
+        { "key": "scale", "label": "Рост и масштаб", "description": "Масштабируем подтверждённые гипотезы." }
+      ]
+    }
+  }
+}
