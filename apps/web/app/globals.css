@@ -1,0 +1,56 @@
+@import "tailwindcss";
+@import "@ads-os/tokens/tokens.css";
+
+/* Компоненты библиотеки живут вне этого приложения — Tailwind должен видеть
+   их исходники, иначе используемые там классы не попадут в сборку. */
+@source "../../../packages/ui/src";
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Фокус показывается только при клавиатурной навигации, но показывается
+     всегда, когда она используется (v0.3 §139). Полное подавление outline
+     недопустимо. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-info-bg);
+  }
+
+  /* Уважение к prefers-reduced-motion. Индикаторы процесса переопределяют это
+     правило точечно — им движение нужно по сути. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* Тонкая полоса прокрутки для горизонтальных лент — цепочка workflow,
+     таблицы. Вертикальная прокрутка страницы остаётся системной. */
+  .scrollbar-slim {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-strong) transparent;
+  }
+}

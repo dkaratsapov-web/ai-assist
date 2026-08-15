@@ -69,7 +69,7 @@
   },
 
   "font": {
-    "sans": "\"Inter\", \"Manrope\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif",
+    "sans": "var(--font-inter), \"Inter\", \"Manrope\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", \"Helvetica Neue\", Arial, sans-serif",
     "mono": "ui-monospace, SFMono-Regular, \"SF Mono\", Menlo, Consolas, monospace"
   },
 
@@ -91,6 +91,8 @@
     "micro": { "size": "12px", "lineHeight": "1.4", "weight": "500", "tracking": "0.01em" }
   },
 
+  "_spacingNote": "Сетка отступов v0.3 §121. В разметке используется числовая шкала Tailwind, совпадающая один в один: micro=1, xs=2, sm=3, md=4, lg=6, xl=8, 2xl=12. Эти переменные экспортируются как --space-* для потребителей вне Tailwind.",
+
   "spacing": {
     "micro": "4px",
     "xs": "8px",
@@ -99,6 +101,16 @@
     "lg": "24px",
     "xl": "32px",
     "2xl": "48px"
+  },
+
+  "container": {
+    "xs": "20rem",
+    "sm": "24rem",
+    "md": "28rem",
+    "lg": "32rem",
+    "xl": "36rem",
+    "2xl": "42rem",
+    "3xl": "48rem"
   },
 
   "radius": {
@@ -154,10 +166,26 @@
     "note": "Общий словарь статусов для Web и сообщений ботов (v0.4 §19). Цвет — только один из носителей смысла; текстовая метка обязательна всегда (v0.3 §139).",
 
     "severity": {
-      "critical": { "label": "Критично", "tone": "critical", "description": "Проблема, требующая срочного внимания" },
-      "warning": { "label": "Важно", "tone": "warning", "description": "Рекомендация с высоким потенциалом или риск без немедленной остановки" },
-      "recommendation": { "label": "Рекомендация", "tone": "success", "description": "Идея, гипотеза или возможность роста" },
-      "info": { "label": "Информация", "tone": "neutral", "description": "Отчёты, завершение анализа, системные события" }
+      "critical": {
+        "label": "Критично",
+        "tone": "critical",
+        "description": "Проблема, требующая срочного внимания"
+      },
+      "warning": {
+        "label": "Важно",
+        "tone": "warning",
+        "description": "Рекомендация с высоким потенциалом или риск без немедленной остановки"
+      },
+      "recommendation": {
+        "label": "Рекомендация",
+        "tone": "success",
+        "description": "Идея, гипотеза или возможность роста"
+      },
+      "info": {
+        "label": "Информация",
+        "tone": "neutral",
+        "description": "Отчёты, завершение анализа, системные события"
+      }
     },
 
     "workflowStepState": {
@@ -202,16 +230,56 @@
     "lifecycle": {
       "note": "Канонический жизненный цикл проекта (v0.4 §3). Десять шагов, заменяют разрозненные 8/10/12-шаговые представления v0.3.",
       "steps": [
-        { "key": "onboarding", "label": "Онбординг", "description": "Создаём проект, заполняем бриф и цели." },
-        { "key": "research", "label": "Исследование", "description": "Аудит сайта и анализ конкурентов." },
-        { "key": "economics", "label": "Экономика", "description": "Считаем маржу, CAC, целевой CPL и точку безубыточности." },
-        { "key": "strategy", "label": "Стратегия", "description": "Каналы, структура, бюджеты и гипотезы." },
-        { "key": "build", "label": "Сборка", "description": "Семантика, кластеры, структура кампаний и объявления." },
-        { "key": "validate", "label": "Проверка", "description": "Предмодерация, аналитика, URL и ограничения площадки." },
-        { "key": "launch", "label": "Запуск", "description": "Публикуем кампании и подключаем аналитику." },
-        { "key": "measure", "label": "Измерение", "description": "Собираем расходы, конверсии, лиды и продажи." },
-        { "key": "optimize", "label": "Оптимизация", "description": "Поисковые запросы, бюджеты, посадочные и качество лидов." },
-        { "key": "scale", "label": "Рост и масштаб", "description": "Масштабируем подтверждённые гипотезы." }
+        {
+          "key": "onboarding",
+          "label": "Онбординг",
+          "description": "Создаём проект, заполняем бриф и цели."
+        },
+        {
+          "key": "research",
+          "label": "Исследование",
+          "description": "Аудит сайта и анализ конкурентов."
+        },
+        {
+          "key": "economics",
+          "label": "Экономика",
+          "description": "Считаем маржу, CAC, целевой CPL и точку безубыточности."
+        },
+        {
+          "key": "strategy",
+          "label": "Стратегия",
+          "description": "Каналы, структура, бюджеты и гипотезы."
+        },
+        {
+          "key": "build",
+          "label": "Сборка",
+          "description": "Семантика, кластеры, структура кампаний и объявления."
+        },
+        {
+          "key": "validate",
+          "label": "Проверка",
+          "description": "Предмодерация, аналитика, URL и ограничения площадки."
+        },
+        {
+          "key": "launch",
+          "label": "Запуск",
+          "description": "Публикуем кампании и подключаем аналитику."
+        },
+        {
+          "key": "measure",
+          "label": "Измерение",
+          "description": "Собираем расходы, конверсии, лиды и продажи."
+        },
+        {
+          "key": "optimize",
+          "label": "Оптимизация",
+          "description": "Поисковые запросы, бюджеты, посадочные и качество лидов."
+        },
+        {
+          "key": "scale",
+          "label": "Рост и масштаб",
+          "description": "Масштабируем подтверждённые гипотезы."
+        }
       ]
     }
   }

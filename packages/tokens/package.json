@@ -10,7 +10,10 @@
     "./design-tokens.json": "./design-tokens.json"
   },
   "types": "./dist/tokens.ts",
-  "files": ["dist", "design-tokens.json"],
+  "files": [
+    "dist",
+    "design-tokens.json"
+  ],
   "scripts": {
     "build": "node build.mjs",
     "check:contrast": "node check-contrast.mjs",

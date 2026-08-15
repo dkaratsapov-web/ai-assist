@@ -20,7 +20,9 @@
     "build-storybook": "pnpm tokens && pnpm --filter @ads-os/web build-storybook"
   },
   "devDependencies": {
+    "playwright": "^1.62.1",
     "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "typescript": "^5.9.3"
   }
 }
