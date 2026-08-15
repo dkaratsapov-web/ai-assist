@@ -4,6 +4,7 @@
 автогенерации миграций.
 """
 
+from .activity import ActivityAction, ActivityLog
 from .audit import ModuleStatus, SiteAudit
 from .competitor import Competitor
 from .organization import Organization, OrganizationPlan
@@ -13,6 +14,8 @@ from .usage import UsageEvent, UsageService, UsageUnit
 from .user import User
 
 __all__ = [
+    "ActivityAction",
+    "ActivityLog",
     "Competitor",
     "MainConversion",
     "ModuleStatus",

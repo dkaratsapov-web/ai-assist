@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api.v1 import (
+    activity,
     audit,
     auth,
     competitors,
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router, prefix="/api/v1")
     app.include_router(competitors.router, prefix="/api/v1")
     app.include_router(overview.router, prefix="/api/v1")
+    app.include_router(activity.router, prefix="/api/v1")
     app.include_router(organization.router, prefix="/api/v1")
 
     return app

@@ -10,6 +10,8 @@ from sqlalchemy.orm import selectinload
 
 from ...errors import AppError, ConflictError, NotFoundError
 from ...models import Organization, Project, User
+from ...models.activity import ActivityAction
+from ...services.activity import changed_fields, record
 from ...services.auth import revoke_all_for_user
 from ...tenancy.context import Role
 from ..deps import OwnerDep, SessionDep, SettingsDep, TenantDep
@@ -132,6 +134,15 @@ async def add_member(
     session.add(user)
     await session.flush()
 
+    await record(
+        session,
+        ctx,
+        ActivityAction.MEMBER_ADDED,
+        subject=user.full_name,
+        actor_name=ctx.user_name,
+        details={"почта": user.email, "роль": user.role.value},
+    )
+
     return _to_member(user)
 
 
@@ -149,6 +160,11 @@ async def update_member(
     user = await _member_or_404(session, ctx.organization_id, member_id)
 
     updates = payload.model_dump(exclude_unset=True)
+    before = {
+        "role": user.role.value,
+        "full_name": user.full_name,
+        "is_active": user.is_active,
+    }
 
     if "role" in updates and updates["role"] is not None:
         new_role = Role(updates.pop("role"))
@@ -168,6 +184,23 @@ async def update_member(
             setattr(user, key, value)
 
     await session.flush()
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.MEMBER_UPDATED,
+        subject=user.full_name,
+        actor_name=ctx.user_name,
+        details=changed_fields(
+            before,
+            {
+                "role": user.role.value,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+            },
+        ),
+    )
+
     return _to_member(user)
 
 

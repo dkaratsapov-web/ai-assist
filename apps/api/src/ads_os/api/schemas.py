@@ -14,6 +14,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..models.activity import ActivityAction
 from ..models.audit import ModuleStatus
 from ..models.project import MainConversion, ProjectStatus
 from ..services.competitors import FeatureKey
@@ -361,6 +362,31 @@ class OrganizationRead(BaseModel):
     app_env: str
     ai_provider: str
     ad_platform_adapter: str
+
+
+class ActivityRead(BaseModel):
+    """Строка журнала.
+
+    Имя автора и название объекта — копии на момент действия, а не ссылки.
+    Человек может быть отключён, проект удалён, а запись обязана остаться
+    читаемой.
+    """
+
+    id: uuid.UUID
+    action: ActivityAction
+    #: Готовая фраза для ленты: «создал проект», «изменил экономику проекта».
+    action_label: str
+    user_name: str
+    subject: str
+    project_id: uuid.UUID | None
+    #: Пары «поле → было → стало». Пусто, если подробностей нет.
+    details: dict[str, str]
+    created_at: datetime
+
+
+class ActivityList(BaseModel):
+    items: list[ActivityRead]
+    total: int
 
 
 class HealthResponse(BaseModel):

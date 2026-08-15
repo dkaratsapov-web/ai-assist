@@ -97,6 +97,7 @@ class AuthenticatedUser:
             organization_id=self.session.organization_id,
             user_id=self.user.id,
             role=self.user.role,
+            user_name=self.user.full_name,
         )
 
 

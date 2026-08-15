@@ -1,6 +1,104 @@
 {
   "components": {
     "schemas": {
+      "ActivityAction": {
+        "description": "Что именно произошло.\n\nСписок закрытый: свободная строка со временем превратилась бы в набор\nпохожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.",
+        "enum": [
+          "project_created",
+          "project_updated",
+          "project_deleted",
+          "economics_updated",
+          "audit_started",
+          "competitor_added",
+          "competitor_removed",
+          "member_added",
+          "member_updated"
+        ],
+        "title": "ActivityAction",
+        "type": "string"
+      },
+      "ActivityList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ActivityList",
+        "type": "object"
+      },
+      "ActivityRead": {
+        "description": "Строка журнала.\n\nИмя автора и название объекта — копии на момент действия, а не ссылки.\nЧеловек может быть отключён, проект удалён, а запись обязана остаться\nчитаемой.",
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/ActivityAction"
+          },
+          "action_label": {
+            "title": "Action Label",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Details",
+            "type": "object"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "project_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Project Id"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "user_name": {
+            "title": "User Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "action",
+          "action_label",
+          "user_name",
+          "subject",
+          "project_id",
+          "details",
+          "created_at"
+        ],
+        "title": "ActivityRead",
+        "type": "object"
+      },
       "AuditHistory": {
         "properties": {
           "items": {
@@ -1920,6 +2018,119 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/activity": {
+      "get": {
+        "description": "Кто что сделал, от новых к старым.\n\nЖурнал общий для организации и виден всем её участникам, а не только\nвладельцу. Это осознанно: смысл журнала — общая ответственность, а не\nнадзор одного человека за остальными. Скрытый журнал работает как надзор.",
+        "operationId": "list_activity_api_v1_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "project_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Project Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Журнал действий",
+        "tags": [
+          "activity"
+        ]
+      }
+    },
     "/api/v1/auth/callback": {
       "get": {
         "operationId": "callback_api_v1_auth_callback_get",

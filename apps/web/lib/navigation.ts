@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import {
   IconBolt,
   IconChart,
+  IconClock,
   IconExperiment,
   IconFolder,
   IconGlobe,
@@ -63,6 +64,7 @@ export const globalNavigation: NavGroup[] = [
     items: [
       { key: "analytics", label: "Аналитика", href: "/analytics", icon: IconChart },
       { key: "reports", label: "Отчёты", href: "/reports", icon: IconReport },
+      { key: "activity", label: "Журнал действий", href: "/activity", icon: IconClock },
       { key: "experiments", label: "Эксперименты", href: "/experiments", icon: IconExperiment },
     ],
   },

@@ -29,6 +29,10 @@ class TenantContext:
     organization_id: uuid.UUID
     user_id: uuid.UUID
     role: Role
+    #: Имя для журнала действий. Хранится здесь, чтобы не запрашивать
+    #: пользователя заново при каждой записи. Пустое значение бывает только в
+    #: локальной разработке, где контекст приходит заголовками.
+    user_name: str = ""
 
     @property
     def is_owner(self) -> bool:

@@ -10,7 +10,9 @@ from sqlalchemy import Select, select
 
 from ...errors import AppError, ConflictError
 from ...models import Competitor, Project, SiteAudit
+from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
+from ...services.activity import record
 from ...services.competitors import FeatureKey, Participant, compare
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.competitors import enqueue_competitor
@@ -79,7 +81,7 @@ async def list_competitors(
 async def add_competitor(
     project_id: uuid.UUID, payload: CompetitorCreate, session: SessionDep, ctx: WriteDep
 ) -> CompetitorRead:
-    await ProjectRepository(session, ctx).get_or_404(project_id)
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
     existing = await _load(session, ctx, project_id)
 
@@ -107,6 +109,16 @@ async def add_competitor(
     # поэтому изменения фиксируются после неё, а не до.
     _enqueue(competitor)
     await session.flush()
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.COMPETITOR_ADDED,
+        subject=competitor.title or competitor.url,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details={"проект": project.name, "адрес": competitor.url},
+    )
 
     return _to_read(competitor)
 
@@ -152,8 +164,20 @@ async def recheck_competitor(
 async def delete_competitor(
     project_id: uuid.UUID, competitor_id: uuid.UUID, session: SessionDep, ctx: WriteDep
 ) -> None:
-    await ProjectRepository(session, ctx).get_or_404(project_id)
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
     competitor = await CompetitorRepository(session, ctx).get_or_404(competitor_id)
+
+    # Запись делается до удаления: после него ни названия, ни адреса уже нет.
+    await record(
+        session,
+        ctx,
+        ActivityAction.COMPETITOR_REMOVED,
+        subject=competitor.title or competitor.url,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details={"проект": project.name, "адрес": competitor.url},
+    )
+
     await session.delete(competitor)
     await session.flush()
 

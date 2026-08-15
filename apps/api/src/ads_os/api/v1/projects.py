@@ -9,7 +9,9 @@ from sqlalchemy import Select, func, select
 
 from ...errors import ConflictError
 from ...models import Competitor, Project, ProjectEconomics, SiteAudit
+from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
+from ...services.activity import changed_fields, record
 from ...services.economics import (
     EconomicsInput,
     EconomicsSummary,
@@ -84,6 +86,16 @@ async def create_project(
             created_by_id=ctx.user_id,
         )
     )
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.PROJECT_CREATED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project.id,
+    )
+
     return ProjectRead.model_validate(project)
 
 
@@ -118,6 +130,11 @@ async def update_project(
     # exclude_unset важен: без него незаполненные поля пришли бы как None и
     # стёрли бы уже сохранённые значения.
     updates = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)
+
+    # Снимок «до» делается раньше записи: после присваивания старых значений
+    # уже не существует.
+    before = {key: getattr(project, key, None) for key in updates}
+
     for key, value in updates.items():
         setattr(project, key, value)
 
@@ -127,6 +144,16 @@ async def update_project(
     # Без явного обновления ответ пытался бы догрузить его лениво — в чужом
     # контексте, где асинхронный ввод-вывод уже недоступен.
     await session.refresh(project)
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.PROJECT_UPDATED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project.id,
+        details=changed_fields(before, updates),
+    )
 
     return ProjectRead.model_validate(project)
 
@@ -144,7 +171,16 @@ async def delete_project(project_id: uuid.UUID, session: SessionDep, ctx: WriteD
     вместе с ним в тот же миг. Окончательное удаление — отдельная процедура по
     истечении срока хранения.
     """
-    await ProjectRepository(session, ctx).soft_delete(project_id)
+    project = await ProjectRepository(session, ctx).soft_delete(project_id)
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.PROJECT_DELETED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project.id,
+    )
 
 
 @router.get(
@@ -257,7 +293,7 @@ async def update_economics(
     ctx: WriteDep,
 ) -> EconomicsResponse:
     project_repo = ProjectRepository(session, ctx)
-    await project_repo.get_or_404(project_id)
+    project = await project_repo.get_or_404(project_id)
 
     economics = await _load_economics(session, ctx, project_id)
 
@@ -280,6 +316,9 @@ async def update_economics(
         )
 
     updates = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)
+    before = {key: getattr(economics, key, None) for key in updates}
+    economics_changes = changed_fields(before, updates)
+
     for key, value in updates.items():
         setattr(economics, key, value)
 
@@ -291,6 +330,17 @@ async def update_economics(
     await session.flush()
 
     summary = evaluate(_to_input(economics))
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.ECONOMICS_UPDATED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details=economics_changes,
+    )
+
     return EconomicsResponse(
         project_id=project_id,
         input=economics,

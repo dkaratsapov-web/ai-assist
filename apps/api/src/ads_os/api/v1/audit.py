@@ -11,7 +11,9 @@ from sqlalchemy import Select, select
 from ...db.base import utcnow
 from ...errors import AppError
 from ...models import Project, SiteAudit
+from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
+from ...services.activity import record
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
@@ -124,6 +126,16 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
             extra={"project_id": str(project_id), "error": type(exc).__name__},
         )
         raise QueueUnavailableError() from exc
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.AUDIT_STARTED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project_id,
+        details={"адрес": project.website_url},
+    )
 
     return _to_read(audit)
 

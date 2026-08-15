@@ -46,6 +46,9 @@ export type CompetitorList = Schemas["CompetitorList"];
 export type CompetitorCreate = Schemas["CompetitorCreate"];
 export type ComparisonRead = Schemas["ComparisonRead"];
 export type FeatureRowRead = Schemas["FeatureRowRead"];
+export type ActivityRead = Schemas["ActivityRead"];
+export type ActivityList = Schemas["ActivityList"];
+export type ActivityAction = Schemas["ActivityAction"];
 export type CategoryRead = Schemas["CategoryRead"];
 export type AuditIssueRead = Schemas["AuditIssueRead"];
 export type ModuleStatus = Schemas["ModuleStatus"];
@@ -257,6 +260,17 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  }
+
+  /**
+   * Журнал действий. Без `projectId` — по всей организации.
+   */
+  listActivity(projectId?: string | null, limit?: number): Promise<ActivityList> {
+    const query = new URLSearchParams();
+    if (projectId) query.set("project_id", projectId);
+    if (limit) query.set("limit", String(limit));
+    const suffix = query.size > 0 ? `?${query.toString()}` : "";
+    return this.request<ActivityList>(`/api/v1/activity${suffix}`);
   }
 
   listCompetitors(projectId: string): Promise<CompetitorList> {
