@@ -11,6 +11,8 @@
           "audit_started",
           "issue_dismissed",
           "issue_restored",
+          "keywords_imported",
+          "minus_word_added",
           "competitor_added",
           "competitor_removed",
           "member_added",
@@ -525,6 +527,59 @@
           "score"
         ],
         "title": "CategoryRead",
+        "type": "object"
+      },
+      "ClusterList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ClusterRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ClusterList",
+        "type": "object"
+      },
+      "ClusterRead": {
+        "description": "Группа фраз под одно объявление.",
+        "properties": {
+          "core": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Core",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phrases": {
+            "title": "Phrases",
+            "type": "integer"
+          },
+          "total_frequency": {
+            "title": "Total Frequency",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "core",
+          "phrases",
+          "total_frequency"
+        ],
+        "title": "ClusterRead",
         "type": "object"
       },
       "ComparisonRead": {
@@ -1338,6 +1393,177 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "ImportSummary": {
+        "description": "Итог разбора списка.\n\nЧисла важнее списка: после загрузки трёх тысяч фраз человеку нужно понять\nмасштаб, а не листать результат.",
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "commercial": {
+            "title": "Commercial",
+            "type": "integer"
+          },
+          "informational": {
+            "title": "Informational",
+            "type": "integer"
+          },
+          "irrelevant": {
+            "title": "Irrelevant",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "added",
+          "updated",
+          "skipped",
+          "commercial",
+          "informational",
+          "irrelevant",
+          "clusters"
+        ],
+        "title": "ImportSummary",
+        "type": "object"
+      },
+      "Intent": {
+        "description": "К чему относится запрос.",
+        "enum": [
+          "commercial",
+          "informational",
+          "irrelevant"
+        ],
+        "title": "Intent",
+        "type": "string"
+      },
+      "KeywordImport": {
+        "description": "Вставленный список фраз.",
+        "properties": {
+          "text": {
+            "maxLength": 2000000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "KeywordImport",
+        "type": "object"
+      },
+      "KeywordList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/KeywordRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "KeywordList",
+        "type": "object"
+      },
+      "KeywordRead": {
+        "properties": {
+          "cluster_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cluster Name"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "intent_label": {
+            "title": "Intent Label",
+            "type": "string"
+          },
+          "is_manual": {
+            "title": "Is Manual",
+            "type": "boolean"
+          },
+          "phrase": {
+            "title": "Phrase",
+            "type": "string"
+          },
+          "trigger": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trigger"
+          }
+        },
+        "required": [
+          "id",
+          "phrase",
+          "frequency",
+          "intent",
+          "intent_label",
+          "trigger",
+          "is_manual",
+          "cluster_name"
+        ],
+        "title": "KeywordRead",
+        "type": "object"
+      },
+      "KeywordUpdate": {
+        "properties": {
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          }
+        },
+        "required": [
+          "intent"
+        ],
+        "title": "KeywordUpdate",
+        "type": "object"
+      },
       "LaunchPlanRead": {
         "description": "План запуска: с какой стратегии начинать и сколько ждать выводов.\n\nРядом с каждым числом идёт объяснение, откуда оно взялось. План без\nобоснования специалист не может ни принять осознанно, ни оспорить — а\nоспорить он должен уметь, потому что отвечает за бюджет он, а не система.",
         "properties": {
@@ -1638,6 +1864,95 @@
           "availability"
         ],
         "title": "MetricRead",
+        "type": "object"
+      },
+      "MinusWordCreate": {
+        "properties": {
+          "word": {
+            "maxLength": 60,
+            "minLength": 2,
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "word"
+        ],
+        "title": "MinusWordCreate",
+        "type": "object"
+      },
+      "MinusWordList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MinusWordRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/MinusWordSuggestionRead"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "suggestions",
+          "total"
+        ],
+        "title": "MinusWordList",
+        "type": "object"
+      },
+      "MinusWordRead": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "word": {
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "word"
+        ],
+        "title": "MinusWordRead",
+        "type": "object"
+      },
+      "MinusWordSuggestionRead": {
+        "properties": {
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "phrases": {
+            "title": "Phrases",
+            "type": "integer"
+          },
+          "word": {
+            "title": "Word",
+            "type": "string"
+          }
+        },
+        "required": [
+          "word",
+          "phrases",
+          "examples"
+        ],
+        "title": "MinusWordSuggestionRead",
         "type": "object"
       },
       "ModuleStatus": {
@@ -4755,6 +5070,746 @@
         "summary": "Сохранить экономику проекта",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords": {
+      "get": {
+        "operationId": "list_keywords_api_v1_projects__project_id__keywords_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "intent",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Intent"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Intent"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cluster_name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cluster Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 200,
+              "maximum": 2000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeywordList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Фразы проекта",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/clusters": {
+      "get": {
+        "description": "Группы считаются заново при каждом запросе.\n\nХранить их отдельно смысла нет: они целиком выводятся из фраз, а фразы\nменяются. Сохранённая группа разошлась бы с ядром при первой же правке\nтипа, и человек увидел бы структуру, которой уже нет.",
+        "operationId": "list_clusters_api_v1_projects__project_id__keywords_clusters_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClusterList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Группы фраз под объявления",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/import": {
+      "post": {
+        "description": "Разбирает вставленный список и сохраняет фразы.\n\nПовторный импорт того же списка не удваивает ядро: фраза в проекте\nсуществует один раз, повторная загрузка обновляет её частотность. Ручные\nрешения при этом сохраняются — если специалист отнёс фразу к нецелевым,\nсловарь её больше не трогает. Иначе правка терялась бы при каждой загрузке,\nи доверие к ручным решениям исчезло бы вместе с ней.",
+        "operationId": "import_keywords_api_v1_projects__project_id__keywords_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeywordImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Загрузить список фраз",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/{keyword_id}": {
+      "patch": {
+        "description": "Переносит фразу в другой тип.\n\nРешение помечается ручным и переживает повторные импорты. Словарь не знает\nни ниши, ни клиента и ошибается в обе стороны — последнее слово всегда за\nспециалистом.",
+        "operationId": "update_keyword_api_v1_projects__project_id__keywords__keyword_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "keyword_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Keyword Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeywordUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KeywordRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Изменить тип фразы",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/minus-words": {
+      "get": {
+        "operationId": "list_minus_words_api_v1_projects__project_id__minus_words_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinusWordList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Минус-слова и предложения",
+        "tags": [
+          "semantics"
+        ]
+      },
+      "post": {
+        "description": "Добавляет слово и перепроверяет по нему всё ядро.\n\nПерепроверка обязательна: минус-слово, не изменившее ни одной фразы,\nвыглядит как принятое решение, хотя не сделало ничего. Ручные решения при\nэтом не трогаются.",
+        "operationId": "add_minus_word_api_v1_projects__project_id__minus_words_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MinusWordCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinusWordRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Добавить минус-слово",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/minus-words/{minus_word_id}": {
+      "delete": {
+        "operationId": "delete_minus_word_api_v1_projects__project_id__minus_words__minus_word_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "minus_word_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Minus Word Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Убрать минус-слово",
+        "tags": [
+          "semantics"
         ]
       }
     },

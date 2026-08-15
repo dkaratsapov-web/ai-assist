@@ -20,6 +20,7 @@ from ..models.project import MainConversion, ProjectStatus
 from ..services.competitors import FeatureKey
 from ..services.economics import Availability, EconomicsMode
 from ..services.progress import StepKey, StepState
+from ..services.semantics import Intent
 from ..services.strategy import BidStrategy, PlanStatus
 
 
@@ -544,3 +545,89 @@ class DismissalRead(BaseModel):
 class DismissalList(BaseModel):
     items: list[DismissalRead]
     total: int
+
+
+class KeywordRead(BaseModel):
+    id: uuid.UUID
+    phrase: str
+    frequency: int | None
+    intent: Intent
+    intent_label: str
+    #: Слово, из-за которого фраза отнесена к этому типу. Пусто, если признаков
+    #: не нашлось и сработало правило по умолчанию.
+    trigger: str | None
+    #: Тип назначен человеком, а не словарём. Повторный разбор такие фразы не
+    #: трогает.
+    is_manual: bool
+    cluster_name: str | None
+
+
+class KeywordList(BaseModel):
+    items: list[KeywordRead]
+    total: int
+
+
+class KeywordImport(BaseModel):
+    """Вставленный список фраз."""
+
+    text: str = Field(max_length=2_000_000)
+
+
+class KeywordUpdate(BaseModel):
+    intent: Intent
+
+
+class ImportSummary(BaseModel):
+    """Итог разбора списка.
+
+    Числа важнее списка: после загрузки трёх тысяч фраз человеку нужно понять
+    масштаб, а не листать результат.
+    """
+
+    added: int
+    updated: int
+    #: Сколько строк не удалось разобрать: пустые, из одних цифр, мусор.
+    skipped: int
+    commercial: int
+    informational: int
+    irrelevant: int
+    clusters: int
+
+
+class ClusterRead(BaseModel):
+    """Группа фраз под одно объявление."""
+
+    name: str
+    #: Общие основы, по которым фразы объединились. Это объяснение группировки:
+    #: без него человек не может ни проверить её, ни поправить.
+    core: list[str]
+    phrases: int
+    total_frequency: int
+
+
+class ClusterList(BaseModel):
+    items: list[ClusterRead]
+    total: int
+
+
+class MinusWordSuggestionRead(BaseModel):
+    word: str
+    #: Сколько фраз оно уводит в нецелевые.
+    phrases: int
+    examples: list[str]
+
+
+class MinusWordRead(BaseModel):
+    id: uuid.UUID
+    word: str
+
+
+class MinusWordList(BaseModel):
+    items: list[MinusWordRead]
+    #: Предложения из разобранных фраз, ещё не добавленные в список.
+    suggestions: list[MinusWordSuggestionRead]
+    total: int
+
+
+class MinusWordCreate(BaseModel):
+    word: str = Field(min_length=2, max_length=60)

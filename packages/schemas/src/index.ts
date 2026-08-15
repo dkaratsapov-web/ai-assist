@@ -49,6 +49,14 @@ export type FeatureRowRead = Schemas["FeatureRowRead"];
 export type LaunchPlanRead = Schemas["LaunchPlanRead"];
 export type BidStrategy = Schemas["BidStrategy"];
 export type PlanStatus = Schemas["PlanStatus"];
+export type KeywordRead = Schemas["KeywordRead"];
+export type KeywordList = Schemas["KeywordList"];
+export type ImportSummary = Schemas["ImportSummary"];
+export type ClusterRead = Schemas["ClusterRead"];
+export type ClusterList = Schemas["ClusterList"];
+export type MinusWordRead = Schemas["MinusWordRead"];
+export type MinusWordList = Schemas["MinusWordList"];
+export type Intent = Schemas["Intent"];
 export type ActivityRead = Schemas["ActivityRead"];
 export type ActivityList = Schemas["ActivityList"];
 export type ActivityAction = Schemas["ActivityAction"];
@@ -283,6 +291,46 @@ export class ApiClient {
     if (limit) query.set("limit", String(limit));
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
     return this.request<ActivityList>(`/api/v1/activity${suffix}`);
+  }
+
+  importKeywords(projectId: string, text: string): Promise<ImportSummary> {
+    return this.request<ImportSummary>(`/api/v1/projects/${projectId}/keywords/import`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+  }
+
+  listKeywords(projectId: string, intent?: Intent | null): Promise<KeywordList> {
+    const suffix = intent ? `?intent=${intent}` : "";
+    return this.request<KeywordList>(`/api/v1/projects/${projectId}/keywords${suffix}`);
+  }
+
+  updateKeyword(projectId: string, keywordId: string, intent: Intent): Promise<KeywordRead> {
+    return this.request<KeywordRead>(`/api/v1/projects/${projectId}/keywords/${keywordId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ intent }),
+    });
+  }
+
+  listClusters(projectId: string): Promise<ClusterList> {
+    return this.request<ClusterList>(`/api/v1/projects/${projectId}/keywords/clusters`);
+  }
+
+  listMinusWords(projectId: string): Promise<MinusWordList> {
+    return this.request<MinusWordList>(`/api/v1/projects/${projectId}/minus-words`);
+  }
+
+  addMinusWord(projectId: string, word: string): Promise<MinusWordRead> {
+    return this.request<MinusWordRead>(`/api/v1/projects/${projectId}/minus-words`, {
+      method: "POST",
+      body: JSON.stringify({ word }),
+    });
+  }
+
+  async deleteMinusWord(projectId: string, minusWordId: string): Promise<void> {
+    await this.requestNoContent(`/api/v1/projects/${projectId}/minus-words/${minusWordId}`, {
+      method: "DELETE",
+    });
   }
 
   listCompetitors(projectId: string): Promise<CompetitorList> {

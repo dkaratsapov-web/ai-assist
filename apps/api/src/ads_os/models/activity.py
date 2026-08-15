@@ -45,6 +45,9 @@ class ActivityAction(StrEnum):
     ISSUE_DISMISSED = "issue_dismissed"
     ISSUE_RESTORED = "issue_restored"
 
+    KEYWORDS_IMPORTED = "keywords_imported"
+    MINUS_WORD_ADDED = "minus_word_added"
+
     COMPETITOR_ADDED = "competitor_added"
     COMPETITOR_REMOVED = "competitor_removed"
 

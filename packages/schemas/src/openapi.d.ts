@@ -461,6 +461,139 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/keywords": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Фразы проекта */
+        get: operations["list_keywords_api_v1_projects__project_id__keywords_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/clusters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Группы фраз под объявления
+         * @description Группы считаются заново при каждом запросе.
+         *
+         *     Хранить их отдельно смысла нет: они целиком выводятся из фраз, а фразы
+         *     меняются. Сохранённая группа разошлась бы с ядром при первой же правке
+         *     типа, и человек увидел бы структуру, которой уже нет.
+         */
+        get: operations["list_clusters_api_v1_projects__project_id__keywords_clusters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Загрузить список фраз
+         * @description Разбирает вставленный список и сохраняет фразы.
+         *
+         *     Повторный импорт того же списка не удваивает ядро: фраза в проекте
+         *     существует один раз, повторная загрузка обновляет её частотность. Ручные
+         *     решения при этом сохраняются — если специалист отнёс фразу к нецелевым,
+         *     словарь её больше не трогает. Иначе правка терялась бы при каждой загрузке,
+         *     и доверие к ручным решениям исчезло бы вместе с ней.
+         */
+        post: operations["import_keywords_api_v1_projects__project_id__keywords_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/{keyword_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Изменить тип фразы
+         * @description Переносит фразу в другой тип.
+         *
+         *     Решение помечается ручным и переживает повторные импорты. Словарь не знает
+         *     ни ниши, ни клиента и ошибается в обе стороны — последнее слово всегда за
+         *     специалистом.
+         */
+        patch: operations["update_keyword_api_v1_projects__project_id__keywords__keyword_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/minus-words": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Минус-слова и предложения */
+        get: operations["list_minus_words_api_v1_projects__project_id__minus_words_get"];
+        put?: never;
+        /**
+         * Добавить минус-слово
+         * @description Добавляет слово и перепроверяет по нему всё ядро.
+         *
+         *     Перепроверка обязательна: минус-слово, не изменившее ни одной фразы,
+         *     выглядит как принятое решение, хотя не сделало ничего. Ручные решения при
+         *     этом не трогаются.
+         */
+        post: operations["add_minus_word_api_v1_projects__project_id__minus_words_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/minus-words/{minus_word_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Убрать минус-слово */
+        delete: operations["delete_minus_word_api_v1_projects__project_id__minus_words__minus_word_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/progress": {
         parameters: {
             query?: never;
@@ -514,7 +647,7 @@ export interface components {
          *     похожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.
          * @enum {string}
          */
-        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
+        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "minus_word_added" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
         /** ActivityList */
         ActivityList: {
             /** Items */
@@ -711,6 +844,27 @@ export interface components {
             findings?: string[];
             /** Score */
             score: number;
+        };
+        /** ClusterList */
+        ClusterList: {
+            /** Items */
+            items: components["schemas"]["ClusterRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ClusterRead
+         * @description Группа фраз под одно объявление.
+         */
+        ClusterRead: {
+            /** Core */
+            core: string[];
+            /** Name */
+            name: string;
+            /** Phrases */
+            phrases: number;
+            /** Total Frequency */
+            total_frequency: number;
         };
         /** ComparisonRead */
         ComparisonRead: {
@@ -965,6 +1119,75 @@ export interface components {
             status: string;
         };
         /**
+         * ImportSummary
+         * @description Итог разбора списка.
+         *
+         *     Числа важнее списка: после загрузки трёх тысяч фраз человеку нужно понять
+         *     масштаб, а не листать результат.
+         */
+        ImportSummary: {
+            /** Added */
+            added: number;
+            /** Clusters */
+            clusters: number;
+            /** Commercial */
+            commercial: number;
+            /** Informational */
+            informational: number;
+            /** Irrelevant */
+            irrelevant: number;
+            /** Skipped */
+            skipped: number;
+            /** Updated */
+            updated: number;
+        };
+        /**
+         * Intent
+         * @description К чему относится запрос.
+         * @enum {string}
+         */
+        Intent: "commercial" | "informational" | "irrelevant";
+        /**
+         * KeywordImport
+         * @description Вставленный список фраз.
+         */
+        KeywordImport: {
+            /** Text */
+            text: string;
+        };
+        /** KeywordList */
+        KeywordList: {
+            /** Items */
+            items: components["schemas"]["KeywordRead"][];
+            /** Total */
+            total: number;
+        };
+        /** KeywordRead */
+        KeywordRead: {
+            /** Cluster Name */
+            cluster_name: string | null;
+            /** Frequency */
+            frequency: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            intent: components["schemas"]["Intent"];
+            /** Intent Label */
+            intent_label: string;
+            /** Is Manual */
+            is_manual: boolean;
+            /** Phrase */
+            phrase: string;
+            /** Trigger */
+            trigger: string | null;
+        };
+        /** KeywordUpdate */
+        KeywordUpdate: {
+            intent: components["schemas"]["Intent"];
+        };
+        /**
          * LaunchPlanRead
          * @description План запуска: с какой стратегии начинать и сколько ждать выводов.
          *
@@ -1073,6 +1296,39 @@ export interface components {
             reason?: string | null;
             /** Value */
             value: string | null;
+        };
+        /** MinusWordCreate */
+        MinusWordCreate: {
+            /** Word */
+            word: string;
+        };
+        /** MinusWordList */
+        MinusWordList: {
+            /** Items */
+            items: components["schemas"]["MinusWordRead"][];
+            /** Suggestions */
+            suggestions: components["schemas"]["MinusWordSuggestionRead"][];
+            /** Total */
+            total: number;
+        };
+        /** MinusWordRead */
+        MinusWordRead: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Word */
+            word: string;
+        };
+        /** MinusWordSuggestionRead */
+        MinusWordSuggestionRead: {
+            /** Examples */
+            examples: string[];
+            /** Phrases */
+            phrases: number;
+            /** Word */
+            word: string;
         };
         /**
          * ModuleStatus
@@ -2341,6 +2597,267 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["EconomicsResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_keywords_api_v1_projects__project_id__keywords_get: {
+        parameters: {
+            query?: {
+                intent?: components["schemas"]["Intent"] | null;
+                cluster_name?: string | null;
+                limit?: number;
+            };
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeywordList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_clusters_api_v1_projects__project_id__keywords_clusters_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClusterList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_keywords_api_v1_projects__project_id__keywords_import_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeywordImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_keyword_api_v1_projects__project_id__keywords__keyword_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                keyword_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeywordUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KeywordRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_minus_words_api_v1_projects__project_id__minus_words_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinusWordList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_minus_word_api_v1_projects__project_id__minus_words_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MinusWordCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinusWordRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_minus_word_api_v1_projects__project_id__minus_words__minus_word_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                minus_word_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

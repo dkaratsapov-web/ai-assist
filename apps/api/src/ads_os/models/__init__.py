@@ -9,6 +9,7 @@ from .audit import IssueDismissal, ModuleStatus, SiteAudit
 from .competitor import Competitor
 from .organization import Organization, OrganizationPlan
 from .project import MainConversion, Project, ProjectEconomics, ProjectStatus
+from .semantics import Keyword, MinusWord
 from .session import Session
 from .usage import UsageEvent, UsageService, UsageUnit
 from .user import User
@@ -18,7 +19,9 @@ __all__ = [
     "ActivityLog",
     "Competitor",
     "IssueDismissal",
+    "Keyword",
     "MainConversion",
+    "MinusWord",
     "ModuleStatus",
     "Organization",
     "OrganizationPlan",
