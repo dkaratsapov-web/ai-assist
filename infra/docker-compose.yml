@@ -191,6 +191,33 @@ services:
     networks:
       - backend
 
+  # Резервные копии базы (v0.4 §14).
+  #
+  # Отдельный контейнер с тем же образом Postgres — ради pg_dump той же версии.
+  # Дамп, снятый клиентом другой версии, восстанавливается не всегда, и узнают
+  # об этом в единственный момент, когда это критично.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/entrypoint.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_KEEP: ${BACKUP_KEEP:-14}
+    volumes:
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+      - ./backup/entrypoint.sh:/usr/local/bin/entrypoint.sh:ro
+      # Копии лежат в каталоге рядом с проектом, а не в томе Docker: том можно
+      # снести одной командой вместе со всем остальным, а каталог виден и
+      # копируется на другую машину обычным scp.
+      - ./backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - backend
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
