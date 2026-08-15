@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  ApiError,
+  type ApiError,
   type EconomicsResponse,
   type EconomicsUpdate,
   type MetricRead,
@@ -25,6 +26,7 @@ import {
 import { IconIdea } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient, isApiConfigured } from "@/lib/api";
+import { toApiError } from "@/lib/errors";
 
 /** Поля ввода экономики. Порядок повторяет деление на обязательное и желательное. */
 const REQUIRED_FIELDS = [
@@ -42,26 +44,26 @@ const RECOMMENDED_FIELDS = [
 type FieldKey =
   (typeof REQUIRED_FIELDS)[number]["key"] | (typeof RECOMMENDED_FIELDS)[number]["key"];
 
-/**
- * Приводит любую ошибку к отображаемому виду.
- *
- * Раньше сюда попадал только ApiError, а всё остальное — сбой сети, ошибка CORS,
- * недоступный backend — превращалось в null, и экран молча оставался в
- * скелетонах. Тихие сбои запрещены (v0.3 §63): пользователь должен видеть, что
- * произошло, и иметь возможность повторить.
- */
-function toApiError(err: unknown): ApiError {
-  if (err instanceof ApiError) return err;
-  return new ApiError(0, {
-    error_code: "network_error",
-    message: err instanceof Error ? `Сервис недоступен: ${err.message}` : "Сервис недоступен",
-    request_id: "-",
-    retryable: true,
-  });
+export default function EconomicsPage() {
+  // useSearchParams требует границы Suspense при пререндере страницы.
+  return (
+    <Suspense
+      fallback={
+        <AppShell title="Экономика проекта">
+          <Skeleton shape="card" />
+        </AppShell>
+      }
+    >
+      <EconomicsScreen />
+    </Suspense>
+  );
 }
 
-export default function EconomicsPage() {
+function EconomicsScreen() {
   const api = useMemo(() => createApiClient(), []);
+  // Проект может прийти ссылкой из карточки проекта: переход должен открывать
+  // экономику именно того проекта, из которого пришли.
+  const requestedProject = useSearchParams().get("project");
   const configured = isApiConfigured();
 
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
@@ -87,7 +89,7 @@ export default function EconomicsPage() {
         if (ignore) return;
         setError(null);
         setProjects(list.items);
-        setSelectedId((current) => current ?? list.items[0]?.id ?? null);
+        setSelectedId((current) => current ?? requestedProject ?? list.items[0]?.id ?? null);
       } catch (err) {
         if (ignore) return;
         setError(toApiError(err));
@@ -98,7 +100,7 @@ export default function EconomicsPage() {
     return () => {
       ignore = true;
     };
-  }, [api, configured, reloadToken]);
+  }, [api, configured, reloadToken, requestedProject]);
 
   useEffect(() => {
     if (!selectedId) return;

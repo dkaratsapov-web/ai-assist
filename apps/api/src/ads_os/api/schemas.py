@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..models.audit import ModuleStatus
 from ..models.project import MainConversion, ProjectStatus
 from ..services.economics import Availability, EconomicsMode
+from ..services.progress import StepKey, StepState
 
 
 class ProjectCreate(BaseModel):
@@ -37,9 +38,50 @@ class ProjectRead(BaseModel):
     updated_at: datetime
 
 
+class ProjectUpdate(BaseModel):
+    """Изменение проекта.
+
+    Все поля необязательные: приходит только то, что меняют. Отличить
+    «не передано» от «очищено» позволяет `exclude_unset` при разборе.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    website_url: str | None = Field(default=None, max_length=2048)
+    primary_region: str | None = Field(default=None, max_length=120)
+    status: ProjectStatus | None = None
+
+    #: Версия, на которой пользователь редактировал (v0.4 §100).
+    expected_version: int | None = None
+
+
 class ProjectList(BaseModel):
     items: list[ProjectRead]
     total: int
+
+
+class StepRead(BaseModel):
+    """Шаг канонического жизненного цикла (v0.4 §3)."""
+
+    key: StepKey
+    label: str
+    state: StepState
+    #: Что сделать, чтобы шаг сдвинулся. У завершённых шагов пусто.
+    hint: str | None = None
+
+
+class ProgressRead(BaseModel):
+    """Где находится проект и что делать дальше.
+
+    Считается на сервере, а не в интерфейсе: то же самое понадобится боту, и
+    два независимых расчёта неизбежно разошлись бы.
+    """
+
+    project_id: uuid.UUID
+    steps: list[StepRead]
+    current: StepKey
+    completed_count: int
+    total_count: int
+    next_action: str | None
 
 
 class EconomicsUpdate(BaseModel):

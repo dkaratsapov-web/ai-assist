@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, status
@@ -15,6 +16,8 @@ from ...tenancy.repository import TenantRepository
 from ...worker.tasks.audit import enqueue_site_audit
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import AuditIssueRead, AuditRead, CategoryRead
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/projects", tags=["audit"])
 
@@ -36,6 +39,20 @@ class WebsiteMissingError(AppError):
     status_code = 422
     error_code = "website_missing"
     message = "У проекта не указан адрес сайта"
+
+
+class QueueUnavailableError(AppError):
+    """Очередь задач недоступна.
+
+    Отдельная ошибка, а не общая «внутренняя»: недоступный Redis — это не
+    дефект в коде, а состояние инфраструктуры. Пользователю нужно сказать, что
+    повторить попытку имеет смысл, а дежурному — что чинить.
+    """
+
+    status_code = 503
+    error_code = "queue_unavailable"
+    message = "Фоновые задачи временно недоступны. Попробуйте позже"
+    retryable = True
 
 
 class AuditAlreadyRunningError(AppError):
@@ -87,7 +104,20 @@ async def start_audit(project_id: uuid.UUID, session: SessionDep, ctx: WriteDep)
 
     # Задача ставится в очередь после записи: если поставить раньше, воркер
     # может начать раньше, чем запись станет видимой.
-    enqueue_site_audit(audit.id, project.website_url)
+    try:
+        enqueue_site_audit(audit.id, project.website_url)
+    except Exception as exc:
+        # Запись удаляется явно, а не оставляется на откат транзакции. Аудит со
+        # статусом «в очереди», которого в очереди нет, навсегда заблокировал бы
+        # повторный запуск: проверка выше сочла бы его за идущий и вернула 409.
+        # Полагаться здесь на чужую политику транзакций слишком хрупко.
+        await session.delete(audit)
+        await session.flush()
+        logger.warning(
+            "не удалось поставить аудит в очередь",
+            extra={"project_id": str(project_id), "error": type(exc).__name__},
+        )
+        raise QueueUnavailableError() from exc
 
     return _to_read(audit)
 

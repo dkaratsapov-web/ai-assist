@@ -5,7 +5,6 @@ import {
   IconExperiment,
   IconFolder,
   IconGlobe,
-  IconGrid,
   IconHome,
   IconLayers,
   IconMegaphone,
@@ -51,7 +50,10 @@ export const globalNavigation: NavGroup[] = [
     title: "Проекты",
     items: [
       { key: "projects", label: "Проекты", href: "/projects", icon: IconFolder },
-      { key: "overview", label: "Обзор всех проектов", href: "/projects/overview", icon: IconGrid },
+      // «Обзор всех проектов» временно убран. Его экрана ещё нет, а адрес
+      // /projects/overview теперь попадает в страницу проекта и открывает её с
+      // идентификатором «overview» — то есть с ошибкой. Пункт вернётся вместе с
+      // самим экраном, по адресу, который не спорит с карточкой проекта.
       { key: "templates", label: "Шаблоны стратегий", href: "/templates", icon: IconLayers },
     ],
   },

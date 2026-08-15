@@ -8,6 +8,8 @@ export interface AppShellProps {
   title: string;
   subtitle?: string;
   notifications?: number;
+  /** Главное действие экрана. Показывается в верхней панели справа. */
+  actions?: ReactNode;
   children: ReactNode;
 }
 
@@ -18,7 +20,7 @@ export interface AppShellProps {
  * компонентом с той же структурой — «предсказуемость» из v0.3 §123 означает,
  * что состав и порядок пунктов не меняются вместе с шириной экрана.
  */
-export function AppShell({ title, subtitle, notifications, children }: AppShellProps) {
+export function AppShell({ title, subtitle, notifications, actions, children }: AppShellProps) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
@@ -30,6 +32,7 @@ export function AppShell({ title, subtitle, notifications, children }: AppShellP
           title={title}
           subtitle={subtitle}
           notifications={notifications}
+          action={actions}
           onMenuClick={() => setMobileNavOpen(true)}
         />
 

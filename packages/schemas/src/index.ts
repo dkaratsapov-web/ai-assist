@@ -16,6 +16,12 @@ type Schemas = components["schemas"];
 export type ProjectRead = Schemas["ProjectRead"];
 export type ProjectList = Schemas["ProjectList"];
 export type ProjectCreate = Schemas["ProjectCreate"];
+export type ProjectUpdate = Schemas["ProjectUpdate"];
+export type ProgressRead = Schemas["ProgressRead"];
+export type StepRead = Schemas["StepRead"];
+export type StepKey = Schemas["StepKey"];
+export type StepState = Schemas["StepState"];
+export type ProjectStatus = Schemas["ProjectStatus"];
 export type EconomicsRead = Schemas["EconomicsRead"];
 export type EconomicsUpdate = Schemas["EconomicsUpdate"];
 export type EconomicsResponse = Schemas["EconomicsResponse"];
@@ -122,6 +128,22 @@ export class ApiClient {
       method: "POST",
       body: JSON.stringify(payload),
     });
+  }
+
+  getProject(projectId: string): Promise<ProjectRead> {
+    return this.request<ProjectRead>(`/api/v1/projects/${projectId}`);
+  }
+
+  updateProject(projectId: string, payload: ProjectUpdate): Promise<ProjectRead> {
+    return this.request<ProjectRead>(`/api/v1/projects/${projectId}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Где находится проект по каноническому циклу и что делать дальше (v0.4 §3). */
+  getProgress(projectId: string): Promise<ProgressRead> {
+    return this.request<ProgressRead>(`/api/v1/projects/${projectId}/progress`);
   }
 
   getEconomics(projectId: string): Promise<EconomicsResponse> {

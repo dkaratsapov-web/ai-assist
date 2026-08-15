@@ -60,7 +60,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Изменить проект */
+        patch: operations["update_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
     "/api/v1/projects/{project_id}/audit": {
@@ -92,6 +93,23 @@ export interface paths {
         get: operations["get_economics_api_v1_projects__project_id__economics_get"];
         /** Сохранить экономику проекта */
         put: operations["update_economics_api_v1_projects__project_id__economics_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Прогресс проекта по шагам */
+        get: operations["get_progress_api_v1_projects__project_id__progress_get"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -325,6 +343,29 @@ export interface components {
          * @enum {string}
          */
         ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
+        /**
+         * ProgressRead
+         * @description Где находится проект и что делать дальше.
+         *
+         *     Считается на сервере, а не в интерфейсе: то же самое понадобится боту, и
+         *     два независимых расчёта неизбежно разошлись бы.
+         */
+        ProgressRead: {
+            /** Completed Count */
+            completed_count: number;
+            current: components["schemas"]["StepKey"];
+            /** Next Action */
+            next_action: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Steps */
+            steps: components["schemas"]["StepRead"][];
+            /** Total Count */
+            total_count: number;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -378,6 +419,48 @@ export interface components {
          * @enum {string}
          */
         ProjectStatus: "draft" | "active" | "paused" | "archived" | "error";
+        /**
+         * ProjectUpdate
+         * @description Изменение проекта.
+         *
+         *     Все поля необязательные: приходит только то, что меняют. Отличить
+         *     «не передано» от «очищено» позволяет `exclude_unset` при разборе.
+         */
+        ProjectUpdate: {
+            /** Expected Version */
+            expected_version?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Primary Region */
+            primary_region?: string | null;
+            status?: components["schemas"]["ProjectStatus"] | null;
+            /** Website Url */
+            website_url?: string | null;
+        };
+        /**
+         * StepKey
+         * @description Ключи шагов. Порядок объявления — это и есть порядок работы.
+         * @enum {string}
+         */
+        StepKey: "onboarding" | "research" | "economics" | "strategy" | "build" | "validate" | "launch" | "measure" | "optimize" | "scale";
+        /**
+         * StepRead
+         * @description Шаг канонического жизненного цикла (v0.4 §3).
+         */
+        StepRead: {
+            /** Hint */
+            hint?: string | null;
+            key: components["schemas"]["StepKey"];
+            /** Label */
+            label: string;
+            state: components["schemas"]["StepState"];
+        };
+        /**
+         * StepState
+         * @description Состояние шага. Совпадает с состояниями компонента WorkflowStepper.
+         * @enum {string}
+         */
+        StepState: "completed" | "active" | "waiting" | "blocked" | "error";
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -507,6 +590,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_api_v1_projects__project_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -659,6 +781,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EconomicsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_progress_api_v1_projects__project_id__progress_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgressRead"];
                 };
             };
             /** @description Validation Error */

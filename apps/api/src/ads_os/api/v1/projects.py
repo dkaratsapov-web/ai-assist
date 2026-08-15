@@ -8,13 +8,15 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, select
 
 from ...errors import ConflictError
-from ...models import Project, ProjectEconomics
+from ...models import Project, ProjectEconomics, SiteAudit
 from ...services.economics import (
     EconomicsInput,
     EconomicsSummary,
     Metric,
     evaluate,
 )
+from ...services.progress import ProgressInput
+from ...services.progress import evaluate as evaluate_progress
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
@@ -22,9 +24,12 @@ from ..schemas import (
     EconomicsSummaryRead,
     EconomicsUpdate,
     MetricRead,
+    ProgressRead,
     ProjectCreate,
     ProjectList,
     ProjectRead,
+    ProjectUpdate,
+    StepRead,
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -87,6 +92,100 @@ async def get_project(
 ) -> ProjectRead:
     repo = ProjectRepository(session, ctx)
     return ProjectRead.model_validate(await repo.get_or_404(project_id))
+
+
+@router.patch("/{project_id}", response_model=ProjectRead, summary="Изменить проект")
+async def update_project(
+    project_id: uuid.UUID,
+    payload: ProjectUpdate,
+    session: SessionDep,
+    ctx: WriteDep,
+) -> ProjectRead:
+    repo = ProjectRepository(session, ctx)
+    project = await repo.get_or_404(project_id)
+
+    if payload.expected_version is not None and project.version != payload.expected_version:
+        # Проект редактируют вдвоём чаще, чем кажется: специалист в вебе и
+        # он же в боте. Молча затирать чужое изменение нельзя (v0.4 §100).
+        raise ConflictError(
+            details={
+                "expected_version": payload.expected_version,
+                "actual_version": project.version,
+            }
+        )
+
+    # exclude_unset важен: без него незаполненные поля пришли бы как None и
+    # стёрли бы уже сохранённые значения.
+    updates = payload.model_dump(exclude={"expected_version"}, exclude_unset=True)
+    for key, value in updates.items():
+        setattr(project, key, value)
+
+    project.version += 1
+    await session.flush()
+    # updated_at проставляет база, и после flush значение в сессии просрочено.
+    # Без явного обновления ответ пытался бы догрузить его лениво — в чужом
+    # контексте, где асинхронный ввод-вывод уже недоступен.
+    await session.refresh(project)
+
+    return ProjectRead.model_validate(project)
+
+
+@router.get(
+    "/{project_id}/progress",
+    response_model=ProgressRead,
+    summary="Прогресс проекта по шагам",
+)
+async def get_progress(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> ProgressRead:
+    repo = ProjectRepository(session, ctx)
+    project = await repo.get_or_404(project_id)
+
+    economics = await _load_economics(session, ctx, project_id)
+    audit = await _latest_audit(session, ctx, project_id)
+
+    progress = evaluate_progress(
+        ProgressInput(
+            has_website=bool(project.website_url),
+            audit_status=audit.status.value if audit else None,
+            audit_has_blocking_issues=_has_blocking_issues(audit),
+            economics_mode=evaluate(_to_input(economics)).mode,
+            # Рекламный кабинет до прохождения проверок безопасности не
+            # подключается ни при каких условиях (v0.4 §2.1).
+            ad_account_connected=False,
+        )
+    )
+
+    return ProgressRead(
+        project_id=project_id,
+        steps=[
+            StepRead(key=s.key, label=s.label, state=s.state, hint=s.hint)
+            for s in progress.steps
+        ],
+        current=progress.current,
+        completed_count=progress.completed_count,
+        total_count=len(progress.steps),
+        next_action=progress.next_action,
+    )
+
+
+async def _latest_audit(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> SiteAudit | None:
+    stmt = (
+        select(SiteAudit)
+        .where(SiteAudit.organization_id == ctx.organization_id)
+        .where(SiteAudit.project_id == project_id)
+        .order_by(SiteAudit.created_at.desc())
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+def _has_blocking_issues(audit: SiteAudit | None) -> bool:
+    if audit is None:
+        return False
+    return any(issue.get("severity") == "critical" for issue in (audit.issues or []))
 
 
 @router.get(

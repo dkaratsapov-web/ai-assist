@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
-  ApiError,
+  type ApiError,
   type AuditIssueRead,
   type AuditRead,
   type CategoryRead,
@@ -25,6 +26,7 @@ import type { Tone } from "@ads-os/tokens";
 import { IconGlobe } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient, isApiConfigured } from "@/lib/api";
+import { toApiError } from "@/lib/errors";
 
 /** Человеческие названия категорий. Ключи приходят с backend. */
 const CATEGORY_LABELS: Record<string, string> = {
@@ -44,22 +46,29 @@ const VERDICT: Record<string, { label: string; tone: Tone }> = {
 /** Как часто перечитывать статус, пока аудит выполняется. */
 const POLL_INTERVAL_MS = 3000;
 
-function toApiError(err: unknown): ApiError {
-  if (err instanceof ApiError) return err;
-  return new ApiError(0, {
-    error_code: "network_error",
-    message: err instanceof Error ? `Сервис недоступен: ${err.message}` : "Сервис недоступен",
-    request_id: "-",
-    retryable: true,
-  });
-}
-
 function isRunning(audit: AuditRead | null): boolean {
   return audit?.status === "queued" || audit?.status === "running";
 }
 
 export default function SiteAuditPage() {
+  // useSearchParams требует границы Suspense при пререндере страницы.
+  return (
+    <Suspense
+      fallback={
+        <AppShell title="Аудит сайта">
+          <Skeleton shape="card" />
+        </AppShell>
+      }
+    >
+      <SiteAuditScreen />
+    </Suspense>
+  );
+}
+
+function SiteAuditScreen() {
   const api = useMemo(() => createApiClient(), []);
+  // Проект может прийти ссылкой из карточки проекта.
+  const requestedProject = useSearchParams().get("project");
   const configured = isApiConfigured();
 
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
@@ -80,7 +89,7 @@ export default function SiteAuditPage() {
         if (ignore) return;
         setError(null);
         setProjects(list.items);
-        setSelectedId((current) => current ?? list.items[0]?.id ?? null);
+        setSelectedId((current) => current ?? requestedProject ?? list.items[0]?.id ?? null);
       } catch (err) {
         if (ignore) return;
         setError(toApiError(err));
@@ -91,7 +100,7 @@ export default function SiteAuditPage() {
     return () => {
       ignore = true;
     };
-  }, [api, configured, reloadToken]);
+  }, [api, configured, reloadToken, requestedProject]);
 
   // Пока аудит в очереди или выполняется, статус перечитывается по таймеру.
   // Опрос останавливается сразу после завершения: держать вечный таймер на

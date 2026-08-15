@@ -106,6 +106,36 @@ class TestЗапуск:
         assert enqueue.call_count == 1
         assert enqueue.call_args.args[1] == "https://example.com/"
 
+    async def test_недоступная_очередь_не_оставляет_зависший_аудит(
+        self, client: AsyncClient, project_with_site: tuple[Organization, User, Project]
+    ) -> None:
+        """Redis лежит — это состояние инфраструктуры, а не дефект кода.
+
+        Важнее ответа то, что запись не остаётся: аудит со статусом «в очереди»,
+        которого нет в очереди, навсегда заблокировал бы повторный запуск.
+        """
+        org, user, project = project_with_site
+
+        with patch(
+            "ads_os.api.v1.audit.enqueue_site_audit",
+            side_effect=OSError("Connection refused"),
+        ):
+            first = await client.post(
+                f"/api/v1/projects/{project.id}/audit", headers=headers(org, user)
+            )
+
+        assert first.status_code == 503
+        assert first.json()["error_code"] == "queue_unavailable"
+        assert first.json()["retryable"] is True
+
+        # Повторная попытка после починки очереди проходит, а не упирается в 409.
+        with patch("ads_os.api.v1.audit.enqueue_site_audit"):
+            second = await client.post(
+                f"/api/v1/projects/{project.id}/audit", headers=headers(org, user)
+            )
+
+        assert second.status_code == 202
+
     async def test_без_адреса_сайта_запуск_невозможен(
         self,
         client: AsyncClient,

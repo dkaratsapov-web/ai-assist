@@ -728,6 +728,55 @@
         "title": "ModuleStatus",
         "type": "string"
       },
+      "ProgressRead": {
+        "description": "Где находится проект и что делать дальше.\n\nСчитается на сервере, а не в интерфейсе: то же самое понадобится боту, и\nдва независимых расчёта неизбежно разошлись бы.",
+        "properties": {
+          "completed_count": {
+            "title": "Completed Count",
+            "type": "integer"
+          },
+          "current": {
+            "$ref": "#/components/schemas/StepKey"
+          },
+          "next_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Action"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepRead"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "project_id",
+          "steps",
+          "current",
+          "completed_count",
+          "total_count",
+          "next_action"
+        ],
+        "title": "ProgressRead",
+        "type": "object"
+      },
       "ProjectCreate": {
         "properties": {
           "name": {
@@ -862,6 +911,133 @@
           "error"
         ],
         "title": "ProjectStatus",
+        "type": "string"
+      },
+      "ProjectUpdate": {
+        "description": "Изменение проекта.\n\nВсе поля необязательные: приходит только то, что меняют. Отличить\n«не передано» от «очищено» позволяет `exclude_unset` при разборе.",
+        "properties": {
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "primary_region": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Region"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProjectStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "website_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Website Url"
+          }
+        },
+        "title": "ProjectUpdate",
+        "type": "object"
+      },
+      "StepKey": {
+        "description": "Ключи шагов. Порядок объявления — это и есть порядок работы.",
+        "enum": [
+          "onboarding",
+          "research",
+          "economics",
+          "strategy",
+          "build",
+          "validate",
+          "launch",
+          "measure",
+          "optimize",
+          "scale"
+        ],
+        "title": "StepKey",
+        "type": "string"
+      },
+      "StepRead": {
+        "description": "Шаг канонического жизненного цикла (v0.4 §3).",
+        "properties": {
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "key": {
+            "$ref": "#/components/schemas/StepKey"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "state": {
+            "$ref": "#/components/schemas/StepState"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "state"
+        ],
+        "title": "StepRead",
+        "type": "object"
+      },
+      "StepState": {
+        "description": "Состояние шага. Совпадает с состояниями компонента WorkflowStepper.",
+        "enum": [
+          "completed",
+          "active",
+          "waiting",
+          "blocked",
+          "error"
+        ],
+        "title": "StepState",
         "type": "string"
       },
       "ValidationError": {
@@ -1220,6 +1396,107 @@
           }
         },
         "summary": "Проект",
+        "tags": [
+          "projects"
+        ]
+      },
+      "patch": {
+        "operationId": "update_project_api_v1_projects__project_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Изменить проект",
         "tags": [
           "projects"
         ]
@@ -1606,6 +1883,99 @@
           }
         },
         "summary": "Сохранить экономику проекта",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/progress": {
+      "get": {
+        "operationId": "get_progress_api_v1_projects__project_id__progress_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProgressRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Прогресс проекта по шагам",
         "tags": [
           "projects"
         ]

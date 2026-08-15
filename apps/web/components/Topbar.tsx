@@ -1,13 +1,22 @@
 "use client";
 
-import { Button, IconButton, SearchInput, cn } from "@ads-os/ui";
-import { IconBell, IconHelp, IconMenu, IconPlus } from "@ads-os/ui/icons";
+import type { ReactNode } from "react";
+import { IconButton, SearchInput, cn } from "@ads-os/ui";
+import { IconBell, IconHelp, IconMenu } from "@ads-os/ui/icons";
 
 export interface TopbarProps {
   title: string;
   subtitle?: string;
   /** Количество непрочитанных уведомлений. */
   notifications?: number;
+  /**
+   * Главное действие текущего экрана (v0.3 §124).
+   *
+   * Задаётся страницей, а не панелью. Раньше здесь стояла постоянная кнопка
+   * «Новый проект», которая ничего не делала — неработающий элемент управления
+   * хуже отсутствующего: по нему судят о том, что система умеет.
+   */
+  action?: ReactNode;
   onMenuClick: () => void;
   className?: string;
 }
@@ -23,6 +32,7 @@ export function Topbar({
   title,
   subtitle,
   notifications = 0,
+  action,
   onMenuClick,
   className,
 }: TopbarProps) {
@@ -59,7 +69,10 @@ export function Topbar({
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">
-        <span className="relative inline-flex">
+        {/* На телефоне колокольчик уступает место действию экрана: заголовок
+            иначе сжимается до трёх букв. Вернётся вместе с экраном уведомлений,
+            когда по нажатию будет что показывать. */}
+        <span className="relative hidden sm:inline-flex">
           <IconButton
             label={
               notifications > 0 ? `Уведомления, непрочитанных: ${notifications}` : "Уведомления"
@@ -86,9 +99,10 @@ export function Topbar({
           className="hidden sm:inline-flex"
         />
 
-        <Button size="sm" iconLeft={<IconPlus size={16} />} className="hidden sm:inline-flex">
-          Новый проект
-        </Button>
+        {/* Действие показывается и на телефоне. Скрывать его на узком экране
+            означало бы, что с телефона нельзя завести или изменить проект —
+            а работа специалиста часто начинается именно с телефона. */}
+        {action && <span className="inline-flex shrink-0">{action}</span>}
 
         <button
           type="button"
