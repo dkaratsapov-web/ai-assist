@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ads_os.api.deps import get_session
 from ads_os.main import create_app
-from ads_os.models import Organization, Project, SiteAudit, User
+from ads_os.models import Competitor, Organization, Project, SiteAudit, User
 from ads_os.models.audit import ModuleStatus
 
 from .conftest import make_user
@@ -161,12 +161,13 @@ class TestПрогресс:
         assert body["current"] == "research"
         assert body["next_action"]
 
-    async def test_завершённый_аудит_закрывает_исследование(
+    async def test_аудит_и_конкурент_закрывают_исследование(
         self,
         client: AsyncClient,
         session: AsyncSession,
         project_ctx: tuple[Organization, User, Project],
     ) -> None:
+        """Исследование — это аудит сайта и сравнение с конкурентами (v0.4 §3)."""
         org, user, project = project_ctx
         project.website_url = "https://example.com/"
         session.add(
@@ -178,6 +179,15 @@ class TestПрогресс:
                 score=82,
                 categories=[],
                 issues=[],
+            )
+        )
+        session.add(
+            Competitor(
+                organization_id=org.id,
+                project_id=project.id,
+                url="https://rival.ru/",
+                status=ModuleStatus.COMPLETED,
+                features={"form": True},
             )
         )
         await session.commit()

@@ -76,6 +76,9 @@ class ProgressInput:
     audit_status: str | None = None
     #: Есть ли критические находки. Они запрещают запуск (v0.3 §15).
     audit_has_blocking_issues: bool = False
+    #: Сколько конкурентов разобрано. Шаг «Исследование» по каноническому циклу
+    #: включает и аудит сайта, и сравнение с конкурентами (v0.4 §3).
+    competitors_checked: int = 0
     economics_mode: EconomicsMode = EconomicsMode.INSUFFICIENT
     #: Подключён ли рекламный кабинет. До проверок безопасности — всегда False
     #: (v0.4 §2.1).
@@ -113,8 +116,7 @@ def evaluate(data: ProgressInput) -> Progress:
     # обязателен: бывает реклама без сайта, и блокировать её нельзя.
     steps.append(_step(StepKey.ONBOARDING, StepState.COMPLETED))
 
-    # 2. Исследование. Пока это только аудит сайта; анализ конкурентов добавится
-    # сюда же и потребует пересмотра правила.
+    # 2. Исследование: аудит сайта и сравнение с конкурентами.
     steps.append(_research(data))
 
     # 3. Экономика. Ограниченный режим — не ошибка и не «не сделано»: проект
@@ -173,6 +175,15 @@ def _research(data: ProgressInput) -> Step:
     if data.audit_status == "completed":
         # Критические находки не отменяют самого исследования: оно выполнено,
         # результат получен. Запуск блокируется отдельным шагом.
+        if data.competitors_checked == 0:
+            # Исследование по каноническому циклу — это аудит и конкуренты.
+            # Закрывать шаг по половине работы значит показывать прогресс,
+            # которого нет.
+            return _step(
+                StepKey.RESEARCH,
+                StepState.ACTIVE,
+                "Сайт проверен. Добавьте конкурентов, чтобы увидеть, чего вам не хватает",
+            )
         return _step(StepKey.RESEARCH, StepState.COMPLETED)
 
     if data.audit_status in ("queued", "running"):

@@ -41,9 +41,24 @@ celery_app.conf.update(
     task_routes={
         "ads_os.worker.tasks.audit.fetch_site_page": {"queue": "crawler"},
         "ads_os.worker.tasks.audit.process_site_audit": {"queue": "default"},
+        "ads_os.worker.tasks.competitors.process_competitor": {"queue": "default"},
     },
     task_default_queue="default",
 )
 
-# Импорт задач при старте воркера — без него Celery их не увидит.
-celery_app.autodiscover_tasks(["ads_os.worker.tasks"], force=True)
+#: Модули задач перечислены явно.
+#:
+#: Здесь стоял autodiscover_tasks(["ads_os.worker.tasks"]) — и он не работал:
+#: автопоиск принимает список *пакетов* и ищет в каждом подмодуль `tasks`,
+#: то есть искал `ads_os.worker.tasks.tasks`. В результате воркер поднимался
+#: без единой зарегистрированной задачи и молча выбрасывал всё, что приходило
+#: в очередь, а аудит навсегда оставался в статусе «в очереди».
+#:
+#: Список проверяется тестом: добавить задачу и забыть строку здесь — ровно тот
+#: же тихий отказ.
+TASK_MODULES = (
+    "ads_os.worker.tasks.audit",
+    "ads_os.worker.tasks.competitors",
+)
+
+celery_app.conf.imports = TASK_MODULES

@@ -5,10 +5,11 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 
 from ...errors import ConflictError
-from ...models import Project, ProjectEconomics, SiteAudit
+from ...models import Competitor, Project, ProjectEconomics, SiteAudit
+from ...models.audit import ModuleStatus
 from ...services.economics import (
     EconomicsInput,
     EconomicsSummary,
@@ -149,6 +150,7 @@ async def get_progress(
             has_website=bool(project.website_url),
             audit_status=audit.status.value if audit else None,
             audit_has_blocking_issues=_has_blocking_issues(audit),
+            competitors_checked=await _count_checked_competitors(session, ctx, project_id),
             economics_mode=evaluate(_to_input(economics)).mode,
             # Рекламный кабинет до прохождения проверок безопасности не
             # подключается ни при каких условиях (v0.4 §2.1).
@@ -180,6 +182,24 @@ async def _latest_audit(
         .limit(1)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _count_checked_competitors(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> int:
+    """Сколько конкурентов уже разобрано.
+
+    Считаются только завершённые: конкурент в очереди ещё ничего не добавил к
+    исследованию.
+    """
+    stmt = (
+        select(func.count())
+        .select_from(Competitor)
+        .where(Competitor.organization_id == ctx.organization_id)
+        .where(Competitor.project_id == project_id)
+        .where(Competitor.status == ModuleStatus.COMPLETED)
+    )
+    return int((await session.execute(stmt)).scalar_one())
 
 
 def _has_blocking_issues(audit: SiteAudit | None) -> bool:

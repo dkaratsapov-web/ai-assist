@@ -29,6 +29,11 @@ export type EconomicsSummaryRead = Schemas["EconomicsSummaryRead"];
 export type MetricRead = Schemas["MetricRead"];
 export type HealthResponse = Schemas["HealthResponse"];
 export type AuditRead = Schemas["AuditRead"];
+export type CompetitorRead = Schemas["CompetitorRead"];
+export type CompetitorList = Schemas["CompetitorList"];
+export type CompetitorCreate = Schemas["CompetitorCreate"];
+export type ComparisonRead = Schemas["ComparisonRead"];
+export type FeatureRowRead = Schemas["FeatureRowRead"];
 export type CategoryRead = Schemas["CategoryRead"];
 export type AuditIssueRead = Schemas["AuditIssueRead"];
 export type ModuleStatus = Schemas["ModuleStatus"];
@@ -155,6 +160,50 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  }
+
+  listCompetitors(projectId: string): Promise<CompetitorList> {
+    return this.request<CompetitorList>(`/api/v1/projects/${projectId}/competitors`);
+  }
+
+  addCompetitor(projectId: string, payload: CompetitorCreate): Promise<CompetitorRead> {
+    return this.request<CompetitorRead>(`/api/v1/projects/${projectId}/competitors`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  recheckCompetitor(projectId: string, competitorId: string): Promise<CompetitorRead> {
+    return this.request<CompetitorRead>(
+      `/api/v1/projects/${projectId}/competitors/${competitorId}/recheck`,
+      { method: "POST" },
+    );
+  }
+
+  async deleteCompetitor(projectId: string, competitorId: string): Promise<void> {
+    // Ответ 204 не содержит тела, поэтому общий request тут не подходит: он
+    // всегда разбирает JSON и упал бы на пустом ответе.
+    const response = await this.fetchImpl(
+      `${this.baseUrl}/api/v1/projects/${projectId}/competitors/${competitorId}`,
+      { method: "DELETE", headers: this.headers },
+    );
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as ErrorBody | null;
+      throw new ApiError(
+        response.status,
+        body ?? {
+          error_code: "unexpected_response",
+          message: "Сервис недоступен",
+          request_id: "-",
+          retryable: true,
+        },
+      );
+    }
+  }
+
+  /** Сравнение своего сайта с конкурентами (v0.3 §16). */
+  getComparison(projectId: string): Promise<ComparisonRead> {
+    return this.request<ComparisonRead>(`/api/v1/projects/${projectId}/comparison`);
   }
 
   /**

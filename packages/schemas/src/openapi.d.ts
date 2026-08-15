@@ -82,6 +82,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Сравнение с конкурентами */
+        get: operations["get_comparison_api_v1_projects__project_id__comparison_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/competitors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Конкуренты проекта */
+        get: operations["list_competitors_api_v1_projects__project_id__competitors_get"];
+        put?: never;
+        /** Добавить конкурента */
+        post: operations["add_competitor_api_v1_projects__project_id__competitors_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/competitors/{competitor_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Удалить конкурента */
+        delete: operations["delete_competitor_api_v1_projects__project_id__competitors__competitor_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/competitors/{competitor_id}/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Перепроверить конкурента */
+        post: operations["recheck_competitor_api_v1_projects__project_id__competitors__competitor_id__recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/economics": {
         parameters: {
             query?: never;
@@ -199,6 +268,62 @@ export interface components {
             /** Score */
             score: number;
         };
+        /** ComparisonRead */
+        ComparisonRead: {
+            /** Own Site Checked */
+            own_site_checked: boolean;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Rivals Checked */
+            rivals_checked: number;
+            /** Rows */
+            rows: components["schemas"]["FeatureRowRead"][];
+            /** Summary */
+            summary: string | null;
+        };
+        /** CompetitorCreate */
+        CompetitorCreate: {
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+        };
+        /** CompetitorList */
+        CompetitorList: {
+            /** Items */
+            items: components["schemas"]["CompetitorRead"][];
+            /** Total */
+            total: number;
+        };
+        /** CompetitorRead */
+        CompetitorRead: {
+            /** Checked At */
+            checked_at: string | null;
+            /** Error Reason */
+            error_reason: string | null;
+            /** Features */
+            features: {
+                [key: string]: boolean;
+            };
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            status: components["schemas"]["ModuleStatus"];
+            /** Title */
+            title: string | null;
+            /** Url */
+            url: string;
+        };
         /**
          * EconomicsMode
          * @description Полнота экономики (v0.4 §5).
@@ -293,6 +418,36 @@ export interface components {
             target_cpl?: number | string | null;
             /** Target Marketing Share */
             target_marketing_share?: number | string | null;
+        };
+        /**
+         * FeatureKey
+         * @description Сравнимые свойства страницы.
+         *
+         *     Список закрытый и короткий: сравнение по тридцати признакам перестаёт быть
+         *     сравнением и становится таблицей, которую никто не читает.
+         * @enum {string}
+         */
+        FeatureKey: "prices" | "form" | "phone" | "messengers" | "cta" | "trust" | "promo" | "mobile" | "analytics";
+        /**
+         * FeatureRowRead
+         * @description Строка таблицы сравнения.
+         */
+        FeatureRowRead: {
+            /** Is Advantage */
+            is_advantage: boolean;
+            /** Is Gap */
+            is_gap: boolean;
+            key: components["schemas"]["FeatureKey"];
+            /** Label */
+            label: string;
+            /** Mine */
+            mine: boolean;
+            /** Rivals Total */
+            rivals_total: number;
+            /** Rivals With */
+            rivals_with: number;
+            /** Why */
+            why: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -707,6 +862,185 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_comparison_api_v1_projects__project_id__comparison_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_competitors_api_v1_projects__project_id__competitors_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_competitor_api_v1_projects__project_id__competitors_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetitorCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_competitor_api_v1_projects__project_id__competitors__competitor_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_competitor_api_v1_projects__project_id__competitors__competitor_id__recheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                competitor_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompetitorRead"];
                 };
             };
             /** @description Validation Error */

@@ -15,7 +15,7 @@ import {
   StatusBadge,
   WorkflowStepper,
 } from "@ads-os/ui";
-import { IconChart, IconGlobe } from "@ads-os/ui/icons";
+import { IconChart, IconGlobe, IconUsers } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient, isApiConfigured } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
@@ -24,6 +24,7 @@ import { toApiError } from "@/lib/errors";
  *  притворяются ссылками. */
 const STEP_LINKS = {
   research: (id: string) => `/site-audit?project=${id}`,
+  competitors: (id: string) => `/competitors?project=${id}`,
   economics: (id: string) => `/economics?project=${id}`,
 } as const;
 
@@ -162,12 +163,18 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             />
           </Card>
 
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <StepLink
               href={STEP_LINKS.research(project.id)}
               icon={<IconGlobe size={18} />}
               title="Аудит сайта"
               description={describe(progress, "research")}
+            />
+            <StepLink
+              href={STEP_LINKS.competitors(project.id)}
+              icon={<IconUsers size={18} />}
+              title="Конкуренты"
+              description="Сравнение с сайтами, за клиента с которыми вы конкурируете"
             />
             <StepLink
               href={STEP_LINKS.economics(project.id)}
@@ -178,8 +185,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
           </section>
 
           <p className="text-caption text-text-secondary">
-            Пока открыты два шага — аудит сайта и экономика. Остальные видны в цепочке, чтобы был
-            понятен весь путь, и станут доступны по мере готовности.
+            Пока открыты исследование и экономика. Остальные шаги видны в цепочке, чтобы был понятен
+            весь путь, и станут доступны по мере готовности.
           </p>
         </>
       )}

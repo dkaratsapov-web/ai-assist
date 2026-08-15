@@ -93,8 +93,14 @@ class AuditResult:
 
 
 @dataclass(slots=True)
-class _Signals:
-    """Что нашлось на странице. Промежуточный результат разбора."""
+class PageSignals:
+    """Что нашлось на странице.
+
+    Публичная структура: тем же разбором пользуется сравнение с конкурентами.
+    Второй парсер для тех же признаков означал бы, что «есть форма заявки» на
+    своём сайте и на чужом определяется по разным правилам — и сравнение
+    перестало бы что-либо значить.
+    """
 
     title: str = ""
     h1: list[str] = field(default_factory=list)
@@ -138,7 +144,7 @@ _CTA_WORDS = (
 
 def audit_page(url: str, html: str, *, status_code: int = 200) -> AuditResult:
     """Разбирает страницу и считает готовность к рекламе."""
-    signals = _collect(html)
+    signals = collect_signals(html)
     issues: list[Issue] = []
 
     technical = _technical(url, status_code, signals, issues)
@@ -179,9 +185,10 @@ def audit_page(url: str, html: str, *, status_code: int = 200) -> AuditResult:
     )
 
 
-def _collect(html: str) -> _Signals:
+def collect_signals(html: str) -> PageSignals:
+    """Разбирает страницу в набор признаков."""
     tree = HTMLParser(html)
-    signals = _Signals()
+    signals = PageSignals()
 
     if (node := tree.css_first("title")) is not None:
         signals.title = node.text(strip=True)
@@ -220,7 +227,7 @@ def _collect(html: str) -> _Signals:
     return signals
 
 
-def _technical(url: str, status_code: int, s: _Signals, issues: list[Issue]) -> CategoryResult:
+def _technical(url: str, status_code: int, s: PageSignals, issues: list[Issue]) -> CategoryResult:
     score = 100
     findings: list[str] = []
 
@@ -288,7 +295,7 @@ def _technical(url: str, status_code: int, s: _Signals, issues: list[Issue]) -> 
     return CategoryResult(Category.TECHNICAL, _clamp(score), tuple(findings))
 
 
-def _offer(s: _Signals, issues: list[Issue]) -> CategoryResult:
+def _offer(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     score = 100
     findings: list[str] = []
 
@@ -326,7 +333,7 @@ def _offer(s: _Signals, issues: list[Issue]) -> CategoryResult:
     return CategoryResult(Category.OFFER, _clamp(score), tuple(findings))
 
 
-def _conversion(s: _Signals, issues: list[Issue]) -> CategoryResult:
+def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     score = 100
     findings: list[str] = []
 
@@ -379,7 +386,7 @@ def _conversion(s: _Signals, issues: list[Issue]) -> CategoryResult:
     return CategoryResult(Category.CONVERSION, _clamp(score), tuple(findings))
 
 
-def _trust(s: _Signals, issues: list[Issue]) -> CategoryResult:
+def _trust(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     score = 100
     findings: list[str] = []
 
@@ -404,7 +411,7 @@ def _trust(s: _Signals, issues: list[Issue]) -> CategoryResult:
     return CategoryResult(Category.TRUST, _clamp(score), tuple(findings))
 
 
-def _tracking(s: _Signals, issues: list[Issue]) -> CategoryResult:
+def _tracking(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     if not s.has_analytics:
         # Без аналитики реклама неуправляема: не видно ни конверсий, ни
         # источников. Это блокирующая проблема, а не замечание.

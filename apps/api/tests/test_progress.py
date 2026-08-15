@@ -70,14 +70,23 @@ class TestИсследование:
         data = ProgressInput(has_website=True, audit_status="running")
         assert state(data, StepKey.RESEARCH) is StepState.ACTIVE
 
-    def test_проверка_завершена(self) -> None:
+    def test_один_аудит_не_закрывает_исследование(self) -> None:
+        """Исследование — это аудит и конкуренты (v0.4 §3)."""
         data = ProgressInput(has_website=True, audit_status="completed")
+        assert state(data, StepKey.RESEARCH) is StepState.ACTIVE
+        assert "конкурент" in (hint(data, StepKey.RESEARCH) or "")
+
+    def test_аудит_и_конкуренты_закрывают_исследование(self) -> None:
+        data = ProgressInput(has_website=True, audit_status="completed", competitors_checked=2)
         assert state(data, StepKey.RESEARCH) is StepState.COMPLETED
 
     def test_критические_находки_не_отменяют_исследования(self) -> None:
         """Исследование выполнено. Запуск блокирует отдельный шаг, не этот."""
         data = ProgressInput(
-            has_website=True, audit_status="completed", audit_has_blocking_issues=True
+            has_website=True,
+            audit_status="completed",
+            audit_has_blocking_issues=True,
+            competitors_checked=1,
         )
         assert state(data, StepKey.RESEARCH) is StepState.COMPLETED
 
@@ -138,12 +147,15 @@ class TestТекущийШаг:
         data = ProgressInput(
             has_website=True,
             audit_status="completed",
+            competitors_checked=1,
             economics_mode=EconomicsMode.INSUFFICIENT,
         )
         assert evaluate(data).current is StepKey.ECONOMICS
 
     def test_подсказка_относится_к_текущему_шагу(self) -> None:
-        data = ProgressInput(has_website=True, economics_mode=EconomicsMode.COMPLETE)
+        data = ProgressInput(
+            has_website=True, competitors_checked=1, economics_mode=EconomicsMode.COMPLETE
+        )
         progress = evaluate(data)
         current = next(s for s in progress.steps if s.key is progress.current)
         assert progress.next_action == current.hint

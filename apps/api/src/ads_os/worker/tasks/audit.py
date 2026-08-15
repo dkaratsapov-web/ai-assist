@@ -24,9 +24,11 @@ from sqlalchemy import select
 from ...db.base import utcnow
 from ...db.session import session_scope
 from ...models.audit import ModuleStatus, SiteAudit
-from ...services.audit import audit_page
+from ...services.audit import audit_page, collect_signals
+from ...services.competitors import extract_features
 from ...services.crawler.fetcher import CrawlLimits, FetchError, fetch_page
 from ..app import celery_app
+from ..runtime import run_task
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +56,7 @@ def fetch_site_page(url: str) -> dict[str, Any]:
 @celery_app.task(name="ads_os.worker.tasks.audit.process_site_audit")
 def process_site_audit(fetched: dict[str, Any], audit_id: str) -> str:
     """Разбирает загруженную страницу и сохраняет результат."""
-    return asyncio.run(_process(uuid.UUID(audit_id), fetched))
+    return run_task(lambda: _process(uuid.UUID(audit_id), fetched))
 
 
 async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
@@ -99,6 +101,13 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         audit.issues = [asdict(i) for i in result.issues]
         audit.metrica_counter = result.metrica_counter
         audit.final_url = fetched["final_url"]
+        # Те же признаки, что собираются у конкурентов. Сохраняются здесь, а не
+        # выводятся потом из текста находок: формулировку находки однажды
+        # поправят, и сравнение молча начнёт врать.
+        audit.features = {
+            key.value: value
+            for key, value in extract_features(collect_signals(fetched["html"])).items()
+        }
 
         logger.info(
             "аудит завершён",

@@ -66,6 +66,11 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     categories: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
     issues: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, nullable=False)
 
+    #: Признаки страницы в том же виде, в каком они хранятся у конкурентов.
+    #: Нужны для сравнения: без них пришлось бы восстанавливать «есть форма» из
+    #: текста находок, и любая правка формулировки молча ломала бы сравнение.
+    features: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
-from ads_os.worker.app import celery_app
+import importlib
+
+from ads_os.worker.app import TASK_MODULES, celery_app
 
 CRAWLER_QUEUE = "crawler"
 DEFAULT_QUEUE = "default"
@@ -33,6 +35,9 @@ class TestМаршрутыЗадач:
         """Разбору нужна база, а у воркера краулера базы нет."""
         assert route("ads_os.worker.tasks.audit.process_site_audit") == DEFAULT_QUEUE
 
+    def test_разбор_конкурента_не_идёт_в_очередь_краулера(self) -> None:
+        assert route("ads_os.worker.tasks.competitors.process_competitor") == DEFAULT_QUEUE
+
     def test_в_очередь_краулера_попадают_только_разрешённые_задачи(self) -> None:
         """Список задач краулера закрытый.
 
@@ -45,6 +50,31 @@ class TestМаршрутыЗадач:
             if destination["queue"] == CRAWLER_QUEUE
         }
         assert crawler_tasks == {"ads_os.worker.tasks.audit.fetch_site_page"}
+
+
+class TestРегистрацияЗадач:
+    """Задача, не зарегистрированная в воркере, отбрасывается молча.
+
+    Именно это и происходило: вместо перечисления модулей стоял автопоиск,
+    который искал подмодуль `tasks` внутри пакета `ads_os.worker.tasks` — то
+    есть `ads_os.worker.tasks.tasks`. Воркер поднимался пустым, сообщения из
+    очереди выбрасывались, а аудит навсегда оставался «в очереди».
+    """
+
+    def test_все_модули_задач_импортируются(self) -> None:
+        for module in TASK_MODULES:
+            importlib.import_module(module)
+
+    def test_каждая_задача_из_маршрутов_зарегистрирована(self) -> None:
+        for module in TASK_MODULES:
+            importlib.import_module(module)
+
+        for name in celery_app.conf.task_routes or {}:
+            assert name in celery_app.tasks, f"задача {name} не зарегистрирована"
+
+    def test_модули_задач_перечислены_в_настройках(self) -> None:
+        """Воркер импортирует именно этот список при старте."""
+        assert tuple(celery_app.conf.imports) == TASK_MODULES
 
 
 class TestНастройкиОчереди:

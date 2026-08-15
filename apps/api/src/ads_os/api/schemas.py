@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..models.audit import ModuleStatus
 from ..models.project import MainConversion, ProjectStatus
+from ..services.competitors import FeatureKey
 from ..services.economics import Availability, EconomicsMode
 from ..services.progress import StepKey, StepState
 
@@ -166,6 +167,57 @@ class EconomicsResponse(BaseModel):
     project_id: uuid.UUID
     input: EconomicsRead | None
     summary: EconomicsSummaryRead
+
+
+class CompetitorCreate(BaseModel):
+    url: str = Field(min_length=4, max_length=2048)
+    #: Как вы называете этого конкурента. Если не задано — возьмётся заголовок
+    #: его страницы.
+    title: str | None = Field(default=None, max_length=300)
+
+
+class CompetitorRead(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    url: str
+    title: str | None
+    status: ModuleStatus
+    #: Признак → есть или нет. Пустой словарь означает «ещё не проверяли».
+    features: dict[str, bool]
+    error_reason: str | None
+    checked_at: datetime | None
+
+
+class CompetitorList(BaseModel):
+    items: list[CompetitorRead]
+    total: int
+
+
+class FeatureRowRead(BaseModel):
+    """Строка таблицы сравнения."""
+
+    key: FeatureKey
+    label: str
+    #: Зачем этот признак нужен. Признак без последствий для рекламы в таблице
+    #: не показывается.
+    why: str
+    mine: bool
+    rivals_with: int
+    rivals_total: int
+    #: Нет у нас, но есть у большинства конкурентов.
+    is_gap: bool
+    #: Есть у нас и меньше чем у половины конкурентов.
+    is_advantage: bool
+
+
+class ComparisonRead(BaseModel):
+    project_id: uuid.UUID
+    #: Проверялся ли наш сайт. Без этого колонка «у вас» читалась бы как
+    #: «у вас ничего нет», хотя мы просто не смотрели.
+    own_site_checked: bool
+    rivals_checked: int
+    summary: str | None
+    rows: list[FeatureRowRead]
 
 
 class HealthResponse(BaseModel):

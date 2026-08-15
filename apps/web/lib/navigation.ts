@@ -86,6 +86,7 @@ export const globalNavigation: NavGroup[] = [
       },
       { key: "semantics", label: "Подбор семантики", href: "/semantics", icon: IconSearch },
       { key: "site-audit", label: "Аудит сайта", href: "/site-audit", icon: IconGlobe },
+      { key: "competitors", label: "Конкуренты", href: "/competitors", icon: IconUsers },
     ],
   },
   {
