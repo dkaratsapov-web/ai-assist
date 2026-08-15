@@ -50,6 +50,7 @@ def fetch_site_page(url: str) -> dict[str, Any]:
         "final_url": page.final_url,
         "status_code": page.status_code,
         "html": page.html,
+        "elapsed_ms": page.elapsed_ms,
     }
 
 
@@ -91,7 +92,12 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             return ModuleStatus.FAILED.value
 
         result = audit_page(
-            fetched["final_url"], fetched["html"], status_code=fetched["status_code"]
+            fetched["final_url"],
+            fetched["html"],
+            status_code=fetched["status_code"],
+            # Задача могла быть поставлена в очередь до появления этого поля —
+            # тогда времени просто нет, и проверка скорости не проводится.
+            elapsed_ms=fetched.get("elapsed_ms"),
         )
 
         audit.status = ModuleStatus.COMPLETED

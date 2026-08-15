@@ -21,6 +21,7 @@ GOOD_PAGE = """
   <a href="https://t.me/example">Написать в Telegram</a>
   <p>Телефон: +7 (900) 123-45-67</p>
   <form action="/lead"><input name="phone"><button>Оставить заявку</button></form>
+  <a href="/privacy">Политика конфиденциальности</a>
 </body></html>
 """
 
@@ -135,3 +136,94 @@ class TestОценка:
     def test_все_категории_присутствуют(self) -> None:
         result = audit_page("https://example.com/", GOOD_PAGE)
         assert {c.category for c in result.categories} == set(Category)
+
+
+class TestПерсональныеДанные:
+    """Проверка, которая отвечает не за конверсию, а за допуск к показам."""
+
+    def test_форма_без_политики_запрещает_запуск(self) -> None:
+        html = GOOD_PAGE.replace('<a href="/privacy">Политика конфиденциальности</a>', "")
+        result = audit_page("https://example.com/", html)
+
+        blocking = [i for i in result.issues if i.severity is Severity.CRITICAL]
+        assert any("политик" in i.title.lower() for i in blocking)
+        assert result.can_launch is False
+
+    def test_страница_без_формы_политику_не_требует(self) -> None:
+        """Ничего не собираем — нечего и обосновывать."""
+        html = GOOD_PAGE.replace(
+            '<form action="/lead"><input name="phone"><button>Оставить заявку</button></form>', ""
+        ).replace('<a href="/privacy">Политика конфиденциальности</a>', "")
+        result = audit_page("https://example.com/", html)
+
+        assert not any("политик" in i.title.lower() for i in result.issues)
+
+    def test_согласие_в_тексте_формы_засчитывается(self) -> None:
+        """Не у всех политика вынесена ссылкой — у многих это галочка согласия."""
+        html = GOOD_PAGE.replace(
+            '<a href="/privacy">Политика конфиденциальности</a>',
+            "<label><input type=checkbox> Согласен на обработку персональных данных</label>",
+        )
+        result = audit_page("https://example.com/", html)
+
+        assert not any("политик" in i.title.lower() for i in result.issues)
+
+
+class TestСкорость:
+    def test_быстрый_ответ_замечаний_не_даёт(self) -> None:
+        result = audit_page("https://example.com/", GOOD_PAGE, elapsed_ms=800)
+
+        assert not any("долго" in i.title or "медленно" in i.title for i in result.issues)
+
+    def test_медленный_ответ_это_рекомендация(self) -> None:
+        result = audit_page("https://example.com/", GOOD_PAGE, elapsed_ms=4000)
+
+        slow = [i for i in result.issues if "медленно" in i.title]
+        assert slow and slow[0].severity is Severity.RECOMMENDATION
+        # Медленный сайт работает, просто хуже. Запрещать запуск за это нельзя.
+        assert result.can_launch is True
+
+    def test_очень_медленный_ответ_это_предупреждение(self) -> None:
+        result = audit_page("https://example.com/", GOOD_PAGE, elapsed_ms=12000)
+
+        slow = [i for i in result.issues if "очень долго" in i.title]
+        assert slow and slow[0].severity is Severity.WARNING
+
+    def test_без_измерения_проверки_нет(self) -> None:
+        """Неизвестное время — не то же самое, что хорошее время."""
+        result = audit_page("https://example.com/", GOOD_PAGE)
+
+        assert not any("Открывается за" in f for c in result.categories for f in c.findings)
+
+
+class TestУдобствоЗаявки:
+    def test_длинная_форма_это_рекомендация(self) -> None:
+        fields = "".join(f'<input name="f{i}">' for i in range(8))
+        html = GOOD_PAGE.replace('<input name="phone">', fields)
+        result = audit_page("https://example.com/", html)
+
+        long_form = [i for i in result.issues if "полей" in i.title]
+        assert long_form and long_form[0].severity is Severity.RECOMMENDATION
+
+    def test_скрытые_поля_не_считаются(self) -> None:
+        """Иначе форма с шестью utm-метками выглядела бы неудобной для человека."""
+        hidden = "".join(f'<input type="hidden" name="utm{i}">' for i in range(8))
+        html = GOOD_PAGE.replace('<input name="phone">', f'<input name="phone">{hidden}')
+        result = audit_page("https://example.com/", html)
+
+        assert not any("полей" in i.title for i in result.issues)
+
+    def test_телефон_без_ссылки_это_рекомендация(self) -> None:
+        result = audit_page("https://example.com/", GOOD_PAGE)
+
+        clickable = [i for i in result.issues if "нажать" in i.title]
+        assert clickable and clickable[0].severity is Severity.RECOMMENDATION
+
+    def test_телефон_ссылкой_замечаний_не_даёт(self) -> None:
+        html = GOOD_PAGE.replace(
+            "Телефон: +7 (900) 123-45-67",
+            'Телефон: <a href="tel:+79001234567">+7 (900) 123-45-67</a>',
+        )
+        result = audit_page("https://example.com/", html)
+
+        assert not any("нажать" in i.title for i in result.issues)

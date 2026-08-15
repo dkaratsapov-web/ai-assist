@@ -116,6 +116,17 @@ class PageSignals:
     has_analytics: bool = False
     trust_words: list[str] = field(default_factory=list)
     offer_words: list[str] = field(default_factory=list)
+    #: Есть ли ссылка на политику обработки персональных данных. Для рекламы это
+    #: не благое пожелание: страницу с формой без политики Яндекс Директ
+    #: отклоняет на модерации.
+    has_privacy_policy: bool = False
+    #: Сколько видимых полей в самой большой форме. Форма из десяти полей
+    #: собирает заявок в разы меньше, чем форма из двух, — при том же бюджете.
+    max_form_fields: int = 0
+    #: Оформлен ли телефон ссылкой tel:. С телефона по ненажимаемому номеру не
+    #: позвонить — его надо запоминать и набирать вручную, и часть посетителей
+    #: этого просто не делает.
+    has_tel_link: bool = False
 
 
 _PHONE_RE = re.compile(r"(?:\+7|8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}")
@@ -131,6 +142,25 @@ _MESSENGERS = {
 
 _TRUST_WORDS = ("гарант", "отзыв", "сертифик", "лиценз", "опыт работы", "кейс", "лет на рынке")
 _OFFER_WORDS = ("скидк", "акци", "бесплатн", "в подарок", "от ", "срок", "за 1 час", "выезд")
+_PRIVACY_WORDS = (
+    "политика конфиденциальности",
+    "политику конфиденциальности",
+    "обработку персональных данных",
+    "обработки персональных данных",
+    "персональных данных",
+    "privacy",
+)
+
+#: Сколько полей в форме считается перебором. Порог не строгий: заявка на замер
+#: и заявка на кредит требуют разного. Пять — граница, после которой почти
+#: всегда есть что убрать.
+MAX_COMFORTABLE_FORM_FIELDS = 5
+
+#: Пороги времени ответа. Три секунды — момент, после которого заметная часть
+#: посетителей уходит, не дождавшись. Восемь — когда уходит большинство.
+SLOW_RESPONSE_MS = 3000
+VERY_SLOW_RESPONSE_MS = 8000
+
 _CTA_WORDS = (
     "заказ",
     "оставить заявку",
@@ -142,12 +172,19 @@ _CTA_WORDS = (
 )
 
 
-def audit_page(url: str, html: str, *, status_code: int = 200) -> AuditResult:
-    """Разбирает страницу и считает готовность к рекламе."""
+def audit_page(
+    url: str, html: str, *, status_code: int = 200, elapsed_ms: int | None = None
+) -> AuditResult:
+    """Разбирает страницу и считает готовность к рекламе.
+
+    `elapsed_ms` — время загрузки, если оно известно. Необязательное: страницу
+    можно разобрать и из сохранённого HTML, и тогда времени нет. Отсутствие
+    времени не считается хорошим результатом — проверка просто не проводится.
+    """
     signals = collect_signals(html)
     issues: list[Issue] = []
 
-    technical = _technical(url, status_code, signals, issues)
+    technical = _technical(url, status_code, signals, issues, elapsed_ms)
     offer = _offer(signals, issues)
     conversion = _conversion(signals, issues)
     trust = _trust(signals, issues)
@@ -207,10 +244,28 @@ def collect_signals(html: str) -> PageSignals:
     signals.emails = len(set(_EMAIL_RE.findall(text)))
     signals.prices = len(_PRICE_RE.findall(text))
 
-    hrefs = " ".join((n.attributes.get("href") or "") for n in tree.css("a"))
+    links = tree.css("a")
+    hrefs = " ".join((n.attributes.get("href") or "") for n in links)
     for name, markers in _MESSENGERS.items():
         if any(marker in hrefs.lower() for marker in markers):
             signals.messengers.append(name)
+
+    signals.has_tel_link = "tel:" in hrefs.lower()
+
+    # Политику ищем и по тексту ссылки, и по адресу: на одних сайтах это ссылка
+    # «Политика конфиденциальности», на других — галочка согласия рядом с
+    # формой, ведущая на /privacy.
+    signals.has_privacy_policy = any(
+        word in lowered for word in _PRIVACY_WORDS
+    ) or "privacy" in hrefs.lower()
+
+    for form in tree.css("form"):
+        visible = [
+            n
+            for n in form.css("input, textarea, select")
+            if (n.attributes.get("type") or "text").lower() not in ("hidden", "submit", "button")
+        ]
+        signals.max_form_fields = max(signals.max_form_fields, len(visible))
 
     clickable = tree.css("button, a, input[type=submit]")
     signals.cta_buttons = sum(
@@ -227,7 +282,13 @@ def collect_signals(html: str) -> PageSignals:
     return signals
 
 
-def _technical(url: str, status_code: int, s: PageSignals, issues: list[Issue]) -> CategoryResult:
+def _technical(
+    url: str,
+    status_code: int,
+    s: PageSignals,
+    issues: list[Issue],
+    elapsed_ms: int | None = None,
+) -> CategoryResult:
     score = 100
     findings: list[str] = []
 
@@ -291,6 +352,33 @@ def _technical(url: str, status_code: int, s: PageSignals, issues: list[Issue]) 
             )
         )
         score -= 15
+
+    if elapsed_ms is not None:
+        seconds = elapsed_ms / 1000
+        if elapsed_ms >= VERY_SLOW_RESPONSE_MS:
+            issues.append(
+                Issue(
+                    Category.TECHNICAL,
+                    Severity.WARNING,
+                    f"Сайт открывается очень долго: {seconds:.1f} с",
+                    "Разберитесь со скоростью до запуска. За такое ожидание "
+                    "уходит большинство посетителей, а клик оплачен.",
+                )
+            )
+            score -= 35
+        elif elapsed_ms >= SLOW_RESPONSE_MS:
+            issues.append(
+                Issue(
+                    Category.TECHNICAL,
+                    Severity.RECOMMENDATION,
+                    f"Сайт открывается медленно: {seconds:.1f} с",
+                    "Ускорьте загрузку: после трёх секунд ожидания заметная "
+                    "часть посетителей закрывает вкладку.",
+                )
+            )
+            score -= 15
+        else:
+            findings.append(f"Открывается за {seconds:.1f} с")
 
     return CategoryResult(Category.TECHNICAL, _clamp(score), tuple(findings))
 
@@ -365,6 +453,30 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     else:
         findings.append(f"Форм на странице: {s.forms}")
 
+    if s.max_form_fields > MAX_COMFORTABLE_FORM_FIELDS:
+        issues.append(
+            Issue(
+                Category.CONVERSION,
+                Severity.RECOMMENDATION,
+                f"В форме {s.max_form_fields} полей",
+                "Оставьте имя и телефон, остальное спросите при звонке. "
+                "Длинная форма собирает меньше заявок при том же бюджете.",
+            )
+        )
+        score -= 15
+
+    if s.phones and not s.has_tel_link:
+        issues.append(
+            Issue(
+                Category.CONVERSION,
+                Severity.RECOMMENDATION,
+                "Телефон нельзя нажать",
+                "Оформите номер ссылкой tel: — с телефона по такому номеру "
+                "звонят в одно касание, а не переписывают вручную.",
+            )
+        )
+        score -= 10
+
     if s.phones:
         findings.append("Указан телефон")
     if s.messengers:
@@ -407,6 +519,24 @@ def _trust(s: PageSignals, issues: list[Issue]) -> CategoryResult:
         score -= 30
     else:
         findings.append("Контакты на виду")
+
+    if s.forms and not s.has_privacy_policy:
+        # Не гигиена, а причина отказа на модерации: страница собирает
+        # персональные данные, а на каком основании — не сказано. Реклама
+        # просто не запустится, поэтому это блокирующая находка.
+        issues.append(
+            Issue(
+                Category.TRUST,
+                Severity.CRITICAL,
+                "Форма есть, а политики обработки данных нет",
+                "Добавьте ссылку на политику обработки персональных данных и "
+                "согласие в форме. Без этого Яндекс Директ отклонит объявления "
+                "на модерации.",
+            )
+        )
+        score -= 40
+    elif s.has_privacy_policy:
+        findings.append("Есть политика обработки данных")
 
     return CategoryResult(Category.TRUST, _clamp(score), tuple(findings))
 

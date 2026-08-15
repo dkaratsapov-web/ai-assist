@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 
 import httpx
@@ -43,6 +44,11 @@ class FetchedPage:
     html: str
     #: Цепочка перенаправлений — нужна для аудита и для объяснения выводов.
     redirects: tuple[str, ...] = field(default_factory=tuple)
+    #: Сколько времени заняла загрузка целиком, вместе с перенаправлениями.
+    #: Считается именно вся цепочка: посетитель ждёт её целиком, а не последний
+    #: запрос. Лишний редирект — это лишние полсекунды ожидания, и в аудите они
+    #: должны быть видны.
+    elapsed_ms: int = 0
 
 
 class FetchError(Exception):
@@ -72,6 +78,7 @@ async def fetch_page(
 
     redirects: list[str] = []
     current = url
+    started = time.monotonic()
 
     try:
         for _ in range(limits.max_redirects + 1):
@@ -115,6 +122,7 @@ async def fetch_page(
                 content_type=content_type or "text/html",
                 html=response.text,
                 redirects=tuple(redirects),
+                elapsed_ms=round((time.monotonic() - started) * 1000),
             )
 
         raise FetchError(url, f"больше {limits.max_redirects} перенаправлений", retryable=False)
