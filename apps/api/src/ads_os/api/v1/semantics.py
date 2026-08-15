@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
+from urllib.parse import quote
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import Select, select
 
 from ...errors import AppError
@@ -13,6 +14,7 @@ from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import record
 from ...services.ads import build_draft
+from ...services.export import ExportRow, file_name, to_csv
 from ...services.semantics import (
     INTENT_LABELS,
     Intent,
@@ -514,3 +516,96 @@ async def list_ad_drafts(
         ready=sum(1 for draft in drafts if draft.is_ready),
         source_note=note,
     )
+
+
+@router.get(
+    "/{project_id}/campaign/export.csv",
+    summary="Выгрузка кампании файлом",
+    response_class=Response,
+    responses={200: {"content": {"text/csv": {}}, "description": "CSV с кампанией"}},
+)
+async def export_campaign(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> Response:
+    """Отдаёт готовую кампанию одним файлом.
+
+    Это единственный способ довести работу до реального запуска, пока доступ к
+    API Директа не получен: специалист забирает структуру, фразы, объявления и
+    минус-слова и заводит кампанию через Коммандер или руками.
+
+    Замечания к объявлениям попадают в отдельный столбец, а не отсеивают строки.
+    Молча выбросить группу с длинным заголовком значило бы отдать неполную
+    кампанию и не сказать об этом — человек узнал бы о пропаже уже в Директе.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    keywords = await _keywords(session, ctx, project_id)
+    groups = cluster(_targeted(keywords))
+    points = await _selling_points(session, ctx, project_id)
+    minus = ", ".join(f"-{row.word}" for row in await _minus_word_rows(session, ctx, project_id))
+
+    url = project.website_url or ""
+    rows: list[ExportRow] = []
+
+    for group in groups:
+        if not group.core:
+            # Остаток — не группа под объявление. В выгрузку он не идёт, иначе
+            # в Директе появилась бы группа без осмысленного объявления.
+            continue
+
+        draft = build_draft(
+            cluster_name=group.name,
+            keywords=group.phrases,
+            selling_points=points,
+            region=project.primary_region,
+        )
+        warnings = "; ".join(v.message for v in draft.violations)
+
+        for phrase in group.phrases:
+            rows.append(
+                ExportRow(
+                    campaign=project.name,
+                    group=group.name,
+                    phrase=phrase,
+                    title=draft.title,
+                    title_2=draft.title_2 or "",
+                    text=draft.text,
+                    url=url,
+                    display_path=draft.display_path or "",
+                    callouts=", ".join(draft.callouts),
+                    minus_words=minus,
+                    warnings=warnings,
+                )
+            )
+
+    body = to_csv(rows)
+    name = file_name(project.name)
+
+    return Response(
+        content=body.encode("utf-8"),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            # Имя файла русское, поэтому передаётся в кодированном виде: без
+            # filename* браузер сохранит его как «download» или искажённо.
+            "Content-Disposition": (
+                f"attachment; filename=campaign.csv; filename*=UTF-8''{quote(name)}"
+            )
+        },
+    )
+
+
+async def _selling_points(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> tuple[str, ...]:
+    audit = (
+        await session.execute(
+            select(SiteAudit)
+            .where(SiteAudit.organization_id == ctx.organization_id)
+            .where(SiteAudit.project_id == project_id)
+            .where(SiteAudit.status == ModuleStatus.COMPLETED)
+            .order_by(SiteAudit.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    return tuple(audit.selling_points or []) if audit else ()

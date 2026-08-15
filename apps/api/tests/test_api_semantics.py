@@ -355,3 +355,135 @@ class TestЧерновикиОбъявлений:
         )
 
         assert response.status_code == 404
+
+
+class TestВыгрузкаКампании:
+    """Единственный способ дойти до реального запуска без доступа к API."""
+
+    async def test_выгрузка_содержит_фразы_и_объявления(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        row.website_url = "https://okna.ru/"
+        session.add(
+            SiteAudit(
+                organization_id=org.id,
+                project_id=row.id,
+                url="https://okna.ru/",
+                status=ModuleStatus.COMPLETED,
+                score=90,
+                categories=[],
+                issues=[],
+                selling_points=["Замер бесплатно", "Гарантия 5 лет"],
+            )
+        )
+        await session.commit()
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        await client.post(
+            f"/api/v1/projects/{row.id}/minus-words",
+            json={"word": "вакансии"},
+            headers=headers(org, user),
+        )
+
+        response = await client.get(
+            f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+        )
+
+        assert response.status_code == 200
+        body = response.text
+        assert "Ключевая фраза" in body
+        assert "купить пластиковые окна" in body
+        assert "Замер бесплатно" in body
+        assert "-вакансии" in body
+
+    async def test_файл_открывается_в_excel(
+        self,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Без метки кодировки Excel показывает русский текст крякозябрами."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        response = await client.get(
+            f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+        )
+
+        assert response.content.startswith(b"\xef\xbb\xbf")
+        # Точка с запятой: с запятой Excel разносит по столбцам «12 900,00».
+        assert ";" in response.text.splitlines()[0]
+
+    async def test_нецелевые_фразы_в_выгрузку_не_попадают(
+        self,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+            )
+        ).text
+
+        assert "вакансии" not in body.replace("-вакансии", "")
+
+    async def test_замечания_не_отсеивают_строки(
+        self,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Молча выброшенная группа обнаружилась бы уже в Директе."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+            )
+        ).text
+
+        # Аудита нет, поэтому текст собрать не из чего — но фразы всё равно
+        # выгружены, а причина указана в отдельном столбце.
+        assert "купить пластиковые окна" in body
+        assert "вручную" in body
+
+    async def test_чужая_кампания_недоступна(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        _, _, row = project
+        _, other_org = two_organizations
+        other_user = await make_user(session, other_org, "other@example.com")
+        await session.commit()
+
+        response = await client.get(
+            f"/api/v1/projects/{row.id}/campaign/export.csv",
+            headers=headers(other_org, other_user),
+        )
+
+        assert response.status_code == 404

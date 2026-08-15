@@ -5018,6 +5018,96 @@
         ]
       }
     },
+    "/api/v1/projects/{project_id}/campaign/export.csv": {
+      "get": {
+        "description": "Отдаёт готовую кампанию одним файлом.\n\nЭто единственный способ довести работу до реального запуска, пока доступ к\nAPI Директа не получен: специалист забирает структуру, фразы, объявления и\nминус-слова и заводит кампанию через Коммандер или руками.\n\nЗамечания к объявлениям попадают в отдельный столбец, а не отсеивают строки.\nМолча выбросить группу с длинным заголовком значило бы отдать неполную\nкампанию и не сказать об этом — человек узнал бы о пропаже уже в Директе.",
+        "operationId": "export_campaign_api_v1_projects__project_id__campaign_export_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "CSV с кампанией"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Выгрузка кампании файлом",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
     "/api/v1/projects/{project_id}/comparison": {
       "get": {
         "operationId": "get_comparison_api_v1_projects__project_id__comparison_get",

@@ -354,6 +354,17 @@ export class ApiClient {
     });
   }
 
+  /**
+   * Адрес выгрузки кампании файлом.
+   *
+   * Возвращается ссылка, а не содержимое: файл скачивает браузер, и делать это
+   * через fetch значило бы держать весь CSV в памяти вкладки ради того же
+   * результата.
+   */
+  campaignExportUrl(projectId: string): string {
+    return `${this.baseUrl}/api/v1/projects/${projectId}/campaign/export.csv`;
+  }
+
   /** Черновики объявлений по группам фраз. Ничего не сохраняется. */
   listAdDrafts(projectId: string): Promise<AdDraftList> {
     return this.request<AdDraftList>(`/api/v1/projects/${projectId}/ads`);

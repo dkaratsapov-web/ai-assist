@@ -88,6 +88,18 @@ function AdsScreen() {
     <AppShell
       title="Объявления"
       subtitle="Черновики по группам фраз — собраны из текста вашей посадочной страницы"
+      actions={
+        selectedId && drafts && drafts.length > 0 ? (
+          // Обычная ссылка, а не запрос из скрипта: файл скачивает браузер, и
+          // тянуть весь CSV в память вкладки ради того же результата незачем.
+          <a
+            href={api.campaignExportUrl(selectedId)}
+            className="rounded-control bg-cta text-cta-text text-caption focus-visible:outline-focus inline-flex h-8 items-center px-3 font-medium focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Выгрузить кампанию
+          </a>
+        ) : undefined
+      }
     >
       {error ? (
         <Card>
@@ -132,6 +144,11 @@ function AdsScreen() {
                   Черновиков: {drafts.length}, без замечаний: {ready}. Текст собран из фрагментов
                   вашей страницы — итоговый пишете вы, система проверяет лимиты и слова, из-за
                   которых приходит отказ.
+                </p>
+                <p className="text-caption text-text-secondary mt-2">
+                  Кнопка «Выгрузить кампанию» отдаёт файл со всей структурой: группы, фразы,
+                  объявления и минус-слова. Его можно открыть в Excel и завести кампанию через
+                  Коммандер, не дожидаясь доступа к API Директа.
                 </p>
               </Card>
 

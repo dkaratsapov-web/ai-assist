@@ -461,6 +461,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/campaign/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Выгрузка кампании файлом
+         * @description Отдаёт готовую кампанию одним файлом.
+         *
+         *     Это единственный способ довести работу до реального запуска, пока доступ к
+         *     API Директа не получен: специалист забирает структуру, фразы, объявления и
+         *     минус-слова и заводит кампанию через Коммандер или руками.
+         *
+         *     Замечания к объявлениям попадают в отдельный столбец, а не отсеивают строки.
+         *     Молча выбросить группу с длинным заголовком значило бы отдать неполную
+         *     кампанию и не сказать об этом — человек узнал бы о пропаже уже в Директе.
+         */
+        get: operations["export_campaign_api_v1_projects__project_id__campaign_export_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/comparison": {
         parameters: {
             query?: never;
@@ -2679,6 +2707,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_campaign_api_v1_projects__project_id__campaign_export_csv_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV с кампанией */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
                 };
             };
             /** @description Validation Error */
