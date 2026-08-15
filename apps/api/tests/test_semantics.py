@@ -300,3 +300,67 @@ class TestМинусСлова:
         suggestions = suggest_minus_words([ParsedKeyword("окна пвх вакансии", 10)])
 
         assert suggestions[0].examples == ("окна пвх вакансии",)
+
+
+class TestСборкаГрупп:
+    """Структура кампании должна быть из групп, а не из россыпи одиночек."""
+
+    def test_группы_собираются_вокруг_частого_сочетания(self) -> None:
+        groups = cluster(
+            [
+                ParsedKeyword("пластиковые окна тверь", 5400),
+                ParsedKeyword("купить пластиковые окна", 3100),
+                ParsedKeyword("пластиковые окна цена", 2800),
+                ParsedKeyword("остекление балкона тверь", 900),
+                ParsedKeyword("остекление балконов цена", 700),
+            ]
+        )
+
+        assert len(groups) == 2
+        assert {"окн", "пластиков"} == set(groups[0].core)
+
+    def test_общее_ядро_собирает_и_узкие_фразы(self) -> None:
+        """Раньше «остекление балкона тверь» не сливалось с «остекление балконов».
+
+        Склейка работала в одну сторону: частное вливалось в общее, только если
+        общее встретилось раньше. При обратном порядке частотностей обе фразы
+        оставались одиночками и уезжали в остаток.
+        """
+        groups = cluster(
+            [
+                ParsedKeyword("остекление балкона тверь", 900),
+                ParsedKeyword("остекление балконов цена", 700),
+            ]
+        )
+
+        assert len(groups) == 1
+        assert len(groups[0].phrases) == 2
+
+    def test_пара_основ_предпочитается_одиночной(self) -> None:
+        """Иначе «окн» смешало бы ремонт, остекление и продажу в одну группу."""
+        groups = cluster(
+            [
+                ParsedKeyword("ремонт окон", 100),
+                ParsedKeyword("ремонта окон", 90),
+                ParsedKeyword("продажа окон", 80),
+                ParsedKeyword("продажи окон", 70),
+            ]
+        )
+
+        assert len(groups) == 2
+        for group in groups:
+            assert len(group.core) == 2
+
+    def test_фраза_попадает_ровно_в_одну_группу(self) -> None:
+        keywords = [
+            ParsedKeyword("пластиковые окна тверь", 5400),
+            ParsedKeyword("купить пластиковые окна", 3100),
+            ParsedKeyword("окна пвх тверь", 1200),
+            ParsedKeyword("окна пвх отзывы", 290),
+            ParsedKeyword("ремонт окон тверь", 260),
+        ]
+
+        groups = cluster(keywords)
+        collected = [phrase for group in groups for phrase in group.phrases]
+
+        assert len(collected) == len(set(collected)) == len(keywords)

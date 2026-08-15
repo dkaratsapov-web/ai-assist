@@ -203,58 +203,55 @@ MIN_CLUSTER_SIZE = 2
 
 
 def cluster(keywords: list[ParsedKeyword]) -> list[Cluster]:
-    """Группирует фразы по совпадающему смысловому ядру.
+    """Группирует фразы вокруг общего смыслового ядра.
 
     Ядро — набор основ без служебных и коммерческих слов. «Купить пластиковые
     окна» и «пластиковые окна цена» имеют одно ядро {пластиков, окн}, и это
     правильно: обе фразы ведут на одну страницу и требуют одного объявления.
     Различие между ними — в тексте объявления, а не в структуре кампании.
 
-    Затем частные группы вливаются в общие: ядро {ремонт, окн, пвх} поглощается
-    ядром {ремонт, окн}, если последнее крупнее. Иначе структура распадается на
-    десятки групп по одной фразе, а Директу для обучения нужен объём.
+    Группы собираются жадно, от самого частого сочетания основ к редким. Такой
+    порядок даёт то, что нужно от структуры кампании: крупные группы с общей
+    сутью, а не россыпь из одной фразы. Директу для обучения нужен объём, и
+    группа из одного ключа его не даёт.
+
+    Сочетание из двух основ предпочитается одиночной: «ремонт окон» — это
+    группа, а просто «окн» объединило бы ремонт с остеклением и продажей.
     """
+    if not keywords:
+        return []
+
     # Свод беглых гласных считается по всему списку сразу: «окн» и «окон»
     # сводятся только потому, что в этом списке встретились обе формы.
     folding = fold_beglye([s for keyword in keywords for s in _core_stems(keyword.phrase)])
 
-    by_core: dict[frozenset[str], list[ParsedKeyword]] = defaultdict(list)
-
+    cores: dict[str, frozenset[str]] = {}
     for keyword in keywords:
         core = frozenset(folding.get(s, s) for s in _core_stems(keyword.phrase))
         if not core:
             # Фраза целиком из служебных и коммерческих слов — «купить
             # недорого». Своего смысла у неё нет, ядром она быть не может.
-            core = frozenset(stem(w) for w in tokenize(keyword.phrase))
-        by_core[core].append(keyword)
+            core = frozenset(folding.get(stem(w), stem(w)) for w in tokenize(keyword.phrase))
+        cores[keyword.phrase] = core
 
-    groups = {core: list(items) for core, items in by_core.items()}
+    unassigned = {keyword.phrase: keyword for keyword in keywords}
+    clusters: list[Cluster] = []
 
-    # От крупных к мелким: частное вливается в общее, а не наоборот.
-    order = sorted(groups, key=lambda c: (-_weight(groups[c]), len(c)))
+    while unassigned:
+        anchor = _best_anchor(unassigned, cores)
+        if anchor is None:
+            break
 
-    merged: dict[frozenset[str], list[ParsedKeyword]] = {}
-    for core in order:
-        target = next(
-            (existing for existing in merged if existing < core),
-            None,
-        )
-        if target is not None:
-            merged[target].extend(groups[core])
-        else:
-            merged[core] = list(groups[core])
+        members = [
+            keyword for phrase, keyword in unassigned.items() if anchor <= cores[phrase]
+        ]
+        for keyword in members:
+            del unassigned[keyword.phrase]
 
-    clusters = [
-        _build(core, items) for core, items in merged.items() if len(items) >= MIN_CLUSTER_SIZE
-    ]
-    leftovers = [
-        item
-        for items in merged.values()
-        if len(items) < MIN_CLUSTER_SIZE
-        for item in items
-    ]
+        clusters.append(_build(anchor, members))
 
-    if leftovers:
+    if unassigned:
+        leftovers = list(unassigned.values())
         clusters.append(
             Cluster(
                 name="Остальные фразы",
@@ -266,6 +263,42 @@ def cluster(keywords: list[ParsedKeyword]) -> list[Cluster]:
 
     clusters.sort(key=lambda c: (-c.total_frequency, -len(c.phrases), c.name))
     return clusters
+
+
+def _best_anchor(
+    unassigned: dict[str, ParsedKeyword], cores: dict[str, frozenset[str]]
+) -> frozenset[str] | None:
+    """Самое весомое сочетание основ среди нераспределённых фраз.
+
+    Перебираются пары основ и одиночные основы. Тройки и длиннее не нужны: они
+    описывают всё более узкую группу, а задача обратная — собрать объём.
+    """
+    weights: dict[frozenset[str], int] = defaultdict(int)
+    sizes: dict[frozenset[str], int] = defaultdict(int)
+
+    for phrase, keyword in unassigned.items():
+        core = sorted(cores[phrase])
+        candidates = [frozenset({s}) for s in core]
+        candidates += [
+            frozenset({first, second})
+            for index, first in enumerate(core)
+            for second in core[index + 1 :]
+        ]
+        for candidate in candidates:
+            weights[candidate] += keyword.frequency or 1
+            sizes[candidate] += 1
+
+    usable = {
+        candidate: weight
+        for candidate, weight in weights.items()
+        if sizes[candidate] >= MIN_CLUSTER_SIZE
+    }
+    if not usable:
+        return None
+
+    # Пара выигрывает у одиночной основы при прочих равных: «ремонт окон» —
+    # это группа, а «окн» смешало бы ремонт, остекление и продажу.
+    return max(usable, key=lambda c: (len(c), usable[c], sizes[c]))
 
 
 @dataclass(frozen=True, slots=True)
