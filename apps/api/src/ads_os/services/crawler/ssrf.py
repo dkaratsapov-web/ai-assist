@@ -18,7 +18,9 @@ from __future__ import annotations
 
 import ipaddress
 import socket
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 from urllib.parse import urlsplit
 
 ALLOWED_SCHEMES = frozenset({"http", "https"})
@@ -106,7 +108,12 @@ def is_blocked_address(raw: str) -> bool:
     return any(address in network for network in BLOCKED_NETWORKS)
 
 
-def resolve_and_validate(url: str, *, resolver=socket.getaddrinfo) -> ResolvedTarget:
+#: Функция разрешения имени. Вынесена в параметр ради тестов: сеть в них не
+#: используется. Подпись повторяет socket.getaddrinfo в нужной здесь части.
+Resolver = Callable[..., list[Any]]
+
+
+def resolve_and_validate(url: str, *, resolver: Resolver = socket.getaddrinfo) -> ResolvedTarget:
     """Разбирает адрес, резолвит имя и проверяет каждый полученный адрес.
 
     Проверяются все адреса имени, а не первый: имя может отдавать вперемешку

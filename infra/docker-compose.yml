@@ -28,6 +28,8 @@ services:
     depends_on:
       - web
       - api
+    networks:
+      - backend
 
   web:
     build:
@@ -43,6 +45,8 @@ services:
     restart: unless-stopped
     expose:
       - "3000"
+    networks:
+      - backend
 
   api:
     build:
@@ -69,6 +73,60 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    networks:
+      - backend
+
+  # Обычный воркер: разбирает результаты и пишет в базу. Наружу не ходит.
+  worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command:
+      ["celery", "-A", "ads_os.worker.app", "worker", "-Q", "default", "--concurrency", "2"]
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379/0
+      AI_PROVIDER: stub
+      AI_SENSITIVE_PROVIDER: none
+      AD_PLATFORM_ADAPTER: mock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks:
+      - backend
+
+  # Воркер краулера: ходит по чужим сайтам.
+  #
+  # Он подключён только к сети `crawler`, где нет базы. Это не удобство
+  # конфигурации, а требование изоляции (v0.3 §97, v0.4 §20): процесс, который
+  # разбирает содержимое произвольного внешнего сайта, не должен иметь никакой
+  # возможности дотянуться до данных клиентов — даже если в нём найдут дыру.
+  #
+  # Адрес базы ему не передаётся намеренно: задача получает адрес страницы
+  # аргументом и возвращает результат значением.
+  crawler-worker:
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    command:
+      ["celery", "-A", "ads_os.worker.app", "worker", "-Q", "crawler", "--concurrency", "2"]
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      LOG_LEVEL: info
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - crawler
 
   migrate:
     build:
@@ -81,6 +139,8 @@ services:
       postgres:
         condition: service_healthy
     restart: "no"
+    networks:
+      - backend
 
   postgres:
     image: postgres:16-alpine
@@ -100,6 +160,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # База состоит только в сети backend. В сеть краулера она не входит — это и
+    # есть механизм изоляции.
+    networks:
+      - backend
 
   redis:
     image: redis:7-alpine
@@ -114,6 +178,19 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    # Очередь — единственное, что видно из обеих сетей: через неё воркер
+    # краулера получает задания и отдаёт результат.
+    networks:
+      - backend
+      - crawler
+
+networks:
+  # Основная сеть: приложение и его данные.
+  backend:
+  # Сеть краулера. Базы здесь нет — только очередь. Контейнер краулера
+  # физически не может обратиться к postgres, потому что не состоит с ним ни в
+  # одной общей сети.
+  crawler:
 
 volumes:
   postgres-data:

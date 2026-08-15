@@ -13,6 +13,7 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..models.audit import ModuleStatus
 from ..models.project import MainConversion, ProjectStatus
 from ..services.economics import Availability, EconomicsMode
 
@@ -134,3 +135,42 @@ class HealthResponse(BaseModel):
     #: Адаптер рекламной площадки. До прохождения проверок безопасности —
     #: только заглушка (v0.4 §2.1).
     ad_platform_adapter: str
+
+
+class CategoryRead(BaseModel):
+    """Оценка по одной категории аудита."""
+
+    category: str
+    score: int
+    findings: list[str] = Field(default_factory=list)
+
+
+class AuditIssueRead(BaseModel):
+    """Находка аудита.
+
+    Поле `action` обязательное: находка без понятного действия бесполезна.
+    """
+
+    category: str
+    severity: str
+    title: str
+    action: str
+
+
+class AuditRead(BaseModel):
+    id: uuid.UUID
+    project_id: uuid.UUID
+    url: str
+    final_url: str | None
+    status: ModuleStatus
+    score: int | None
+    verdict: str | None
+    metrica_counter: str | None
+    error_reason: str | None
+    categories: list[CategoryRead]
+    issues: list[AuditIssueRead]
+    #: Можно ли запускать рекламу. Критические находки это запрещают (v0.3 §15).
+    can_launch: bool
+    started_at: datetime | None
+    finished_at: datetime | None
+    created_at: datetime

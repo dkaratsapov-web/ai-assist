@@ -45,7 +45,12 @@ class MainConversion(StrEnum):
 
 class Project(UUIDPrimaryKey, Timestamps, SoftDelete, OrganizationScoped, Base):
     __tablename__ = "projects"
-    __mapper_args__: ClassVar[dict[str, object]] = {"version_id_col": None}
+    # SQLAlchemy объявляет __mapper_args__ переменной экземпляра, но читает его
+    # с класса. Аннотация ClassVar здесь корректна, а замечание mypy — следствие
+    # его собственного описания базового класса.
+    __mapper_args__: ClassVar[dict[str, object]] = {  # type: ignore[misc]
+        "version_id_col": None
+    }
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     website_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)

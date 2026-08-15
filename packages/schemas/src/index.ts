@@ -22,6 +22,10 @@ export type EconomicsResponse = Schemas["EconomicsResponse"];
 export type EconomicsSummaryRead = Schemas["EconomicsSummaryRead"];
 export type MetricRead = Schemas["MetricRead"];
 export type HealthResponse = Schemas["HealthResponse"];
+export type AuditRead = Schemas["AuditRead"];
+export type CategoryRead = Schemas["CategoryRead"];
+export type AuditIssueRead = Schemas["AuditIssueRead"];
+export type ModuleStatus = Schemas["ModuleStatus"];
 export type Availability = Schemas["Availability"];
 export type EconomicsMode = Schemas["EconomicsMode"];
 export type MainConversion = Schemas["MainConversion"];
@@ -129,5 +133,21 @@ export class ApiClient {
       method: "PUT",
       body: JSON.stringify(payload),
     });
+  }
+
+  /**
+   * Последний аудит сайта. `null` означает, что аудит ещё ни разу не запускали —
+   * это не ошибка и не пустой результат.
+   */
+  getAudit(projectId: string): Promise<AuditRead | null> {
+    return this.request<AuditRead | null>(`/api/v1/projects/${projectId}/audit`);
+  }
+
+  /**
+   * Запускает аудит. Ответ приходит сразу со статусом «в очереди»: работа идёт в
+   * фоне, потому что обход чужого сайта занимает десятки секунд (v0.3 §6).
+   */
+  startAudit(projectId: string): Promise<AuditRead> {
+    return this.request<AuditRead>(`/api/v1/projects/${projectId}/audit`, { method: "POST" });
   }
 }

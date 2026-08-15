@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Query, status
+from sqlalchemy import Select, select
 
 from ...errors import ConflictError
 from ...models import Project, ProjectEconomics
@@ -36,11 +37,9 @@ class ProjectRepository(TenantRepository[Project]):
 class EconomicsRepository(TenantRepository[ProjectEconomics]):
     model = ProjectEconomics
 
-    def scoped(self, *, include_deleted: bool = False):  # type: ignore[override]
+    def scoped(self, *, include_deleted: bool = False) -> Select[tuple[ProjectEconomics]]:
         # У экономики нет мягкого удаления: она живёт и умирает вместе с
         # проектом, а не отдельно от него.
-        from sqlalchemy import select
-
         return select(self.model).where(
             self.model.organization_id == self.ctx.organization_id
         )
@@ -106,7 +105,7 @@ async def get_economics(
 
     return EconomicsResponse(
         project_id=project_id,
-        input=economics,  # type: ignore[arg-type]
+        input=economics,
         summary=_to_summary(summary),
     )
 
@@ -159,7 +158,7 @@ async def update_economics(
     summary = evaluate(_to_input(economics))
     return EconomicsResponse(
         project_id=project_id,
-        input=economics,  # type: ignore[arg-type]
+        input=economics,
         summary=_to_summary(summary),
     )
 

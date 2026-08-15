@@ -24,6 +24,11 @@ TEST_DATABASE_URL = os.environ.get(
     "postgresql+asyncpg://ads_os@127.0.0.1:5433/ads_os_test",
 )
 
+# Фоновые задачи открывают собственную сессию через session_scope и берут адрес
+# базы из настроек, а не из фикстуры. Без этой строки они молча ушли бы в базу
+# разработки, и тест увидел бы «запись не найдена» вместо настоящей проверки.
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
 _TABLES = ", ".join(
     f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables) if t.name != "alembic_version"
 )
@@ -32,6 +37,21 @@ _TABLES = ", ".join(
 @pytest.fixture(scope="session")
 def anyio_backend() -> str:
     return "asyncio"
+
+
+@pytest.fixture(autouse=True)
+async def _dispose_global_engine() -> AsyncIterator[None]:
+    """Сбрасывает общий движок после каждого теста.
+
+    Движок кэшируется на уровне модуля, а каждый тест получает свой цикл
+    событий. Без сброса соединения переживают закрытие цикла, и следующий
+    тест, который берёт сессию через session_scope (например, фоновая
+    задача), падает на «Event loop is closed».
+    """
+    yield
+    from ads_os.db.session import dispose_engine
+
+    await dispose_engine()
 
 
 @pytest.fixture

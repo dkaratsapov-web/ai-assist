@@ -10,6 +10,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Index, Numeric, String
@@ -58,4 +59,4 @@ class UsageEvent(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
 
     #: Провайдер, модель, назначение вызова. Персональные данные сюда не
     #: попадают: это метаданные учёта, а не копия запроса (v0.4 §2.3).
-    meta: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    meta: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)

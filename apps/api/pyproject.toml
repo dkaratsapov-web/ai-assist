@@ -14,6 +14,7 @@ dependencies = [
   "python-json-logger>=3.1",
   "httpx>=0.28",
   "selectolax>=0.3.21",
+  "celery[redis]>=5.4",
 ]
 
 [project.optional-dependencies]
@@ -56,3 +57,15 @@ ignore = ["RUF001", "RUF002", "RUF003"]  # кириллица в строках 
 python_version = "3.11"
 strict = true
 plugins = ["pydantic.mypy"]
+
+# Celery не поставляет типы. Ослабление точечное — на сам пакет, а не на наш код.
+[[tool.mypy.overrides]]
+module = ["celery.*"]
+ignore_missing_imports = true
+
+# Декораторы Celery не типизированы, поэтому строгий режим считает нетипизированной
+# и саму задачу. Проверка отключается только для модуля задач: подписи функций в
+# нём по-прежнему объявлены и читаются человеком.
+[[tool.mypy.overrides]]
+module = ["ads_os.worker.tasks.*"]
+disable_error_code = ["untyped-decorator"]

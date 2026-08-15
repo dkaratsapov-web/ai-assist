@@ -63,6 +63,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Последний аудит сайта */
+        get: operations["get_audit_api_v1_projects__project_id__audit_get"];
+        put?: never;
+        /** Запустить аудит сайта */
+        post: operations["start_audit_api_v1_projects__project_id__audit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/economics": {
         parameters: {
             query?: never;
@@ -86,6 +104,63 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AuditIssueRead
+         * @description Находка аудита.
+         *
+         *     Поле `action` обязательное: находка без понятного действия бесполезна.
+         */
+        AuditIssueRead: {
+            /** Action */
+            action: string;
+            /** Category */
+            category: string;
+            /** Severity */
+            severity: string;
+            /** Title */
+            title: string;
+        };
+        /** AuditRead */
+        AuditRead: {
+            /** Can Launch */
+            can_launch: boolean;
+            /** Categories */
+            categories: components["schemas"]["CategoryRead"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Error Reason */
+            error_reason: string | null;
+            /** Final Url */
+            final_url: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Issues */
+            issues: components["schemas"]["AuditIssueRead"][];
+            /** Metrica Counter */
+            metrica_counter: string | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            /** Score */
+            score: number | null;
+            /** Started At */
+            started_at: string | null;
+            status: components["schemas"]["ModuleStatus"];
+            /** Url */
+            url: string;
+            /** Verdict */
+            verdict: string | null;
+        };
+        /**
          * Availability
          * @description Насколько можно доверять значению.
          *
@@ -94,6 +169,18 @@ export interface components {
          * @enum {string}
          */
         Availability: "available" | "proxy" | "unavailable";
+        /**
+         * CategoryRead
+         * @description Оценка по одной категории аудита.
+         */
+        CategoryRead: {
+            /** Category */
+            category: string;
+            /** Findings */
+            findings?: string[];
+            /** Score */
+            score: number;
+        };
         /**
          * EconomicsMode
          * @description Полнота экономики (v0.4 §5).
@@ -228,6 +315,16 @@ export interface components {
             /** Value */
             value: string | null;
         };
+        /**
+         * ModuleStatus
+         * @description Состояние работы модуля (v0.3 §5).
+         *
+         *     Общее для всех долгих операций: аудита, сбора семантики, анализа
+         *     конкурентов. Интерфейс показывает их одинаково, поэтому и в базе они
+         *     называются одинаково.
+         * @enum {string}
+         */
+        ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -418,6 +515,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_audit_api_v1_projects__project_id__audit_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditRead"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_audit_api_v1_projects__project_id__audit_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditRead"];
                 };
             };
             /** @description Validation Error */

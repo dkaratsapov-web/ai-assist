@@ -1,6 +1,177 @@
 {
   "components": {
     "schemas": {
+      "AuditIssueRead": {
+        "description": "Находка аудита.\n\nПоле `action` обязательное: находка без понятного действия бесполезна.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category",
+          "severity",
+          "title",
+          "action"
+        ],
+        "title": "AuditIssueRead",
+        "type": "object"
+      },
+      "AuditRead": {
+        "properties": {
+          "can_launch": {
+            "title": "Can Launch",
+            "type": "boolean"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryRead"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Reason"
+          },
+          "final_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Url"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/AuditIssueRead"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "metrica_counter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metrica Counter"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ModuleStatus"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "required": [
+          "id",
+          "project_id",
+          "url",
+          "final_url",
+          "status",
+          "score",
+          "verdict",
+          "metrica_counter",
+          "error_reason",
+          "categories",
+          "issues",
+          "can_launch",
+          "started_at",
+          "finished_at",
+          "created_at"
+        ],
+        "title": "AuditRead",
+        "type": "object"
+      },
       "Availability": {
         "description": "Насколько можно доверять значению.\n\nСовпадает с состояниями карточки KPI в интерфейсе — одно и то же понятие не\nдолжно называться по-разному на разных концах системы.",
         "enum": [
@@ -10,6 +181,32 @@
         ],
         "title": "Availability",
         "type": "string"
+      },
+      "CategoryRead": {
+        "description": "Оценка по одной категории аудита.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "findings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "score": {
+            "title": "Score",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "category",
+          "score"
+        ],
+        "title": "CategoryRead",
+        "type": "object"
       },
       "EconomicsMode": {
         "description": "Полнота экономики (v0.4 §5).",
@@ -518,6 +715,19 @@
         "title": "MetricRead",
         "type": "object"
       },
+      "ModuleStatus": {
+        "description": "Состояние работы модуля (v0.3 §5).\n\nОбщее для всех долгих операций: аудита, сбора семантики, анализа\nконкурентов. Интерфейс показывает их одинаково, поэтому и в базе они\nназываются одинаково.",
+        "enum": [
+          "not_started",
+          "queued",
+          "running",
+          "needs_review",
+          "completed",
+          "failed"
+        ],
+        "title": "ModuleStatus",
+        "type": "string"
+      },
       "ProjectCreate": {
         "properties": {
           "name": {
@@ -1012,6 +1222,198 @@
         "summary": "Проект",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/audit": {
+      "get": {
+        "operationId": "get_audit_api_v1_projects__project_id__audit_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/AuditRead"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Audit Api V1 Projects  Project Id  Audit Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Последний аудит сайта",
+        "tags": [
+          "audit"
+        ]
+      },
+      "post": {
+        "operationId": "start_audit_api_v1_projects__project_id__audit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Запустить аудит сайта",
+        "tags": [
+          "audit"
         ]
       }
     },
