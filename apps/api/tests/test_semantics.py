@@ -7,12 +7,16 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from ads_os.services.morphology import fold_beglye, stem
 from ads_os.services.semantics import (
     Intent,
+    LandingPage,
     ParsedKeyword,
     classify,
     cluster,
+    match_landing,
     parse_list,
     suggest_minus_words,
 )
@@ -364,3 +368,45 @@ class TestСборкаГрупп:
         collected = [phrase for group in groups for phrase in group.phrases]
 
         assert len(collected) == len(set(collected)) == len(keywords)
+
+
+class TestПодборПосадочной:
+    """Реклама на нерелевантную страницу — оплаченный клик без заявки.
+
+    Мы сами называем это ошибкой в аудите, и делать её в собственных
+    объявлениях тем более незачем.
+    """
+
+    PAGES: ClassVar[list[LandingPage]] = [
+        LandingPage("https://x.ru/", "Пластиковые окна под ключ"),
+        LandingPage("https://x.ru/balkony", "Остекление балконов и лоджий"),
+        LandingPage("https://x.ru/remont", "Ремонт окон ПВХ"),
+    ]
+
+    def test_группа_ведёт_на_свою_страницу(self) -> None:
+        assert (
+            match_landing(("балкон", "остеклен"), self.PAGES, fallback="https://x.ru/")
+            == "https://x.ru/balkony"
+        )
+
+    def test_беглая_гласная_не_мешает_совпадению(self) -> None:
+        """В заголовке «Ремонт окон» основа «окон», а в ядре группы — «окн»."""
+        assert (
+            match_landing(("ремонт", "окн"), self.PAGES, fallback="https://x.ru/")
+            == "https://x.ru/remont"
+        )
+
+    def test_без_совпадения_остаётся_главная(self) -> None:
+        """На главной человек хотя бы попадает в понятное место."""
+        assert (
+            match_landing(("потолк", "натяжн"), self.PAGES, fallback="https://x.ru/")
+            == "https://x.ru/"
+        )
+
+    def test_страница_без_заголовка_не_участвует(self) -> None:
+        pages = [LandingPage("https://x.ru/tmp", None)]
+
+        assert match_landing(("окн",), pages, fallback="https://x.ru/") == "https://x.ru/"
+
+    def test_пустое_ядро_ведёт_на_главную(self) -> None:
+        assert match_landing((), self.PAGES, fallback="https://x.ru/") == "https://x.ru/"

@@ -159,3 +159,80 @@ class TestТекущийШаг:
         progress = evaluate(data)
         current = next(s for s in progress.steps if s.key is progress.current)
         assert progress.next_action == current.hint
+
+
+class TestСборкаКампании:
+    """Шаги «Стратегия» и «Сборка» перестали быть заглушками."""
+
+    def test_готовая_стратегия_закрывает_шаг(self) -> None:
+        progress = evaluate(
+            ProgressInput(
+                has_website=True,
+                audit_status="completed",
+                competitors_checked=2,
+                economics_mode=EconomicsMode.COMPLETE,
+                strategy_ready=True,
+            )
+        )
+
+        strategy = next(s for s in progress.steps if s.key is StepKey.STRATEGY)
+        assert strategy.state is StepState.COMPLETED
+
+    def test_без_фраз_сборка_ждёт_действия(self) -> None:
+        progress = evaluate(
+            ProgressInput(
+                has_website=True,
+                audit_status="completed",
+                competitors_checked=2,
+                economics_mode=EconomicsMode.COMPLETE,
+                strategy_ready=True,
+            )
+        )
+
+        build = next(s for s in progress.steps if s.key is StepKey.BUILD)
+        assert build.state is StepState.ACTIVE
+        assert build.hint is not None and "фраз" in build.hint
+
+    def test_фразы_без_объявлений_шаг_не_закрывают(self) -> None:
+        """Список фраз сам по себе — ещё не кампания."""
+        progress = evaluate(
+            ProgressInput(
+                has_website=True,
+                audit_status="completed",
+                competitors_checked=2,
+                economics_mode=EconomicsMode.COMPLETE,
+                strategy_ready=True,
+                keywords_count=120,
+                clusters_count=6,
+                ad_drafts_ready=0,
+            )
+        )
+
+        build = next(s for s in progress.steps if s.key is StepKey.BUILD)
+        assert build.state is StepState.ACTIVE
+        assert build.hint is not None and "Директа" in build.hint
+
+    def test_готовые_объявления_закрывают_сборку(self) -> None:
+        progress = evaluate(
+            ProgressInput(
+                has_website=True,
+                audit_status="completed",
+                competitors_checked=2,
+                economics_mode=EconomicsMode.COMPLETE,
+                strategy_ready=True,
+                keywords_count=120,
+                clusters_count=6,
+                ad_drafts_ready=6,
+            )
+        )
+
+        build = next(s for s in progress.steps if s.key is StepKey.BUILD)
+        assert build.state is StepState.COMPLETED
+
+    def test_без_стратегии_сборка_ждёт_её(self) -> None:
+        progress = evaluate(
+            ProgressInput(has_website=True, audit_status="completed", competitors_checked=1)
+        )
+
+        build = next(s for s in progress.steps if s.key is StepKey.BUILD)
+        assert build.state is StepState.WAITING

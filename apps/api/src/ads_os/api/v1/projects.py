@@ -8,10 +8,11 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, func, select
 
 from ...errors import ConflictError
-from ...models import Competitor, Project, ProjectEconomics, SiteAudit
+from ...models import Competitor, Keyword, Project, ProjectEconomics, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import changed_fields, record
+from ...services.ads import build_draft
 from ...services.economics import (
     Availability,
     EconomicsInput,
@@ -21,7 +22,8 @@ from ...services.economics import (
 )
 from ...services.progress import ProgressInput
 from ...services.progress import evaluate as evaluate_progress
-from ...services.strategy import StrategyInput, build_plan
+from ...services.semantics import Cluster, Intent, ParsedKeyword, cluster
+from ...services.strategy import PlanStatus, StrategyInput, build_plan
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
@@ -200,13 +202,40 @@ async def get_progress(
     economics = await _load_economics(session, ctx, project_id)
     audit = await _latest_audit(session, ctx, project_id)
 
+    summary = evaluate(_to_input(economics))
+    keywords = await _keywords_for_progress(session, ctx, project_id)
+    groups = cluster([ParsedKeyword(row.phrase, row.frequency) for row in keywords])
+    countable = [group for group in groups if group.core]
+
+    # План запуска существует ровно тогда, когда он не заблокирован. Отдельного
+    # действия у него нет: он выводится из экономики и аудита.
+    plan = build_plan(
+        StrategyInput(
+            economics_mode=summary.mode,
+            monthly_budget=economics.monthly_budget if economics else None,
+            monthly_conversions=summary.monthly_leads_capacity.value,
+            conversions_are_proxy=(
+                summary.monthly_leads_capacity.availability is Availability.PROXY
+            ),
+            site_can_launch=(
+                not _has_blocking_issues(audit)
+                if audit is not None and audit.status is ModuleStatus.COMPLETED
+                else None
+            ),
+        )
+    )
+
     progress = evaluate_progress(
         ProgressInput(
             has_website=bool(project.website_url),
             audit_status=audit.status.value if audit else None,
             audit_has_blocking_issues=_has_blocking_issues(audit),
             competitors_checked=await _count_checked_competitors(session, ctx, project_id),
-            economics_mode=evaluate(_to_input(economics)).mode,
+            economics_mode=summary.mode,
+            strategy_ready=plan.status is not PlanStatus.BLOCKED,
+            keywords_count=len(keywords),
+            clusters_count=len(countable),
+            ad_drafts_ready=await _ready_drafts(session, ctx, project, countable),
             # Рекламный кабинет до прохождения проверок безопасности не
             # подключается ни при каких условиях (v0.4 §2.1).
             ad_account_connected=False,
@@ -456,3 +485,57 @@ def _to_summary(summary: EconomicsSummary) -> EconomicsSummaryRead:
         projected_gross_profit=_metric(summary.projected_gross_profit),
     )
 
+
+
+async def _keywords_for_progress(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> list[Keyword]:
+    """Целевые и информационные фразы проекта.
+
+    Нецелевые не считаются: они существуют, чтобы по ним не показываться, и
+    учитывать их в прогрессе значило бы засчитывать за работу отсев.
+    """
+    stmt = (
+        select(Keyword)
+        .where(Keyword.organization_id == ctx.organization_id)
+        .where(Keyword.project_id == project_id)
+        .where(Keyword.intent != Intent.IRRELEVANT)
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def _ready_drafts(
+    session: SessionDep, ctx: TenantDep, project: Project, groups: list[Cluster]
+) -> int:
+    """Сколько черновиков объявлений проходит правила Директа.
+
+    Шаг «Сборка» закрывается по ним, а не по загруженным фразам: список фраз сам
+    по себе ещё не кампания, а объявление с превышенным лимитом не выйдет на
+    показы, сколько бы групп ни собралось.
+    """
+    if not groups:
+        return 0
+
+    audit = (
+        await session.execute(
+            select(SiteAudit)
+            .where(SiteAudit.organization_id == ctx.organization_id)
+            .where(SiteAudit.project_id == project.id)
+            .where(SiteAudit.status == ModuleStatus.COMPLETED)
+            .order_by(SiteAudit.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+
+    points = tuple(audit.selling_points or []) if audit else ()
+
+    return sum(
+        1
+        for group in groups
+        if build_draft(
+            cluster_name=group.name,
+            keywords=group.phrases,
+            selling_points=points,
+            region=project.primary_region,
+        ).is_ready
+    )

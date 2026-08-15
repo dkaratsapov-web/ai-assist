@@ -77,6 +77,11 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: соответствовать той версии, которую проверяли.
     selling_points: Mapped[list[str]] = mapped_column(JSONB, default=list, nullable=False)
 
+    #: Заголовок страницы. Нужен, чтобы сопоставить группу фраз с подходящей
+    #: посадочной: по адресу это делать нельзя — он часто на латинице, а фразы
+    #: на русском.
+    page_title: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
     #: Внутренние разделы сайта: пары «подпись, адрес». Из них собираются
     #: быстрые ссылки объявлений.
     internal_links: Mapped[list[list[str]]] = mapped_column(

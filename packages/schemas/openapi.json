@@ -178,6 +178,10 @@
             "title": "Keywords",
             "type": "array"
           },
+          "landing_url": {
+            "title": "Landing Url",
+            "type": "string"
+          },
           "sitelinks": {
             "items": {
               "$ref": "#/components/schemas/SitelinkRead"
@@ -214,6 +218,7 @@
         },
         "required": [
           "cluster",
+          "landing_url",
           "title",
           "title_2",
           "text",

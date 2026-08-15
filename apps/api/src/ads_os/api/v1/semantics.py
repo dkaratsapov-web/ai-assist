@@ -18,9 +18,11 @@ from ...services.export import ExportRow, file_name, to_csv
 from ...services.semantics import (
     INTENT_LABELS,
     Intent,
+    LandingPage,
     ParsedKeyword,
     classify,
     cluster,
+    match_landing,
     parse_list,
     suggest_minus_words,
 )
@@ -486,13 +488,19 @@ async def list_ad_drafts(
                 "собирать текст не из чего. Тексты придётся написать вручную."
             )
 
+    pages = await _landing_pages(session, ctx, project_id)
+    fallback = project.website_url or ""
+
     drafts = [
-        build_draft(
-            cluster_name=group.name,
-            keywords=group.phrases,
-            selling_points=points,
-            region=project.primary_region,
-            internal_links=links,
+        (
+            group,
+            build_draft(
+                cluster_name=group.name,
+                keywords=group.phrases,
+                selling_points=points,
+                region=project.primary_region,
+                internal_links=links,
+            ),
         )
         for group in groups
         # Остаток — это не группа под объявление, а фразы, которым не нашлось
@@ -504,6 +512,7 @@ async def list_ad_drafts(
         items=[
             AdDraftRead(
                 cluster=draft.cluster,
+                landing_url=match_landing(group.core, pages, fallback=fallback),
                 title=draft.title,
                 title_2=draft.title_2,
                 text=draft.text,
@@ -521,10 +530,10 @@ async def list_ad_drafts(
                 ],
                 is_ready=draft.is_ready,
             )
-            for draft in drafts
+            for group, draft in drafts
         ],
         total=len(drafts),
-        ready=sum(1 for draft in drafts if draft.is_ready),
+        ready=sum(1 for _, draft in drafts if draft.is_ready),
         source_note=note,
     )
 
@@ -555,7 +564,8 @@ async def export_campaign(
     points, links = await _page_content(session, ctx, project_id)
     minus = ", ".join(f"-{row.word}" for row in await _minus_word_rows(session, ctx, project_id))
 
-    url = project.website_url or ""
+    fallback = project.website_url or ""
+    pages = await _landing_pages(session, ctx, project_id)
     rows: list[ExportRow] = []
 
     for group in groups:
@@ -572,6 +582,7 @@ async def export_campaign(
             internal_links=links,
         )
         warnings = "; ".join(v.message for v in draft.violations)
+        landing = match_landing(group.core, pages, fallback=fallback)
 
         for phrase in group.phrases:
             rows.append(
@@ -582,7 +593,7 @@ async def export_campaign(
                     title=draft.title,
                     title_2=draft.title_2 or "",
                     text=draft.text,
-                    url=url,
+                    url=landing,
                     display_path=draft.display_path or "",
                     callouts=", ".join(draft.callouts),
                     sitelinks="; ".join(f"{link.title} → {link.url}" for link in draft.sitelinks),
@@ -605,6 +616,31 @@ async def export_campaign(
             )
         },
     )
+
+
+async def _landing_pages(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> list[LandingPage]:
+    """Проверенные страницы проекта с заголовками — для подбора посадочной."""
+    rows = list(
+        (
+            await session.execute(
+                select(SiteAudit)
+                .where(SiteAudit.organization_id == ctx.organization_id)
+                .where(SiteAudit.project_id == project_id)
+                .where(SiteAudit.status == ModuleStatus.COMPLETED)
+                .order_by(SiteAudit.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    latest: dict[str, SiteAudit] = {}
+    for row in rows:
+        latest.setdefault(row.url, row)
+
+    return [LandingPage(url=url, title=audit.page_title) for url, audit in latest.items()]
 
 
 async def _page_content(

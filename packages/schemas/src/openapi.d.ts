@@ -946,6 +946,8 @@ export interface components {
             is_ready: boolean;
             /** Keywords */
             keywords: string[];
+            /** Landing Url */
+            landing_url: string;
             /** Sitelinks */
             sitelinks: components["schemas"]["SitelinkRead"][];
             /** Text */

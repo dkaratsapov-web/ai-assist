@@ -180,9 +180,15 @@ function DraftCard({ draft }: { draft: AdDraftRead }) {
           {draft.title}
           {draft.title_2 && <span className="text-text-secondary"> — {draft.title_2}</span>}
         </p>
-        {draft.display_path && (
-          <p className="text-caption text-success">сайт.ру/{draft.display_path}</p>
-        )}
+        {/* Настоящий адрес посадочной показывается рядом с отображаемой
+            ссылкой: разные группы теперь ведут на разные страницы, и это надо
+            видеть до выгрузки, а не после запуска. */}
+        <p className="text-caption text-success break-all">
+          {draft.landing_url}
+          {draft.display_path && (
+            <span className="text-text-secondary"> · {draft.display_path}</span>
+          )}
+        </p>
         <p className="text-body-sm text-text-secondary mt-1">{draft.text || "текст не собран"}</p>
         {draft.callouts.length > 0 && (
           <p className="text-caption text-text-secondary mt-1">{draft.callouts.join(" · ")}</p>

@@ -83,6 +83,14 @@ class ProgressInput:
     #: Подключён ли рекламный кабинет. До проверок безопасности — всегда False
     #: (v0.4 §2.1).
     ad_account_connected: bool = False
+    #: Есть ли план запуска. Он выводится из экономики и аудита и существует,
+    #: как только оба готовы, — отдельного действия для него нет.
+    strategy_ready: bool = False
+    #: Сколько целевых фраз загружено и на сколько групп они разложены.
+    keywords_count: int = 0
+    clusters_count: int = 0
+    #: Сколько черновиков объявлений прошло проверку по правилам Директа.
+    ad_drafts_ready: int = 0
     has_campaigns: bool = False
     has_performance_data: bool = False
 
@@ -123,18 +131,16 @@ def evaluate(data: ProgressInput) -> Progress:
     # ведётся, но без оптимизации по продажам (v0.4 §5).
     steps.append(_economics(data))
 
-    # 4. Стратегия и далее — модули ещё не построены. Показывать их как
-    # «ожидает» честнее, чем прятать: пользователь видит весь путь целиком.
     blocked_reason = _launch_blocker(data)
 
-    steps.append(
-        _step(
-            StepKey.STRATEGY,
-            StepState.WAITING,
-            "Появится после того, как будут готовы исследование и экономика",
-        )
-    )
-    steps.append(_step(StepKey.BUILD, StepState.WAITING, "Требует стратегии"))
+    # 4. Стратегия запуска.
+    steps.append(_strategy(data))
+
+    # 5. Сборка: семантика, группы, объявления.
+    steps.append(_build(data))
+
+    # Дальше модули ещё не построены. Показывать их как «ожидает» честнее, чем
+    # прятать: пользователь видит весь путь целиком.
     steps.append(_step(StepKey.VALIDATE, StepState.WAITING, "Требует собранных кампаний"))
 
     steps.append(
@@ -215,6 +221,57 @@ def _economics(data: ProgressInput) -> Step:
         StepState.ACTIVE,
         "Укажите месячный бюджет и средний чек",
     )
+
+
+def _strategy(data: ProgressInput) -> Step:
+    """Шаг «Стратегия».
+
+    План запуска не требует отдельного действия: он выводится из экономики и
+    аудита. Поэтому шаг закрывается ровно тогда, когда план перестаёт быть
+    заблокированным, — придумывать пользователю лишнее нажатие незачем.
+    """
+    if data.strategy_ready:
+        return _step(StepKey.STRATEGY, StepState.COMPLETED)
+
+    return _step(
+        StepKey.STRATEGY,
+        StepState.WAITING,
+        "Появится после того, как будут готовы исследование и экономика",
+    )
+
+
+def _build(data: ProgressInput) -> Step:
+    """Шаг «Сборка»: семантика, группы, объявления.
+
+    Закрывается по объявлениям, а не по загруженным фразам. Список фраз сам по
+    себе — это ещё не кампания: пока из него не собраны группы и черновики,
+    собирать в Директе нечего.
+    """
+    if data.keywords_count == 0:
+        return _step(
+            StepKey.BUILD,
+            StepState.ACTIVE if data.strategy_ready else StepState.WAITING,
+            "Загрузите список фраз — система отсеет нецелевые и разложит по группам"
+            if data.strategy_ready
+            else "Требует стратегии",
+        )
+
+    if data.clusters_count == 0:
+        return _step(
+            StepKey.BUILD,
+            StepState.ACTIVE,
+            "Фразы загружены, но групп не собралось — проверьте, не отсеялись ли все",
+        )
+
+    if data.ad_drafts_ready == 0:
+        return _step(
+            StepKey.BUILD,
+            StepState.ACTIVE,
+            f"Групп собрано: {data.clusters_count}. Ни одно объявление пока не проходит "
+            "правила Директа — проверьте замечания",
+        )
+
+    return _step(StepKey.BUILD, StepState.COMPLETED)
 
 
 def _launch_blocker(data: ProgressInput) -> str | None:

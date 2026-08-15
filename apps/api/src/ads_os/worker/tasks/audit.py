@@ -124,6 +124,9 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         signals = collect_signals(fetched["html"])
         audit.features = {key.value: value for key, value in extract_features(signals).items()}
         audit.selling_points = list(signals.selling_points)
+        # Заголовок H1 предпочтительнее title: он описывает саму страницу, а
+        # title часто содержит хвост с названием компании и городом.
+        audit.page_title = (signals.h1[0] if signals.h1 else signals.title)[:300] or None
         audit.internal_links = [[text, href] for text, href in signals.internal_links]
 
         # Учёт ведётся по факту разбора, а не по факту постановки в очередь:

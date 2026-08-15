@@ -360,3 +360,58 @@ def _build(core: frozenset[str], items: list[ParsedKeyword]) -> Cluster:
         phrases=tuple(item.phrase for item in items),
         total_frequency=sum(item.frequency or 0 for item in items),
     )
+
+
+@dataclass(frozen=True, slots=True)
+class LandingPage:
+    """Проверенная страница сайта, на которую можно вести группу фраз."""
+
+    url: str
+    #: Заголовок страницы. По нему и происходит сопоставление: адрес обычно на
+    #: латинице, а фразы на русском, и сравнивать их нечем.
+    title: str | None = None
+
+
+def match_landing(core: tuple[str, ...], pages: list[LandingPage], *, fallback: str) -> str:
+    """Подбирает посадочную под группу фраз.
+
+    Ведёт по совпадению основ ядра группы с заголовком страницы. Реклама по
+    запросу «остекление балконов», приводящая на главную, — это оплаченный клик,
+    после которого человек ищет балконы сам. Мы сами называем это ошибкой в
+    аудите, и делать её в собственных объявлениях тем более незачем.
+
+    При отсутствии совпадения возвращается главная страница. Вести на случайную
+    подходящую «хоть немного» хуже, чем на главную: с главной человек хотя бы
+    попадает в понятное место.
+    """
+    if not core:
+        return fallback
+
+    # Беглая гласная сводится по ядру и заголовкам разом: «ремонт окон» в
+    # заголовке даёт основу «окон», а в ядре группы стоит «окн», и без свода
+    # страница «Ремонт окон» не находилась бы по группе про ремонт окон.
+    everything = list(core) + [
+        stem(word) for page in pages if page.title for word in tokenize(page.title)
+    ]
+    folding = fold_beglye(everything)
+    folded_core = {folding.get(item, item) for item in core}
+
+    best_url = fallback
+    best_score = 0
+
+    for page in pages:
+        if not page.title:
+            continue
+
+        title_stems = {
+            folding.get(stem(word), stem(word)) for word in tokenize(page.title)
+        }
+        score = len(folded_core & title_stems)
+
+        # Строгое «больше»: при равном совпадении остаётся первая найденная, а
+        # порядок страниц задан осмысленно — главная идёт первой.
+        if score > best_score:
+            best_score = score
+            best_url = page.url
+
+    return best_url

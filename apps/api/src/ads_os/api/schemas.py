@@ -673,6 +673,9 @@ class AdDraftRead(BaseModel):
     """
 
     cluster: str
+    #: Куда вести эту группу. Подбирается по совпадению темы группы с
+    #: заголовком проверенной страницы; при отсутствии совпадения — главная.
+    landing_url: str
     title: str
     title_2: str | None
     text: str
