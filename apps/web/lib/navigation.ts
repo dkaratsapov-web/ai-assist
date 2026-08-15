@@ -6,6 +6,7 @@ import {
   IconGlobe,
   IconHome,
   IconSettings,
+  IconTarget,
   IconUsers,
   type IconProps,
 } from "@ads-os/ui/icons";
@@ -57,6 +58,11 @@ export const globalNavigation: NavGroup[] = [
       { key: "competitors", label: "Конкуренты", href: "/competitors", icon: IconUsers },
       { key: "economics", label: "Экономика", href: "/economics", icon: IconChart },
     ],
+  },
+  {
+    key: "launch",
+    title: "Запуск",
+    items: [{ key: "strategy", label: "Стратегия запуска", href: "/strategy", icon: IconTarget }],
   },
   {
     key: "history",

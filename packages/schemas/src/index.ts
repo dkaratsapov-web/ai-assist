@@ -46,6 +46,9 @@ export type CompetitorList = Schemas["CompetitorList"];
 export type CompetitorCreate = Schemas["CompetitorCreate"];
 export type ComparisonRead = Schemas["ComparisonRead"];
 export type FeatureRowRead = Schemas["FeatureRowRead"];
+export type LaunchPlanRead = Schemas["LaunchPlanRead"];
+export type BidStrategy = Schemas["BidStrategy"];
+export type PlanStatus = Schemas["PlanStatus"];
 export type ActivityRead = Schemas["ActivityRead"];
 export type ActivityList = Schemas["ActivityList"];
 export type ActivityAction = Schemas["ActivityAction"];
@@ -249,6 +252,11 @@ export class ApiClient {
   /** Где находится проект по каноническому циклу и что делать дальше (v0.4 §3). */
   getProgress(projectId: string): Promise<ProgressRead> {
     return this.request<ProgressRead>(`/api/v1/projects/${projectId}/progress`);
+  }
+
+  /** План запуска. Считается на лету из экономики и аудита, не хранится. */
+  getStrategy(projectId: string): Promise<LaunchPlanRead> {
+    return this.request<LaunchPlanRead>(`/api/v1/projects/${projectId}/strategy`);
   }
 
   getEconomics(projectId: string): Promise<EconomicsResponse> {

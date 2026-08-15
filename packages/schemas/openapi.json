@@ -392,6 +392,17 @@
         "title": "Availability",
         "type": "string"
       },
+      "BidStrategy": {
+        "description": "Стратегия назначения ставок на старте.",
+        "enum": [
+          "manual",
+          "max_clicks",
+          "pay_per_conversion",
+          "max_conversions"
+        ],
+        "title": "BidStrategy",
+        "type": "string"
+      },
       "CategoryRead": {
         "description": "Оценка по одной категории аудита.",
         "properties": {
@@ -1146,6 +1157,126 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "LaunchPlanRead": {
+        "description": "План запуска: с какой стратегии начинать и сколько ждать выводов.\n\nРядом с каждым числом идёт объяснение, откуда оно взялось. План без\nобоснования специалист не может ни принять осознанно, ни оспорить — а\nоспорить он должен уметь, потому что отвечает за бюджет он, а не система.",
+        "properties": {
+          "advice": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Advice",
+            "type": "array"
+          },
+          "blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "learning_ready": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Ready"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PlanStatus"
+          },
+          "strategy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BidStrategy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "strategy_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Label"
+          },
+          "strategy_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strategy Reason"
+          },
+          "test_budget": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Budget"
+          },
+          "test_weeks": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Test Weeks"
+          },
+          "weekly_conversions": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Conversions"
+          }
+        },
+        "required": [
+          "project_id",
+          "status",
+          "blockers",
+          "strategy",
+          "strategy_label",
+          "strategy_reason",
+          "weekly_conversions",
+          "learning_ready",
+          "test_weeks",
+          "test_budget",
+          "advice"
+        ],
+        "title": "LaunchPlanRead",
+        "type": "object"
+      },
       "MainConversion": {
         "description": "Основная целевая конверсия проекта (v0.3 §13).",
         "enum": [
@@ -1469,6 +1600,16 @@
         ],
         "title": "PlanRead",
         "type": "object"
+      },
+      "PlanStatus": {
+        "description": "Можно ли запускаться.",
+        "enum": [
+          "ready",
+          "risky",
+          "blocked"
+        ],
+        "title": "PlanStatus",
+        "type": "string"
       },
       "ProgressRead": {
         "description": "Где находится проект и что делать дальше.\n\nСчитается на сервере, а не в интерфейсе: то же самое понадобится боту, и\nдва независимых расчёта неизбежно разошлись бы.",
@@ -4234,6 +4375,100 @@
           }
         },
         "summary": "Прогресс проекта по шагам",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/strategy": {
+      "get": {
+        "description": "Считает план запуска по экономике и результату аудита.\n\nНичего не сохраняет: план — это производная величина, ровно как метрики\nэкономики. Сохранённый план устарел бы в тот момент, когда поменяли бюджет,\nи начал бы спорить с экраном экономики.",
+        "operationId": "get_strategy_api_v1_projects__project_id__strategy_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LaunchPlanRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "План запуска: стратегия, срок теста, ограничения",
         "tags": [
           "projects"
         ]

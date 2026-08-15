@@ -17,7 +17,7 @@ import {
   StatusBadge,
   WorkflowStepper,
 } from "@ads-os/ui";
-import { IconChart, IconGlobe, IconUsers } from "@ads-os/ui/icons";
+import { IconChart, IconGlobe, IconTarget, IconUsers } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient } from "@/lib/api";
 import { toApiError } from "@/lib/errors";
@@ -28,6 +28,7 @@ const STEP_LINKS = {
   research: (id: string) => `/site-audit?project=${id}`,
   competitors: (id: string) => `/competitors?project=${id}`,
   economics: (id: string) => `/economics?project=${id}`,
+  strategy: (id: string) => `/strategy?project=${id}`,
 } as const;
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
@@ -196,7 +197,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             />
           </Card>
 
-          <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StepLink
               href={STEP_LINKS.research(project.id)}
               icon={<IconGlobe size={18} />}
@@ -215,11 +216,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
               title="Экономика"
               description={describe(progress, "economics")}
             />
+            <StepLink
+              href={STEP_LINKS.strategy(project.id)}
+              icon={<IconTarget size={18} />}
+              title="Стратегия запуска"
+              description="С какой стратегии ставок начинать и сколько ждать первых выводов"
+            />
           </section>
 
           <p className="text-caption text-text-secondary">
-            Пока открыты исследование и экономика. Остальные шаги видны в цепочке, чтобы был понятен
-            весь путь, и станут доступны по мере готовности.
+            Пока открыты исследование, экономика и план запуска. Остальные шаги видны в цепочке,
+            чтобы был понятен весь путь, и станут доступны по мере готовности.
           </p>
         </>
       )}

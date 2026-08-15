@@ -435,6 +435,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/strategy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * План запуска: стратегия, срок теста, ограничения
+         * @description Считает план запуска по экономике и результату аудита.
+         *
+         *     Ничего не сохраняет: план — это производная величина, ровно как метрики
+         *     экономики. Сохранённый план устарел бы в тот момент, когда поменяли бюджет,
+         *     и начал бы спорить с экраном экономики.
+         */
+        get: operations["get_strategy_api_v1_projects__project_id__strategy_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -593,6 +617,12 @@ export interface components {
          * @enum {string}
          */
         Availability: "available" | "proxy" | "unavailable";
+        /**
+         * BidStrategy
+         * @description Стратегия назначения ставок на старте.
+         * @enum {string}
+         */
+        BidStrategy: "manual" | "max_clicks" | "pay_per_conversion" | "max_conversions";
         /**
          * CategoryRead
          * @description Оценка по одной категории аудита.
@@ -827,6 +857,39 @@ export interface components {
             status: string;
         };
         /**
+         * LaunchPlanRead
+         * @description План запуска: с какой стратегии начинать и сколько ждать выводов.
+         *
+         *     Рядом с каждым числом идёт объяснение, откуда оно взялось. План без
+         *     обоснования специалист не может ни принять осознанно, ни оспорить — а
+         *     оспорить он должен уметь, потому что отвечает за бюджет он, а не система.
+         */
+        LaunchPlanRead: {
+            /** Advice */
+            advice: string[];
+            /** Blockers */
+            blockers: string[];
+            /** Learning Ready */
+            learning_ready: boolean | null;
+            /**
+             * Project Id
+             * Format: uuid
+             */
+            project_id: string;
+            status: components["schemas"]["PlanStatus"];
+            strategy: components["schemas"]["BidStrategy"] | null;
+            /** Strategy Label */
+            strategy_label: string | null;
+            /** Strategy Reason */
+            strategy_reason: string | null;
+            /** Test Budget */
+            test_budget: string | null;
+            /** Test Weeks */
+            test_weeks: number | null;
+            /** Weekly Conversions */
+            weekly_conversions: string | null;
+        };
+        /**
          * MainConversion
          * @description Основная целевая конверсия проекта (v0.3 §13).
          * @enum {string}
@@ -974,6 +1037,12 @@ export interface components {
             /** Retention Days */
             retention_days: number;
         };
+        /**
+         * PlanStatus
+         * @description Можно ли запускаться.
+         * @enum {string}
+         */
+        PlanStatus: "ready" | "risky" | "blocked";
         /**
          * ProgressRead
          * @description Где находится проект и что делать дальше.
@@ -2090,6 +2159,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProgressRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_strategy_api_v1_projects__project_id__strategy_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LaunchPlanRead"];
                 };
             };
             /** @description Validation Error */

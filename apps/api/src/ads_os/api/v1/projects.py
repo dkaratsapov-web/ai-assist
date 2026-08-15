@@ -13,6 +13,7 @@ from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import changed_fields, record
 from ...services.economics import (
+    Availability,
     EconomicsInput,
     EconomicsSummary,
     Metric,
@@ -20,12 +21,14 @@ from ...services.economics import (
 )
 from ...services.progress import ProgressInput
 from ...services.progress import evaluate as evaluate_progress
+from ...services.strategy import StrategyInput, build_plan
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
     EconomicsResponse,
     EconomicsSummaryRead,
     EconomicsUpdate,
+    LaunchPlanRead,
     MetricRead,
     ProgressRead,
     ProjectCreate,
@@ -345,6 +348,61 @@ async def update_economics(
         project_id=project_id,
         input=economics,
         summary=_to_summary(summary),
+    )
+
+
+@router.get(
+    "/{project_id}/strategy",
+    response_model=LaunchPlanRead,
+    summary="План запуска: стратегия, срок теста, ограничения",
+)
+async def get_strategy(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> LaunchPlanRead:
+    """Считает план запуска по экономике и результату аудита.
+
+    Ничего не сохраняет: план — это производная величина, ровно как метрики
+    экономики. Сохранённый план устарел бы в тот момент, когда поменяли бюджет,
+    и начал бы спорить с экраном экономики.
+    """
+    repo = ProjectRepository(session, ctx)
+    await repo.get_or_404(project_id)
+
+    economics = await _load_economics(session, ctx, project_id)
+    summary = evaluate(_to_input(economics))
+
+    audit = await _latest_audit(session, ctx, project_id)
+    # Незавершённый аудит не считается ни успешным, ни провальным: его вывода
+    # ещё нет, и подставлять вместо него «сайт в порядке» нельзя.
+    site_can_launch = (
+        not _has_blocking_issues(audit)
+        if audit is not None and audit.status is ModuleStatus.COMPLETED
+        else None
+    )
+
+    capacity = summary.monthly_leads_capacity
+    plan = build_plan(
+        StrategyInput(
+            economics_mode=summary.mode,
+            monthly_budget=economics.monthly_budget if economics else None,
+            monthly_conversions=capacity.value,
+            conversions_are_proxy=capacity.availability is Availability.PROXY,
+            site_can_launch=site_can_launch,
+        )
+    )
+
+    return LaunchPlanRead(
+        project_id=project_id,
+        status=plan.status,
+        blockers=list(plan.blockers),
+        strategy=plan.strategy,
+        strategy_label=plan.strategy_label,
+        strategy_reason=plan.strategy_reason,
+        weekly_conversions=plan.weekly_conversions,
+        learning_ready=plan.learning_ready,
+        test_weeks=plan.test_weeks,
+        test_budget=plan.test_budget,
+        advice=list(plan.advice),
     )
 
 

@@ -300,3 +300,80 @@ class TestПроекты:
         # У соседней организации список пуст.
         theirs = await client.get("/api/v1/projects", headers=headers(*actors[1]))
         assert theirs.json()["total"] == 0
+
+
+class TestПланЗапуска:
+    """План строится на тех же цифрах, что показывает экран экономики."""
+
+    async def test_пустой_проект_план_не_даёт(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        actors: tuple[tuple[Organization, User], tuple[Organization, User]],
+    ) -> None:
+        (org_a, user_a), _ = actors
+        project = await make_project(session, org_a, "Проект")
+        await session.commit()
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/strategy", headers=headers(org_a, user_a)
+            )
+        ).json()
+
+        assert body["status"] == "blocked"
+        assert body["strategy"] is None
+        assert body["blockers"]
+
+    async def test_план_считается_по_экономике(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        actors: tuple[tuple[Organization, User], tuple[Organization, User]],
+    ) -> None:
+        (org_a, user_a), _ = actors
+        project = await make_project(session, org_a, "Проект")
+        await session.commit()
+
+        await client.put(
+            f"/api/v1/projects/{project.id}/economics",
+            json={
+                "monthly_budget": "150000",
+                "average_order_value": "6000",
+                "main_conversion": "lead",
+                "margin_percent": "45",
+                "lead_to_sale_rate": "0.2",
+                # Цену лида задаём явно, иначе она вывелась бы из допущения и
+                # весь план получил бы пометку «приблизительно».
+                "target_cpl": "500",
+            },
+            headers=headers(org_a, user_a),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/strategy", headers=headers(org_a, user_a)
+            )
+        ).json()
+
+        # 150 000 / 500 = 300 заявок в месяц ≈ 69 в неделю.
+        assert body["strategy"] == "max_conversions"
+        assert body["learning_ready"] is True
+        assert body["test_weeks"] == 1
+        assert body["strategy_reason"]
+
+    async def test_чужой_план_недоступен(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        actors: tuple[tuple[Organization, User], tuple[Organization, User]],
+    ) -> None:
+        (org_a, _), (org_b, user_b) = actors
+        project = await make_project(session, org_a, "Чужой проект")
+        await session.commit()
+
+        response = await client.get(
+            f"/api/v1/projects/{project.id}/strategy", headers=headers(org_b, user_b)
+        )
+
+        assert response.status_code == 404

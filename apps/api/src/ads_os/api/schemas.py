@@ -20,6 +20,7 @@ from ..models.project import MainConversion, ProjectStatus
 from ..services.competitors import FeatureKey
 from ..services.economics import Availability, EconomicsMode
 from ..services.progress import StepKey, StepState
+from ..services.strategy import BidStrategy, PlanStatus
 
 
 class ProjectCreate(BaseModel):
@@ -462,3 +463,30 @@ class AuditRead(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
+
+
+class LaunchPlanRead(BaseModel):
+    """План запуска: с какой стратегии начинать и сколько ждать выводов.
+
+    Рядом с каждым числом идёт объяснение, откуда оно взялось. План без
+    обоснования специалист не может ни принять осознанно, ни оспорить — а
+    оспорить он должен уметь, потому что отвечает за бюджет он, а не система.
+    """
+
+    project_id: uuid.UUID
+    status: PlanStatus
+    #: Что мешает стартовать прямо сейчас. Пусто, если ничего не мешает.
+    blockers: list[str]
+    strategy: BidStrategy | None
+    #: Название стратегии словами, как в интерфейсе Директа.
+    strategy_label: str | None
+    strategy_reason: str | None
+    #: Ожидаемое число заявок в неделю при текущем бюджете и цене заявки.
+    weekly_conversions: Decimal | None
+    #: Хватает ли потока, чтобы автостратегия обучилась.
+    learning_ready: bool | None
+    #: Через сколько недель накопится статистика для выводов. `null` означает,
+    #: что при таком объёме ждать пришлось бы неразумно долго.
+    test_weeks: int | None
+    test_budget: Decimal | None
+    advice: list[str]

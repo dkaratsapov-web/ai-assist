@@ -6,6 +6,7 @@ import type {
   AuditRead,
   ComparisonRead,
   EconomicsResponse,
+  LaunchPlanRead,
   ProgressRead,
   ProjectRead,
 } from "@ads-os/schemas";
@@ -49,6 +50,7 @@ interface Report {
   audit: AuditRead | null;
   comparison: ComparisonRead | null;
   economics: EconomicsResponse | null;
+  plan: LaunchPlanRead | null;
 }
 
 /**
@@ -79,15 +81,16 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         // Разделы отчёта независимы: если конкурентов не добавляли, а экономику
         // не заполняли, отчёт всё равно должен собраться — просто без этих
         // разделов. Поэтому каждый запрос гасит свою ошибку сам.
-        const [progress, audit, comparison, economics] = await Promise.all([
+        const [progress, audit, comparison, economics, plan] = await Promise.all([
           api.getProgress(id).catch(() => null),
           api.getAudit(id).catch(() => null),
           api.getComparison(id).catch(() => null),
           api.getEconomics(id).catch(() => null),
+          api.getStrategy(id).catch(() => null),
         ]);
 
         if (ignore) return;
-        setReport({ project, progress, audit, comparison, economics });
+        setReport({ project, progress, audit, comparison, economics, plan });
       } catch (err) {
         if (!ignore) setError(toApiError(err));
       }
@@ -115,7 +118,7 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
     );
   }
 
-  const { project, progress, audit, comparison, economics } = report;
+  const { project, progress, audit, comparison, economics, plan } = report;
   const gaps = (comparison?.rows ?? []).filter((row) => row.is_gap);
 
   return (
@@ -251,6 +254,55 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
               metric={economics.summary.projected_gross_profit}
             />
           </ul>
+        </Section>
+      )}
+
+      {plan && (
+        <Section title="План запуска">
+          {plan.blockers.length > 0 ? (
+            <ul className="flex flex-col gap-1">
+              {plan.blockers.map((blocker) => (
+                <li key={blocker} className="text-body-sm">
+                  {blocker}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
+              {plan.strategy_label && (
+                <p className="text-body-sm mb-1">
+                  Стратегия на старте: <strong>{plan.strategy_label}</strong>
+                </p>
+              )}
+              <p className="text-body-sm text-text-secondary mb-2">{plan.strategy_reason}</p>
+              <ul className="flex flex-col gap-1">
+                {plan.weekly_conversions !== null && (
+                  <li className="text-body-sm flex justify-between gap-3">
+                    <span>Заявок в неделю</span>
+                    <span className="text-text-secondary shrink-0 tabular-nums">
+                      {plan.weekly_conversions}
+                    </span>
+                  </li>
+                )}
+                <li className="text-body-sm flex justify-between gap-3">
+                  <span>До первых выводов</span>
+                  <span className="text-text-secondary shrink-0 tabular-nums">
+                    {plan.test_weeks !== null
+                      ? `${plan.test_weeks} нед.`
+                      : "объёма мало, ждать пришлось бы слишком долго"}
+                  </span>
+                </li>
+                {plan.test_budget !== null && (
+                  <li className="text-body-sm flex justify-between gap-3">
+                    <span>Бюджет теста</span>
+                    <span className="text-text-secondary shrink-0 tabular-nums">
+                      {plan.test_budget} ₽
+                    </span>
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
         </Section>
       )}
 
