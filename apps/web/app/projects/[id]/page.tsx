@@ -127,6 +127,15 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       actions={
         project ? (
           <span className="flex items-center gap-2">
+            {/* Отчёт открывается в новой вкладке: это отдельная страница под
+                печать, и возвращаться из неё «назад» к проекту неудобно. */}
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => window.open(`/projects/${project.id}/report`, "_blank")}
+            >
+              Отчёт
+            </Button>
             <Button size="sm" variant="secondary" onClick={openEditor}>
               Изменить
             </Button>
