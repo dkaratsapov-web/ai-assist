@@ -19,6 +19,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: "ADS OS",
   description: "Операционная система для специалиста по контекстной рекламе",
+  icons: { icon: "/favicon.svg" },
 };
 
 export const viewport: Viewport = {

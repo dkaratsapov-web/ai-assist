@@ -12,8 +12,14 @@ WORKDIR /build
 
 # Зависимости ставятся отдельным слоем: правка кода не приводит к их
 # переустановке при каждой сборке.
+#
+# Пустой пакет-заглушка нужен, чтобы сборка метаданных вообще состоялась:
+# pyproject объявляет пакеты в каталоге src, и без него `pip install .` падает
+# на «Getting requirements to build wheel». Настоящий код копируется следующим
+# слоем и ставится поверх без переустановки зависимостей.
 COPY pyproject.toml ./
-RUN python -m venv /opt/venv \
+RUN mkdir -p src/ads_os && touch src/ads_os/__init__.py \
+    && python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
     && /opt/venv/bin/pip install .
 

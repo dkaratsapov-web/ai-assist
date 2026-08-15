@@ -23,7 +23,6 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/tokens/package.json ./packages/tokens/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/schemas/package.json ./packages/schemas/
-COPY packages/shared/package.json* ./packages/shared/
 
 RUN pnpm install --frozen-lockfile
 
@@ -33,12 +32,10 @@ COPY apps/web ./apps/web
 
 # Значения NEXT_PUBLIC_* попадают в браузерный бандл на этапе сборки, поэтому
 # передаются аргументами. Секретов среди них нет и быть не должно.
+# Пустое значение означает относительные пути: браузер обращается к тому же
+# домену, запросы проксирует Caddy.
 ARG NEXT_PUBLIC_API_URL=""
-ARG NEXT_PUBLIC_DEMO_ORG_ID=""
-ARG NEXT_PUBLIC_DEMO_USER_ID=""
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
-    NEXT_PUBLIC_DEMO_ORG_ID=$NEXT_PUBLIC_DEMO_ORG_ID \
-    NEXT_PUBLIC_DEMO_USER_ID=$NEXT_PUBLIC_DEMO_USER_ID
+ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 
 RUN pnpm --filter @ads-os/tokens build \
     && pnpm --filter @ads-os/web build
