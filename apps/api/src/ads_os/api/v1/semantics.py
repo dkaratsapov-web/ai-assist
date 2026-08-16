@@ -13,7 +13,7 @@ from ...models import Keyword, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import record
-from ...services.ads import build_draft
+from ...services.ads import build_variants
 from ...services.export import ExportRow, file_name, to_csv
 from ...services.semantics import (
     INTENT_LABELS,
@@ -502,17 +502,15 @@ async def list_ad_drafts(
     fallback = project.website_url or ""
 
     drafts = [
-        (
-            group,
-            build_draft(
-                cluster_name=group.name,
-                keywords=group.phrases,
-                selling_points=points,
-                region=project.primary_region,
-                internal_links=links,
-            ),
-        )
+        (group, variant)
         for group in groups
+        for variant in build_variants(
+            cluster_name=group.name,
+            keywords=group.phrases,
+            selling_points=points,
+            region=project.primary_region,
+            internal_links=links,
+        )
         # Остаток — это не группа под объявление, а фразы, которым не нашлось
         # места. Собирать по ним объявление значило бы делать вид, что оно есть.
         if group.core
@@ -584,33 +582,39 @@ async def export_campaign(
             # в Директе появилась бы группа без осмысленного объявления.
             continue
 
-        draft = build_draft(
+        landing = match_landing(group.core, pages, fallback=fallback)
+        variants = build_variants(
             cluster_name=group.name,
             keywords=group.phrases,
             selling_points=points,
             region=project.primary_region,
             internal_links=links,
         )
-        warnings = "; ".join(v.message for v in draft.violations)
-        landing = match_landing(group.core, pages, fallback=fallback)
 
-        for phrase in group.phrases:
-            rows.append(
-                ExportRow(
-                    campaign=project.name,
-                    group=group.name,
-                    phrase=phrase,
-                    title=draft.title,
-                    title_2=draft.title_2 or "",
-                    text=draft.text,
-                    url=landing,
-                    display_path=draft.display_path or "",
-                    callouts=", ".join(draft.callouts),
-                    sitelinks="; ".join(f"{link.title} → {link.url}" for link in draft.sitelinks),
-                    minus_words=minus,
-                    warnings=warnings,
+        # Строка на пару «фраза × вариант»: Коммандер ждёт именно такую
+        # таблицу, а объявления группы должны стоять рядом с её фразами.
+        for index, draft in enumerate(variants, start=1):
+            warnings = "; ".join(v.message for v in draft.violations)
+            for phrase in group.phrases:
+                rows.append(
+                    ExportRow(
+                        campaign=project.name,
+                        group=group.name,
+                        variant=str(index),
+                        phrase=phrase,
+                        title=draft.title,
+                        title_2=draft.title_2 or "",
+                        text=draft.text,
+                        url=landing,
+                        display_path=draft.display_path or "",
+                        callouts=", ".join(draft.callouts),
+                        sitelinks="; ".join(
+                            f"{link.title} → {link.url}" for link in draft.sitelinks
+                        ),
+                        minus_words=minus,
+                        warnings=warnings,
+                    )
                 )
-            )
 
     body = to_csv(rows)
     name = file_name(project.name)

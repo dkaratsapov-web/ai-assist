@@ -284,6 +284,71 @@ def _trim_words(text: str, limit: int) -> str:
     return " ".join(result) if result else text[:limit]
 
 
+#: Сколько черновиков готовить на группу. Директу для сравнения нужно минимум
+#: два: с одним объявлением тестировать нечего, а автостратегии не на чем
+#: учиться. Больше трёх — это уже дробление показов между вариантами, каждый из
+#: которых собирает статистику втрое дольше.
+DRAFTS_PER_GROUP = 3
+
+
+def build_variants(
+    *,
+    cluster_name: str,
+    keywords: tuple[str, ...],
+    selling_points: tuple[str, ...],
+    region: str | None = None,
+    internal_links: tuple[tuple[str, str], ...] = (),
+) -> tuple[AdDraft, ...]:
+    """Собирает несколько черновиков на одну группу.
+
+    Варианты отличаются вторым заголовком и порядком фрагментов в тексте: это
+    ровно то, что имеет смысл сравнивать. Менять между вариантами первый
+    заголовок нельзя — он повторяет ключевую фразу, и подмена его убила бы
+    релевантность, ради которой он таким и сделан.
+
+    Если фрагментов на странице мало, вариантов будет меньше трёх. Это честнее,
+    чем собрать три почти одинаковых объявления: тест между ними ничего не
+    покажет, а специалист потратит на него недели.
+    """
+    if not selling_points:
+        return (
+            build_draft(
+                cluster_name=cluster_name,
+                keywords=keywords,
+                selling_points=(),
+                region=region,
+                internal_links=internal_links,
+            ),
+        )
+
+    variants: list[AdDraft] = []
+    seen: set[tuple[str | None, str]] = set()
+
+    for shift in range(min(DRAFTS_PER_GROUP, len(selling_points))):
+        # Сдвиг переставляет фрагменты по кругу: во втором заголовке оказывается
+        # следующий, а текст начинается с него же.
+        rotated = selling_points[shift:] + selling_points[:shift]
+
+        draft = build_draft(
+            cluster_name=cluster_name,
+            keywords=keywords,
+            selling_points=rotated,
+            region=region,
+            internal_links=internal_links,
+        )
+
+        key = (draft.title_2, draft.text)
+        if key in seen:
+            # Совпавший вариант не добавляется: два одинаковых объявления в
+            # группе — это не тест, а разделённые пополам показы.
+            continue
+
+        seen.add(key)
+        variants.append(draft)
+
+    return tuple(variants)
+
+
 def _sitelinks(links: tuple[tuple[str, str], ...], *, exclude: str) -> tuple[Sitelink, ...]:
     """Отбирает быстрые ссылки для объявления.
 

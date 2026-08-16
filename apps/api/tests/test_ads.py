@@ -14,6 +14,7 @@ from ads_os.services.ads import (
     MAX_TITLE_2,
     Problem,
     build_draft,
+    build_variants,
 )
 
 POINTS = ("Замер бесплатно", "Окно от 12 900 ₽", "Гарантия 5 лет", "11 лет на рынке")
@@ -176,3 +177,54 @@ class TestБыстрыеСсылки:
 
         assert result.sitelinks == ()
         assert result.is_ready
+
+
+class TestВариантыОбъявлений:
+    """Директу для сравнения нужно минимум два объявления в группе.
+
+    С одним тестировать нечего, а автостратегии не на чем учиться.
+    """
+
+    def test_собирается_несколько_вариантов(self) -> None:
+        variants = build_variants(
+            cluster_name="пластиковые окна тверь",
+            keywords=("пластиковые окна тверь",),
+            selling_points=POINTS,
+            region="Тверь",
+        )
+
+        assert len(variants) == 3
+
+    def test_первый_заголовок_у_всех_одинаковый(self) -> None:
+        """Он повторяет ключевую фразу — ради этого он таким и сделан."""
+        variants = build_variants(
+            cluster_name="пластиковые окна тверь",
+            keywords=("пластиковые окна тверь",),
+            selling_points=POINTS,
+        )
+
+        assert len({v.title for v in variants}) == 1
+
+    def test_варианты_отличаются_тем_что_стоит_сравнивать(self) -> None:
+        variants = build_variants(
+            cluster_name="пластиковые окна тверь",
+            keywords=("пластиковые окна тверь",),
+            selling_points=POINTS,
+        )
+
+        assert len({v.title_2 for v in variants}) == len(variants)
+        assert len({v.text for v in variants}) == len(variants)
+
+    def test_одинаковые_варианты_не_плодятся(self) -> None:
+        """Два одинаковых объявления — это не тест, а разделённые пополам показы."""
+        variants = build_variants(
+            cluster_name="окна", keywords=("окна",), selling_points=("Замер бесплатно",)
+        )
+
+        assert len(variants) == 1
+
+    def test_без_фрагментов_остаётся_один_черновик(self) -> None:
+        variants = build_variants(cluster_name="окна", keywords=("окна",), selling_points=())
+
+        assert len(variants) == 1
+        assert variants[0].text == ""

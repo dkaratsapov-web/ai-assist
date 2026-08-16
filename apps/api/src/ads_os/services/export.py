@@ -24,6 +24,7 @@ BOM = "﻿"
 COLUMNS = (
     "Кампания",
     "Группа",
+    "Вариант",
     "Ключевая фраза",
     "Заголовок 1",
     "Заголовок 2",
@@ -43,6 +44,8 @@ class ExportRow:
 
     campaign: str
     group: str
+    #: Номер варианта объявления. Директу для сравнения нужно минимум два.
+    variant: str
     phrase: str
     title: str
     title_2: str
@@ -73,6 +76,7 @@ def to_csv(rows: list[ExportRow]) -> str:
             [
                 row.campaign,
                 row.group,
+                row.variant,
                 row.phrase,
                 row.title,
                 row.title_2,

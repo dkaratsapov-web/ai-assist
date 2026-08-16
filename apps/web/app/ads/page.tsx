@@ -141,9 +141,10 @@ function AdsScreen() {
             <>
               <Card>
                 <p className="text-body-sm text-text-secondary">
-                  Черновиков: {drafts.length}, без замечаний: {ready}. Текст собран из фрагментов
-                  вашей страницы — итоговый пишете вы, система проверяет лимиты и слова, из-за
-                  которых приходит отказ.
+                  Черновиков: {drafts.length}, без замечаний: {ready}. На каждую группу их несколько
+                  — Директу для сравнения нужно минимум два, с одним тестировать нечего. Текст
+                  собран из фрагментов вашей страницы — итоговый пишете вы, система проверяет лимиты
+                  и слова, из-за которых приходит отказ.
                 </p>
                 <p className="text-caption text-text-secondary mt-2">
                   Кнопка «Выгрузить кампанию» отдаёт файл со всей структурой: группы, фразы,
@@ -152,8 +153,8 @@ function AdsScreen() {
                 </p>
               </Card>
 
-              {drafts.map((draft) => (
-                <DraftCard key={draft.cluster} draft={draft} />
+              {drafts.map((draft, index) => (
+                <DraftCard key={`${draft.cluster}-${index}`} draft={draft} />
               ))}
             </>
           )}
