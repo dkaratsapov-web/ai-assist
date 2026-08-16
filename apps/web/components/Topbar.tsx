@@ -2,7 +2,8 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { IconButton, SearchInput, cn } from "@ads-os/ui";
+import { IconButton, cn } from "@ads-os/ui";
+import { GlobalSearch } from "./GlobalSearch";
 import { UserMenu } from "./UserMenu";
 import { IconBell, IconHelp, IconMenu } from "@ads-os/ui/icons";
 
@@ -63,11 +64,7 @@ export function Topbar({
       {/* Ширина задана явно, а не через flex-1: два растягивающихся соседа
           делят место непредсказуемо, и поле схлопывалось до иконок. */}
       <div className="hidden shrink-0 md:block md:w-56 lg:w-72 xl:w-96">
-        <SearchInput
-          placeholder="Поиск по проектам, кампаниям, ключевым словам…"
-          shortcut="⌘K"
-          aria-label="Поиск по проектам, кампаниям и ключевым словам"
-        />
+        <GlobalSearch />
       </div>
 
       <div className="flex shrink-0 items-center gap-1.5">

@@ -790,3 +790,28 @@ class ApplySetResult(BaseModel):
     #: Сколько слов уже были в проекте. Показывается отдельно: «добавлено 0»
     #: без этого числа читается как сбой, хотя означает «всё уже на месте».
     already_present: int
+
+
+class SearchProjectRead(BaseModel):
+    id: uuid.UUID
+    name: str
+    status: ProjectStatus
+
+
+class SearchKeywordRead(BaseModel):
+    """Найденная фраза вместе с проектом.
+
+    Без указания проекта фраза не отвечает ни на один вопрос: «остекление
+    балконов» есть у половины клиентов.
+    """
+
+    phrase: str
+    frequency: int | None
+    intent: Intent
+    project_id: uuid.UUID
+    project_name: str
+
+
+class SearchResult(BaseModel):
+    projects: list[SearchProjectRead]
+    keywords: list[SearchKeywordRead]

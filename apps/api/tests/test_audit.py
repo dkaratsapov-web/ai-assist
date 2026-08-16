@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from ads_os.services.audit import (
     BLOCKING_ISSUE_KEYS,
     Category,
@@ -336,3 +338,47 @@ class TestБлокирующиеПроверки:
                             f"{issue.key}: в списке блокирующих {blocking}, "
                             f"а severity критический {critical}"
                         )
+
+
+class TestСтраницаНаСкриптах:
+    """Сайт на React виден нам пустым каркасом.
+
+    Поставить ему 20 из 100 значило бы обвинить его в том, чего мы просто не
+    разглядели, — и человек справедливо решит, что проверка врёт.
+    """
+
+    SPA: ClassVar[str] = (
+        "<html><head><title>Магазин</title>"
+        "<script src=a.js></script><script src=b.js></script><script src=c.js></script>"
+        "</head><body><div id=root></div></body></html>"
+    )
+
+    def test_страница_на_скриптах_распознаётся(self) -> None:
+        result = audit_page("https://example.com/", self.SPA)
+
+        assert IssueKey.JS_RENDERED in {issue.key for issue in result.issues}
+
+    def test_обычная_страница_не_попадает_под_правило(self) -> None:
+        result = audit_page("https://example.com/", GOOD_PAGE)
+
+        assert IssueKey.JS_RENDERED not in {issue.key for issue in result.issues}
+
+    def test_короткая_страница_без_скриптов_не_попадает(self) -> None:
+        """По одному признаку судить нельзя: короткая страница бывает обычной."""
+        result = audit_page("https://example.com/", BARE_PAGE)
+
+        assert IssueKey.JS_RENDERED not in {issue.key for issue in result.issues}
+
+    def test_запуск_не_запрещается(self) -> None:
+        """Это оговорка к проверке, а не приговор сайту."""
+        html = self.SPA.replace("<div id=root></div>", "<div id=root></div>")
+        result = audit_page("https://example.com/", html)
+
+        js = next(i for i in result.issues if i.key is IssueKey.JS_RENDERED)
+        assert js.severity is Severity.WARNING
+
+    def test_объясняется_что_делать(self) -> None:
+        result = audit_page("https://example.com/", self.SPA)
+        js = next(i for i in result.issues if i.key is IssueKey.JS_RENDERED)
+
+        assert "ниже реальной" in js.action

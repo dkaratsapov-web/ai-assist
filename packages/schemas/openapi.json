@@ -2991,6 +2991,94 @@
         "title": "ProjectUpdate",
         "type": "object"
       },
+      "SearchKeywordRead": {
+        "description": "Найденная фраза вместе с проектом.\n\nБез указания проекта фраза не отвечает ни на один вопрос: «остекление\nбалконов» есть у половины клиентов.",
+        "properties": {
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          },
+          "intent": {
+            "$ref": "#/components/schemas/Intent"
+          },
+          "phrase": {
+            "title": "Phrase",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "phrase",
+          "frequency",
+          "intent",
+          "project_id",
+          "project_name"
+        ],
+        "title": "SearchKeywordRead",
+        "type": "object"
+      },
+      "SearchProjectRead": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ProjectStatus"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status"
+        ],
+        "title": "SearchProjectRead",
+        "type": "object"
+      },
+      "SearchResult": {
+        "properties": {
+          "keywords": {
+            "items": {
+              "$ref": "#/components/schemas/SearchKeywordRead"
+            },
+            "title": "Keywords",
+            "type": "array"
+          },
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/SearchProjectRead"
+            },
+            "title": "Projects",
+            "type": "array"
+          }
+        },
+        "required": [
+          "projects",
+          "keywords"
+        ],
+        "title": "SearchResult",
+        "type": "object"
+      },
       "SessionList": {
         "properties": {
           "items": {
@@ -7528,6 +7616,113 @@
         "summary": "План запуска: стратегия, срок теста, ограничения",
         "tags": [
           "projects"
+        ]
+      }
+    },
+    "/api/v1/search": {
+      "get": {
+        "description": "Ищет по названиям проектов и по ключевым фразам.\n\nПоиск подстрочный, без морфологии. Для проектов и фраз этого достаточно:\nчеловек ищет то, что сам вводил, и помнит написание. Приводить запрос к\nосновам здесь значило бы находить «ремонту» по запросу «ремонт» ценой того,\nчто точное совпадение перестанет быть первым.\n\nНазвания проектов сравниваются в Python, а не запросом к базе. Причина\nнеочевидная и стоила бы молчаливо неработающего поиска: `lower()` в\nPostgreSQL при локали C не понижает регистр кириллицы — «Окна» остаётся\n«Окна», и поиск по-русски не находит ничего. Локаль задаётся при создании\nбазы и на уже развёрнутых установках не меняется, поэтому полагаться на неё\nнельзя. Проектов у организации десятки, и сравнить их в памяти дешевле, чем\nзависеть от того, как когда-то создали базу.\n\nФразы так не обрабатываются: они хранятся уже приведёнными к нижнему\nрегистру при загрузке, и обычного LIKE достаточно — а их бывают тысячи.\n\nНайденная фраза показывается вместе с проектом: «остекление балконов» без\nуказания, в каком проекте, не отвечает ни на один вопрос.",
+        "operationId": "search_api_v1_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 120,
+              "minLength": 2,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Поиск по проектам и фразам",
+        "tags": [
+          "search"
         ]
       }
     }

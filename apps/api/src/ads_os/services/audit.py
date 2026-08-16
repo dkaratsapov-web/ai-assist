@@ -70,12 +70,21 @@ class IssueKey(StrEnum):
 
     NO_METRICA = "no_metrica"
 
+    #: Страница собирается скриптами: в присланном HTML содержимого почти нет.
+    JS_RENDERED = "js_rendered"
+
 
 class Verdict(StrEnum):
     READY = "ready"
     READY_WITH_WARNINGS = "ready_with_warnings"
     NOT_READY = "not_ready"
 
+
+#: Признаки страницы, собираемой скриптами. Порог по тексту низкий намеренно:
+#: у обычной посадочной текста в разы больше, и попасть под него случайно она
+#: не может.
+JS_RENDERED_TEXT_LIMIT = 400
+JS_RENDERED_MIN_SCRIPTS = 3
 
 #: Проверки, находки по которым всегда блокируют запуск. Список задан явно, а
 #: не выведен из результата: скрывать замечание человек решает до того, как
@@ -183,6 +192,12 @@ class PageSignals:
     #: быстрые ссылки объявления — они занимают место в выдаче и дают человеку
     #: попасть сразу в нужный раздел, а не искать его на посадочной.
     internal_links: list[tuple[str, str]] = field(default_factory=list)
+    #: Сколько текста нашлось на странице и сколько на ней скриптов. Вместе они
+    #: выдают страницу, которая собирается в браузере: наш разбор видит пустой
+    #: каркас и оценивает не то, что увидит посетитель.
+    text_length: int = 0
+    scripts: int = 0
+    has_app_root: bool = False
     #: Оформлен ли телефон ссылкой tel:. С телефона по ненажимаемому номеру не
     #: позвонить — его надо запоминать и набирать вручную, и часть посетителей
     #: этого просто не делает.
@@ -232,6 +247,18 @@ _CTA_WORDS = (
 )
 
 
+def looks_js_rendered(s: PageSignals) -> bool:
+    """Собирается ли страница скриптами.
+
+    Определяется по совокупности: мало текста, много скриптов и пустой корневой
+    контейнер. По одному признаку судить нельзя — короткая страница бывает и
+    обычной, а скрипты есть у всех.
+    """
+    if s.text_length > JS_RENDERED_TEXT_LIMIT:
+        return False
+    return s.has_app_root or s.scripts >= JS_RENDERED_MIN_SCRIPTS
+
+
 def audit_page(
     url: str, html: str, *, status_code: int = 200, elapsed_ms: int | None = None
 ) -> AuditResult:
@@ -256,6 +283,22 @@ def audit_page(
     # категория мешает вести трафик, а не насколько она заметна глазу.
     total = sum(c.score * CATEGORY_WEIGHTS[c.category] for c in categories)
     score = round(total / sum(CATEGORY_WEIGHTS.values()))
+
+    if looks_js_rendered(signals):
+        # Балл не выставляется: мы видим каркас, а не страницу. Поставить 20 из
+        # 100 значило бы обвинить сайт в том, чего мы просто не разглядели, — и
+        # человек справедливо решит, что проверка врёт.
+        issues.append(
+            Issue(
+                IssueKey.JS_RENDERED,
+                Category.TECHNICAL,
+                Severity.WARNING,
+                "Страница собирается скриптами — проверка неполная",
+                "В присланном коде почти нет содержимого: текст, форма и счётчик "
+                "появляются уже в браузере. Оценка ниже реальной. Проверьте "
+                "страницу глазами или дайте адрес версии, отдающей готовый HTML.",
+            )
+        )
 
     has_critical = any(i.severity is Severity.CRITICAL for i in issues)
     has_warning = any(i.severity is Severity.WARNING for i in issues)
@@ -312,6 +355,14 @@ def collect_signals(html: str) -> PageSignals:
 
     signals.has_tel_link = "tel:" in hrefs.lower()
     signals.internal_links = _internal_links(links)
+    signals.text_length = len(text)
+    signals.scripts = len(tree.css("script"))
+    # Пустой корневой контейнер — почерк React, Vue и подобных: разметка
+    # появляется в нём уже в браузере.
+    signals.has_app_root = any(
+        (node.attributes.get("id") or "").lower() in ("root", "app", "__next")
+        for node in tree.css("div")
+    )
 
     # Политику ищем и по тексту ссылки, и по адресу: на одних сайтах это ссылка
     # «Политика конфиденциальности», на других — галочка согласия рядом с

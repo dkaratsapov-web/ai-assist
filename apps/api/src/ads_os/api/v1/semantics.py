@@ -43,10 +43,20 @@ from ..schemas import (
     MinusWordList,
     MinusWordRead,
     MinusWordSuggestionRead,
+    SearchKeywordRead,
+    SearchProjectRead,
+    SearchResult,
     SitelinkRead,
 )
 
 router = APIRouter(prefix="/projects", tags=["semantics"])
+
+#: Поиск живёт на отдельном маршруте, а не под префиксом проектов.
+#:
+#: Под префиксом он стал бы «/projects/search» и попал бы под «/projects/{id}»:
+#: слово «search» не является идентификатором, и запрос отвечал бы ошибкой
+#: разбора. Эти грабли в проекте уже случались с «/projects/overview».
+search_router = APIRouter(tags=["search"])
 
 #: Предел на один импорт. Не защита от злого умысла, а защита от случайности:
 #: вставленный целиком файл на миллион строк обработается, но экран после этого
@@ -672,3 +682,80 @@ async def _page_content(
         if isinstance(pair, list) and len(pair) == 2
     )
     return tuple(audit.selling_points or []), links
+
+
+@search_router.get("/search", response_model=SearchResult, summary="Поиск по проектам и фразам")
+async def search(
+    session: SessionDep,
+    ctx: TenantDep,
+    q: str = Query(min_length=2, max_length=120),
+    limit: int = Query(default=10, ge=1, le=50),
+) -> SearchResult:
+    """Ищет по названиям проектов и по ключевым фразам.
+
+    Поиск подстрочный, без морфологии. Для проектов и фраз этого достаточно:
+    человек ищет то, что сам вводил, и помнит написание. Приводить запрос к
+    основам здесь значило бы находить «ремонту» по запросу «ремонт» ценой того,
+    что точное совпадение перестанет быть первым.
+
+    Названия проектов сравниваются в Python, а не запросом к базе. Причина
+    неочевидная и стоила бы молчаливо неработающего поиска: `lower()` в
+    PostgreSQL при локали C не понижает регистр кириллицы — «Окна» остаётся
+    «Окна», и поиск по-русски не находит ничего. Локаль задаётся при создании
+    базы и на уже развёрнутых установках не меняется, поэтому полагаться на неё
+    нельзя. Проектов у организации десятки, и сравнить их в памяти дешевле, чем
+    зависеть от того, как когда-то создали базу.
+
+    Фразы так не обрабатываются: они хранятся уже приведёнными к нижнему
+    регистру при загрузке, и обычного LIKE достаточно — а их бывают тысячи.
+
+    Найденная фраза показывается вместе с проектом: «остекление балконов» без
+    указания, в каком проекте, не отвечает ни на один вопрос.
+    """
+    needle = q.strip().lower()
+    pattern = f"%{needle}%"
+
+    projects = [
+        row
+        for row in (await session.execute(ProjectRepository(session, ctx).scoped()))
+        .scalars()
+        .all()
+        if needle in row.name.lower()
+    ][:limit]
+
+    keywords = list(
+        (
+            await session.execute(
+                KeywordRepository(session, ctx)
+                .scoped()
+                .where(Keyword.phrase.like(pattern))
+                .order_by(Keyword.frequency.desc().nullslast())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    names = {
+        row.id: row.name
+        for row in (await session.execute(ProjectRepository(session, ctx).scoped()))
+        .scalars()
+        .all()
+    }
+
+    return SearchResult(
+        projects=[
+            SearchProjectRead(id=row.id, name=row.name, status=row.status) for row in projects
+        ],
+        keywords=[
+            SearchKeywordRead(
+                phrase=row.phrase,
+                frequency=row.frequency,
+                intent=row.intent,
+                project_id=row.project_id,
+                project_name=names.get(row.project_id, "проект удалён"),
+            )
+            for row in keywords
+        ],
+    )

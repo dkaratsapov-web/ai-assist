@@ -125,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(audit.router, prefix="/api/v1")
     app.include_router(competitors.router, prefix="/api/v1")
     app.include_router(semantics.router, prefix="/api/v1")
+    app.include_router(semantics.search_router, prefix="/api/v1")
     app.include_router(minus_sets.router, prefix="/api/v1")
     app.include_router(overview.router, prefix="/api/v1")
     app.include_router(activity.router, prefix="/api/v1")

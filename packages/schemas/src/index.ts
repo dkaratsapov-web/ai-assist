@@ -63,6 +63,9 @@ export type AdViolationRead = Schemas["AdViolationRead"];
 export type MinusWordSetRead = Schemas["MinusWordSetRead"];
 export type MinusWordSetList = Schemas["MinusWordSetList"];
 export type ApplySetResult = Schemas["ApplySetResult"];
+export type SearchResult = Schemas["SearchResult"];
+export type SearchProjectRead = Schemas["SearchProjectRead"];
+export type SearchKeywordRead = Schemas["SearchKeywordRead"];
 export type Intent = Schemas["Intent"];
 export type NotificationRead = Schemas["NotificationRead"];
 export type NotificationList = Schemas["NotificationList"];
@@ -377,6 +380,11 @@ export class ApiClient {
   }
 
   /** Наборы минус-слов организации: заготовки для новых проектов. */
+  /** Поиск по проектам и фразам. */
+  search(query: string): Promise<SearchResult> {
+    return this.request<SearchResult>(`/api/v1/search?q=${encodeURIComponent(query)}`);
+  }
+
   listMinusWordSets(): Promise<MinusWordSetList> {
     return this.request<MinusWordSetList>("/api/v1/minus-word-sets");
   }

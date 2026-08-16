@@ -487,3 +487,74 @@ class TestВыгрузкаКампании:
         )
 
         assert response.status_code == 404
+
+
+class TestПоиск:
+    async def test_находит_проект_по_части_названия(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Запрос с маленькой буквы находит проект с большой.
+
+        В PostgreSQL при локали C `lower()` не понижает регистр кириллицы, и
+        поиск по-русски молча не находил ничего. Локаль задаётся при создании
+        базы, поэтому сравнение вынесено в Python.
+        """
+        org, user, _ = project
+
+        body = (await client.get("/api/v1/search?q=окна", headers=headers(org, user))).json()
+
+        assert [item["name"] for item in body["projects"]] == ["Окна Тверь"]
+
+    async def test_находит_фразу_вместе_с_проектом(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Фраза без указания проекта не отвечает ни на один вопрос."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        body = (await client.get("/api/v1/search?q=вакансии", headers=headers(org, user))).json()
+
+        assert body["keywords"]
+        assert body["keywords"][0]["project_name"] == "Окна Тверь"
+
+    async def test_поиск_не_ломается_о_маршрут_проекта(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Под префиксом /projects слово «search» приняли бы за идентификатор."""
+        org, user, _ = project
+
+        response = await client.get("/api/v1/search?q=окна", headers=headers(org, user))
+
+        assert response.status_code == 200
+
+    async def test_чужое_не_находится(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        _, other_org = two_organizations
+        other_user = await make_user(session, other_org, "other@example.com")
+        await session.commit()
+
+        body = (
+            await client.get("/api/v1/search?q=окна", headers=headers(other_org, other_user))
+        ).json()
+
+        assert body["projects"] == []
+        assert body["keywords"] == []
+
+    async def test_слишком_короткий_запрос_отклоняется(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """По одной букве находится всё, и это не поиск."""
+        org, user, _ = project
+
+        response = await client.get("/api/v1/search?q=о", headers=headers(org, user))
+
+        assert response.status_code == 422
