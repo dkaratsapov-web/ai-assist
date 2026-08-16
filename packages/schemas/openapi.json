@@ -2208,6 +2208,13 @@
             "title": "Items",
             "type": "array"
           },
+          "learned": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Learned",
+            "type": "array"
+          },
           "suggestions": {
             "items": {
               "$ref": "#/components/schemas/MinusWordSuggestionRead"
@@ -2223,6 +2230,7 @@
         "required": [
           "items",
           "suggestions",
+          "learned",
           "total"
         ],
         "title": "MinusWordList",

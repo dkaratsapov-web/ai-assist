@@ -558,3 +558,122 @@ class TestПоиск:
         response = await client.get("/api/v1/search?q=о", headers=headers(org, user))
 
         assert response.status_code == 422
+
+
+class TestПовторённыеРешения:
+    """Словарь не знает ниши. Зато знает специалист."""
+
+    async def test_слово_из_двух_проектов_подсказывается(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, current = project
+        others = [
+            Project(organization_id=org.id, name=f"Проект {i}", created_by_id=user.id)
+            for i in range(2)
+        ]
+        session.add_all(others)
+        await session.commit()
+
+        for other in others:
+            await client.post(
+                f"/api/v1/projects/{other.id}/minus-words",
+                json={"word": "рассрочка"},
+                headers=headers(org, user),
+            )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{current.id}/minus-words", headers=headers(org, user)
+            )
+        ).json()
+
+        assert "рассрочка" in body["learned"]
+
+    async def test_слово_из_одного_проекта_не_подсказывается(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """На одном проекте нельзя отличить нишевое слово от разовой правки."""
+        org, user, current = project
+        other = Project(organization_id=org.id, name="Другой", created_by_id=user.id)
+        session.add(other)
+        await session.commit()
+
+        await client.post(
+            f"/api/v1/projects/{other.id}/minus-words",
+            json={"word": "рассрочка"},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{current.id}/minus-words", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["learned"] == []
+
+    async def test_подсказка_не_применяется_сама(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Тихо отсечённый трафик — это то, о чём человек не просил и не узнает."""
+        org, user, current = project
+        others = [
+            Project(organization_id=org.id, name=f"П{i}", created_by_id=user.id) for i in range(2)
+        ]
+        session.add_all(others)
+        await session.commit()
+        for other in others:
+            await client.post(
+                f"/api/v1/projects/{other.id}/minus-words",
+                json={"word": "рассрочка"},
+                headers=headers(org, user),
+            )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{current.id}/minus-words", headers=headers(org, user)
+            )
+        ).json()
+
+        assert "рассрочка" not in {item["word"] for item in body["items"]}
+
+    async def test_уже_добавленное_не_подсказывается(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, current = project
+        others = [
+            Project(organization_id=org.id, name=f"П{i}", created_by_id=user.id) for i in range(2)
+        ]
+        session.add_all(others)
+        await session.commit()
+        for other in others:
+            await client.post(
+                f"/api/v1/projects/{other.id}/minus-words",
+                json={"word": "рассрочка"},
+                headers=headers(org, user),
+            )
+        await client.post(
+            f"/api/v1/projects/{current.id}/minus-words",
+            json={"word": "рассрочка"},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{current.id}/minus-words", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["learned"] == []

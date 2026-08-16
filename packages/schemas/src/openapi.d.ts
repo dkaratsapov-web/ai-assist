@@ -1682,6 +1682,8 @@ export interface components {
         MinusWordList: {
             /** Items */
             items: components["schemas"]["MinusWordRead"][];
+            /** Learned */
+            learned: string[];
             /** Suggestions */
             suggestions: components["schemas"]["MinusWordSuggestionRead"][];
             /** Total */

@@ -289,80 +289,105 @@ function SemanticsScreen() {
                 </Card>
               )}
 
-              {minus && (minus.items.length > 0 || minus.suggestions.length > 0) && (
-                <Card>
-                  <CardHeader
-                    title="Минус-слова"
-                    description="Готовый список для кампании: остаётся проверить и перенести"
-                  />
-                  {minus.items.length > 0 && (
-                    <div className="mb-3 flex flex-wrap gap-2">
-                      {minus.items.map((word) => (
-                        <button
-                          key={word.id}
-                          type="button"
-                          onClick={() => void removeMinus(word.id)}
-                          className="rounded-pill bg-bg-secondary text-caption text-text-secondary hover:bg-surface-active focus-visible:outline-focus px-3 py-1.5 focus-visible:outline-2"
-                          title="Убрать из списка"
-                        >
-                          −{word.word} ✕
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {(sets.length > 0 || minus.items.length > 0) && (
-                    <div className="border-border mb-3 flex flex-wrap items-center gap-2 border-t pt-3">
-                      {/* Набор — заготовка на будущие проекты. Применение
-                          добавляет слова, а не заменяет: своё в проекте важнее. */}
-                      <span className="text-caption text-text-secondary">Готовые наборы:</span>
-                      {sets.map((item) => (
-                        <Button
-                          key={item.id}
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => void applySet(item.id)}
-                        >
-                          {item.name} ({item.words.length})
-                        </Button>
-                      ))}
-                      {minus.items.length > 0 && (
-                        <Button size="sm" variant="ghost" onClick={() => setSavingSet(true)}>
-                          Сохранить свой
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  {minus.suggestions.length > 0 && (
-                    <>
-                      <p className="text-caption text-text-secondary mb-1">Предлагаются</p>
-                      <div className="flex flex-col">
-                        {minus.suggestions.map((item) => (
-                          <div
-                            key={item.word}
-                            className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+              {minus &&
+                (minus.items.length > 0 ||
+                  minus.suggestions.length > 0 ||
+                  minus.learned.length > 0) && (
+                  <Card>
+                    <CardHeader
+                      title="Минус-слова"
+                      description="Готовый список для кампании: остаётся проверить и перенести"
+                    />
+                    {minus.items.length > 0 && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {minus.items.map((word) => (
+                          <button
+                            key={word.id}
+                            type="button"
+                            onClick={() => void removeMinus(word.id)}
+                            className="rounded-pill bg-bg-secondary text-caption text-text-secondary hover:bg-surface-active focus-visible:outline-focus px-3 py-1.5 focus-visible:outline-2"
+                            title="Убрать из списка"
                           >
-                            <div className="flex min-w-0 flex-col">
-                              <span className="text-body-sm text-text-primary">{item.word}</span>
-                              {/* Пример нужен, чтобы видеть, не выбросит ли
-                                  минус-слово что-то нужное. */}
-                              <span className="text-caption text-text-secondary">
-                                уводит фраз: {item.phrases} · например: {item.examples[0]}
-                              </span>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => void addMinus(item.word)}
-                            >
-                              Добавить
-                            </Button>
-                          </div>
+                            −{word.word} ✕
+                          </button>
                         ))}
                       </div>
-                    </>
-                  )}
-                </Card>
-              )}
+                    )}
+                    {(sets.length > 0 || minus.items.length > 0) && (
+                      <div className="border-border mb-3 flex flex-wrap items-center gap-2 border-t pt-3">
+                        {/* Набор — заготовка на будущие проекты. Применение
+                          добавляет слова, а не заменяет: своё в проекте важнее. */}
+                        <span className="text-caption text-text-secondary">Готовые наборы:</span>
+                        {sets.map((item) => (
+                          <Button
+                            key={item.id}
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => void applySet(item.id)}
+                          >
+                            {item.name} ({item.words.length})
+                          </Button>
+                        ))}
+                        {minus.items.length > 0 && (
+                          <Button size="sm" variant="ghost" onClick={() => setSavingSet(true)}>
+                            Сохранить свой
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                    {minus.learned.length > 0 && (
+                      <div className="border-border mb-3 border-t pt-3">
+                        {/* Подсказка, а не автоматика: слово не добавляется само.
+                          Тихо отсечённый трафик — это то, о чём человек не
+                          просил и о чём не узнает. */}
+                        <p className="text-caption text-text-secondary mb-1.5">
+                          Вы относили это к нецелевым в других проектах
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {minus.learned.map((word) => (
+                            <Button
+                              key={word}
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void addMinus(word)}
+                            >
+                              + {word}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {minus.suggestions.length > 0 && (
+                      <>
+                        <p className="text-caption text-text-secondary mb-1">Предлагаются</p>
+                        <div className="flex flex-col">
+                          {minus.suggestions.map((item) => (
+                            <div
+                              key={item.word}
+                              className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+                            >
+                              <div className="flex min-w-0 flex-col">
+                                <span className="text-body-sm text-text-primary">{item.word}</span>
+                                {/* Пример нужен, чтобы видеть, не выбросит ли
+                                  минус-слово что-то нужное. */}
+                                <span className="text-caption text-text-secondary">
+                                  уводит фраз: {item.phrases} · например: {item.examples[0]}
+                                </span>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => void addMinus(item.word)}
+                              >
+                                Добавить
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </Card>
+                )}
 
               <FilterBar
                 label="Фильтр фраз"

@@ -651,6 +651,10 @@ class MinusWordList(BaseModel):
     items: list[MinusWordRead]
     #: Предложения из разобранных фраз, ещё не добавленные в список.
     suggestions: list[MinusWordSuggestionRead]
+    #: Слова, которые специалист сам относил к нецелевым в других проектах.
+    #: Словарь не знает ниши — а человек знает, и повторённое решение стоит
+    #: заметить, а не заставлять принимать заново.
+    learned: list[str]
     total: int
 
 

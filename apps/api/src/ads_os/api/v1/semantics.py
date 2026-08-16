@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import defaultdict
 from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Response, status
@@ -267,6 +268,12 @@ async def list_clusters(
     )
 
 
+#: Со скольких проектов слово считается вашим решением, а не случайностью.
+#: Два — это уже повторение; на одном проекте нельзя отличить нишевое слово от
+#: разовой правки.
+REPEATED_DECISION_PROJECTS = 2
+
+
 @router.get(
     "/{project_id}/minus-words",
     response_model=MinusWordList,
@@ -297,7 +304,48 @@ async def list_minus_words(
     return MinusWordList(
         items=[MinusWordRead(id=row.id, word=row.word) for row in rows],
         suggestions=suggestions,
+        learned=await _learned_words(session, ctx, project_id, already=saved),
         total=len(rows),
+    )
+
+
+async def _learned_words(
+    session: SessionDep,
+    ctx: TenantDep,
+    project_id: uuid.UUID,
+    *,
+    already: set[str],
+) -> list[str]:
+    """Слова, которые вы сами относили к нецелевым в других проектах.
+
+    Словарь не знает ни ниши, ни клиента. Зато знает специалист — и, отнеся
+    «рассрочка» к нецелевым в двух проектах, он уже принял решение, которое
+    системе остаётся заметить, а не заставлять повторять в третий раз.
+
+    Подсказка именно подсказка: слово не добавляется само. Тихое применение
+    чужого решения к новому проекту — это отсечённый трафик, о котором человек
+    не просил и о котором не узнает.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(MinusWord.word, MinusWord.project_id)
+                .where(MinusWord.organization_id == ctx.organization_id)
+                .where(MinusWord.project_id != project_id)
+            )
+        )
+        .tuples()
+        .all()
+    )
+
+    by_word: dict[str, set[uuid.UUID]] = defaultdict(set)
+    for word, other_project in rows:
+        by_word[word].add(other_project)
+
+    return sorted(
+        word
+        for word, projects in by_word.items()
+        if len(projects) >= REPEATED_DECISION_PROJECTS and word not in already
     )
 
 
