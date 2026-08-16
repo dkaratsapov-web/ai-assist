@@ -212,10 +212,15 @@ def build_plan(data: StrategyInput) -> LaunchPlan:
             "стратегию на них."
         )
 
+    # Непроверенный сайт не даёт статуса готовности. Выдать «можно запускать» и
+    # тут же приписать «план построен без учёта состояния сайта» — значит
+    # сказать две противоположные вещи в одном экране. Отсутствие проверки не
+    # означает, что с сайтом всё хорошо: оно означает, что мы не смотрели.
     status = (
         PlanStatus.READY
         if (
             learning_ready
+            and data.site_can_launch is True
             and data.conversions_are_forecast
             and not data.conversions_are_proxy
             and test_weeks is not None

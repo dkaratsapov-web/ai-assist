@@ -120,6 +120,16 @@ class TestБлокировки:
         assert plan.status is not PlanStatus.BLOCKED
         assert any("аудит" in note.lower() for note in plan.advice)
 
+    def test_непроверенный_сайт_не_даёт_готовности(self) -> None:
+        """Иначе экран говорит «можно запускать» и рядом — «сайт не смотрели».
+
+        Две противоположные вещи в одном месте: человек поверит той, которая
+        крупнее, то есть статусу.
+        """
+        plan = plan_for("87", site_can_launch=None)
+
+        assert plan.status is PlanStatus.RISKY
+
     def test_без_расчёта_ёмкости_плана_нет(self) -> None:
         plan = plan_for(None)
 

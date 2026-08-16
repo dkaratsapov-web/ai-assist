@@ -1466,6 +1466,22 @@
             ],
             "title": "Average Order Value"
           },
+          "expected_cpc": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Cpc"
+          },
           "expected_value": {
             "anyOf": [
               {
@@ -1552,6 +1568,23 @@
               }
             ],
             "title": "Monthly Budget"
+          },
+          "site_conversion_rate": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 1.0,
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Conversion Rate"
           },
           "target_cac": {
             "anyOf": [

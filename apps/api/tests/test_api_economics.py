@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from decimal import Decimal
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -377,3 +378,65 @@ class TestПланЗапуска:
         )
 
         assert response.status_code == 404
+
+
+class TestПоляПрогноза:
+    """Поле, которое форма отправляет, а сервер молча выбрасывает, — худший вид
+    поломки: интерфейс показывает успех, а результат не меняется."""
+
+    async def test_цена_клика_и_конверсия_сохраняются(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        actors: tuple[tuple[Organization, User], tuple[Organization, User]],
+    ) -> None:
+        (org, user), _ = actors
+        project = await make_project(session, org, "Проект")
+        await session.commit()
+
+        body = (
+            await client.put(
+                f"/api/v1/projects/{project.id}/economics",
+                json={
+                    "monthly_budget": "150000",
+                    "average_order_value": "38000",
+                    "main_conversion": "lead",
+                    "expected_cpc": "45",
+                    "site_conversion_rate": "0.03",
+                },
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert Decimal(body["input"]["expected_cpc"]) == Decimal("45")
+        assert body["summary"]["expected_monthly_leads"]["value"] is not None
+
+    async def test_прогноз_переживает_перечитывание(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        actors: tuple[tuple[Organization, User], tuple[Organization, User]],
+    ) -> None:
+        (org, user), _ = actors
+        project = await make_project(session, org, "Проект")
+        await session.commit()
+
+        await client.put(
+            f"/api/v1/projects/{project.id}/economics",
+            json={
+                "monthly_budget": "150000",
+                "average_order_value": "38000",
+                "main_conversion": "lead",
+                "expected_cpc": "45",
+                "site_conversion_rate": "0.03",
+            },
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/economics", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["summary"]["expected_monthly_leads"]["value"] is not None

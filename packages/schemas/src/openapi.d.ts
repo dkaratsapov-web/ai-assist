@@ -1430,6 +1430,8 @@ export interface components {
         EconomicsUpdate: {
             /** Average Order Value */
             average_order_value?: number | string | null;
+            /** Expected Cpc */
+            expected_cpc?: number | string | null;
             /** Expected Value */
             expected_value?: number | string | null;
             /** Expected Version */
@@ -1441,6 +1443,8 @@ export interface components {
             margin_percent?: number | string | null;
             /** Monthly Budget */
             monthly_budget?: number | string | null;
+            /** Site Conversion Rate */
+            site_conversion_rate?: number | string | null;
             /** Target Cac */
             target_cac?: number | string | null;
             /** Target Cpl */

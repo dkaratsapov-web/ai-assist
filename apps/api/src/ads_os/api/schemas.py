@@ -152,6 +152,10 @@ class EconomicsUpdate(BaseModel):
     target_cpl: Decimal | None = Field(default=None, gt=0)
     target_marketing_share: Decimal | None = Field(default=None, gt=0, le=1)
 
+    #: Поля прогноза. Без них считается только ёмкость бюджета.
+    expected_cpc: Decimal | None = Field(default=None, gt=0)
+    site_conversion_rate: Decimal | None = Field(default=None, gt=0, le=1)
+
     #: Версия, на которой пользователь редактировал. Защищает от записи поверх
     #: чужого изменения (v0.4 §100).
     expected_version: int | None = None
