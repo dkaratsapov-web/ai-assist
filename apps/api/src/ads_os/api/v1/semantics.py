@@ -15,7 +15,7 @@ from ...errors import AppError
 from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
-from ...services import niches, profile
+from ...services import niches, profile, utm
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -69,6 +69,7 @@ from ..schemas import (
     SearchProjectRead,
     SearchResult,
     SitelinkRead,
+    UtmNotesRead,
 )
 
 router = APIRouter(prefix="/projects", tags=["semantics"])
@@ -1010,6 +1011,9 @@ async def list_ad_drafts(
 
     pages = await _landing_pages(session, ctx, project_id)
     fallback = project.website_url or ""
+    # Ссылка показывается уже размеченной: именно она уедет в кампанию, и
+    # увидеть её человек должен до выгрузки, а не после запуска.
+    template = utm.UtmTemplate()
 
     drafts = [
         (group, variant)
@@ -1030,7 +1034,11 @@ async def list_ad_drafts(
         items=[
             AdDraftRead(
                 cluster=draft.cluster,
-                landing_url=match_landing(group.core, pages, fallback=fallback),
+                landing_url=utm.tag(
+                    match_landing(group.core, pages, fallback=fallback),
+                    template,
+                    campaign_name=utm.slug(project.name),
+                ),
                 title=draft.title,
                 title_2=draft.title_2,
                 text=draft.text,
@@ -1053,6 +1061,11 @@ async def list_ad_drafts(
         total=len(drafts),
         ready=sum(1 for _, draft in drafts if draft.is_ready),
         source_note=note,
+        utm=UtmNotesRead(
+            example=utm.preview(fallback or "https://site.ru/", template,
+                                campaign_name=utm.slug(project.name)),
+            notes=list(utm.NOTES),
+        ),
     )
 
 
@@ -1125,6 +1138,9 @@ async def export_campaign(
 
     fallback = project.website_url or ""
     pages = await _landing_pages(session, ctx, project_id)
+    # Разметка проставляется здесь, а не на экране: файл уходит прямо в
+    # Коммандер, и размечать его потом уже некому.
+    template = utm.UtmTemplate()
     rows: list[ExportRow] = []
 
     for group in groups:
@@ -1133,7 +1149,11 @@ async def export_campaign(
             # в Директе появилась бы группа без осмысленного объявления.
             continue
 
-        landing = match_landing(group.core, pages, fallback=fallback)
+        landing = utm.tag(
+            match_landing(group.core, pages, fallback=fallback),
+            template,
+            campaign_name=utm.slug(project.name),
+        )
         variants = build_variants(
             cluster_name=group.name,
             keywords=group.phrases,

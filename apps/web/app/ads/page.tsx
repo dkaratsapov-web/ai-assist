@@ -2,7 +2,7 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AdDraftRead, ApiError, ProjectRead } from "@ads-os/schemas";
+import type { AdDraftRead, ApiError, ProjectRead, UtmNotesRead } from "@ads-os/schemas";
 import {
   Card,
   CardHeader,
@@ -43,6 +43,7 @@ function AdsScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<AdDraftRead[] | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [utm, setUtm] = useState<UtmNotesRead | null>(null);
   const [ready, setReady] = useState(0);
   const [error, setError] = useState<ApiError | null>(null);
 
@@ -75,6 +76,7 @@ function AdsScreen() {
         setError(null);
         setDrafts(list.items);
         setNote(list.source_note ?? null);
+        setUtm(list.utm);
         setReady(list.ready);
       } catch (err) {
         if (!ignore) setError(toApiError(err));
@@ -165,6 +167,8 @@ function AdsScreen() {
                 </p>
               </Card>
 
+              {utm && <UtmCard utm={utm} />}
+
               {groups.map((group) => (
                 <GroupCard key={group.name} name={group.name} drafts={group.drafts} />
               ))}
@@ -173,6 +177,33 @@ function AdsScreen() {
         </>
       )}
     </AppShell>
+  );
+}
+
+/**
+ * Разметка ссылок: пример и объяснение.
+ *
+ * Стоит рядом с черновиками, потому что именно эти ссылки уедут в кампанию.
+ * Строка с фигурными скобками выглядит как ошибка вёрстки, и первый вопрос
+ * человека — что это такое; показать рядом готовый пример дешевле, чем потом
+ * объяснять, почему в отчёте оказалось «%7Bkeyword%7D».
+ */
+function UtmCard({ utm }: { utm: UtmNotesRead }) {
+  return (
+    <Card>
+      <CardHeader
+        title="Разметка ссылок"
+        description="Проставляется сама — по ней в Метрике видно, какая группа и фраза принесли заявку"
+      />
+      <code className="text-caption text-text-secondary mb-2 block break-all">{utm.example}</code>
+      <ul className="flex flex-col gap-1">
+        {utm.notes.map((text, index) => (
+          <li key={index} className="text-caption text-text-secondary">
+            {text}
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 }
 

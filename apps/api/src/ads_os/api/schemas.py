@@ -1018,6 +1018,15 @@ class AdDraftRead(BaseModel):
     is_ready: bool
 
 
+class UtmNotesRead(BaseModel):
+    """Как размечены ссылки и что об этом надо знать."""
+
+    #: Пример готовой ссылки с подставленными значениями. Строка с
+    #: фигурными скобками выглядит как ошибка, и это первый вопрос.
+    example: str
+    notes: list[str]
+
+
 class AdDraftList(BaseModel):
     items: list[AdDraftRead]
     total: int
@@ -1025,6 +1034,9 @@ class AdDraftList(BaseModel):
     ready: int
     #: Пусто, если аудит не проводился: без него неоткуда взять текст.
     source_note: str | None = None
+    #: Разметка ссылок: пример и пояснения. Показывается рядом с
+    #: черновиками, потому что именно эти ссылки уедут в кампанию.
+    utm: UtmNotesRead
 
 
 class NotificationRead(BaseModel):

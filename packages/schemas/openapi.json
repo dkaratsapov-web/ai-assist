@@ -133,12 +133,16 @@
           "total": {
             "title": "Total",
             "type": "integer"
+          },
+          "utm": {
+            "$ref": "#/components/schemas/UtmNotesRead"
           }
         },
         "required": [
           "items",
           "total",
-          "ready"
+          "ready",
+          "utm"
         ],
         "title": "AdDraftList",
         "type": "object"
@@ -4336,6 +4340,28 @@
           "ai_tokens_limit"
         ],
         "title": "UsageRead",
+        "type": "object"
+      },
+      "UtmNotesRead": {
+        "description": "Как размечены ссылки и что об этом надо знать.",
+        "properties": {
+          "example": {
+            "title": "Example",
+            "type": "string"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "example",
+          "notes"
+        ],
+        "title": "UtmNotesRead",
         "type": "object"
       },
       "ValidationError": {

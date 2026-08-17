@@ -1234,6 +1234,7 @@ export interface components {
             source_note?: string | null;
             /** Total */
             total: number;
+            utm: components["schemas"]["UtmNotesRead"];
         };
         /**
          * AdDraftRead
@@ -2869,6 +2870,16 @@ export interface components {
             crawler_pages: number;
             /** Crawler Pages Limit */
             crawler_pages_limit: number;
+        };
+        /**
+         * UtmNotesRead
+         * @description Как размечены ссылки и что об этом надо знать.
+         */
+        UtmNotesRead: {
+            /** Example */
+            example: string;
+            /** Notes */
+            notes: string[];
         };
         /** ValidationError */
         ValidationError: {

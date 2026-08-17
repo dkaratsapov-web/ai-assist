@@ -72,6 +72,7 @@ export type MinusWordRead = Schemas["MinusWordRead"];
 export type MinusWordList = Schemas["MinusWordList"];
 export type AdDraftRead = Schemas["AdDraftRead"];
 export type AdDraftList = Schemas["AdDraftList"];
+export type UtmNotesRead = Schemas["UtmNotesRead"];
 export type AdViolationRead = Schemas["AdViolationRead"];
 export type MinusWordSetRead = Schemas["MinusWordSetRead"];
 export type MinusWordSetList = Schemas["MinusWordSetList"];

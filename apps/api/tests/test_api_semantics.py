@@ -1176,3 +1176,78 @@ class TestОнбординг:
 
         assert body["irrelevant"] == 1
         assert body["cleaned"][0]["reason"] == "geo"
+
+
+class TestРазметкаВВыгрузке:
+    """Ссылки в файле размечены: он уходит прямо в Коммандер.
+
+    Разметить его потом уже некому, а без меток отчёт показывает «переходы с
+    рекламы» одной строкой — отключать нечего, не видно, что не работает.
+    """
+
+    async def _export(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> str:
+        org, user, row = project
+        row.website_url = "https://okna.ru/"
+        session.add(
+            SiteAudit(
+                organization_id=org.id,
+                project_id=row.id,
+                url="https://okna.ru/",
+                status=ModuleStatus.COMPLETED,
+                score=90,
+                categories=[],
+                issues=[],
+                selling_points=["Замер бесплатно"],
+            )
+        )
+        await session.commit()
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+
+        response = await client.get(
+            f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+        )
+        return response.text
+
+    async def test_метки_есть_в_ссылке(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        body = await self._export(client, session, project)
+
+        assert "utm_source=yandex" in body
+        assert "utm_medium=cpc" in body
+
+    async def test_подстановки_директа_не_закодированы(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Закодированные скобки площадка не распознает, и в отчёт уедет
+        буквальное «%7Bkeyword%7D» вместо фразы."""
+        body = await self._export(client, session, project)
+
+        assert "{keyword}" in body
+        assert "%7B" not in body
+
+    async def test_название_кампании_из_проекта(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Проект называется «Окна Тверь» — в метке он должен быть узнаваем."""
+        body = await self._export(client, session, project)
+
+        assert "utm_campaign=okna_tver" in body
