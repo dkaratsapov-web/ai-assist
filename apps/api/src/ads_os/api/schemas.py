@@ -735,6 +735,35 @@ class MinusWordList(BaseModel):
     total: int
 
 
+class CrossMinusRead(BaseModel):
+    """Что добавить к фразе, чтобы она не перехватывала чужие запросы."""
+
+    phrase: str
+    minus_words: list[str]
+    #: Чьи запросы она иначе перехватывала бы. Без этого списка совет
+    #: невозможно проверить и не понять, что сломается, если ему последовать.
+    shadows: list[str]
+
+
+class DuplicateRead(BaseModel):
+    """Фразы, неразличимые для площадки."""
+
+    phrases: list[str]
+
+
+class CrossMinusResultRead(BaseModel):
+    """Пересечения внутри ядра.
+
+    Общая фраза, перехватывающая запросы уточнённой, — самая тихая утечка
+    бюджета: в отчёте обе фразы получают показы, и по цифрам всё выглядит
+    нормально.
+    """
+
+    items: list[CrossMinusRead]
+    duplicates: list[DuplicateRead]
+    analyzed: int
+
+
 class MinusWordCreate(BaseModel):
     word: str = Field(min_length=2, max_length=60)
 

@@ -34,6 +34,7 @@ COLUMNS = (
     "Уточнения",
     "Быстрые ссылки",
     "Минус-слова кампании",
+    "Минус-слова фразы",
     "Замечания",
 )
 
@@ -55,6 +56,10 @@ class ExportRow:
     callouts: str
     sitelinks: str
     minus_words: str
+    #: Кросс-минусовка: слова, без которых эта фраза перехватывала бы запросы
+    #: соседних, более точных фраз. Ставятся на саму фразу, а не на группу —
+    #: у соседней фразы в той же группе минус-слова другие.
+    phrase_minus_words: str
     warnings: str
 
 
@@ -86,6 +91,7 @@ def to_csv(rows: list[ExportRow]) -> str:
                 row.callouts,
                 row.sitelinks,
                 row.minus_words,
+                row.phrase_minus_words,
                 row.warnings,
             ]
         )

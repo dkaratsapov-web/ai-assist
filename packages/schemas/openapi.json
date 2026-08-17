@@ -1121,6 +1121,66 @@
         "title": "CompetitorRead",
         "type": "object"
       },
+      "CrossMinusRead": {
+        "description": "Что добавить к фразе, чтобы она не перехватывала чужие запросы.",
+        "properties": {
+          "minus_words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Minus Words",
+            "type": "array"
+          },
+          "phrase": {
+            "title": "Phrase",
+            "type": "string"
+          },
+          "shadows": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Shadows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "phrase",
+          "minus_words",
+          "shadows"
+        ],
+        "title": "CrossMinusRead",
+        "type": "object"
+      },
+      "CrossMinusResultRead": {
+        "description": "Пересечения внутри ядра.\n\nОбщая фраза, перехватывающая запросы уточнённой, — самая тихая утечка\nбюджета: в отчёте обе фразы получают показы, и по цифрам всё выглядит\nнормально.",
+        "properties": {
+          "analyzed": {
+            "title": "Analyzed",
+            "type": "integer"
+          },
+          "duplicates": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateRead"
+            },
+            "title": "Duplicates",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CrossMinusRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "duplicates",
+          "analyzed"
+        ],
+        "title": "CrossMinusResultRead",
+        "type": "object"
+      },
       "CurrentUserRead": {
         "description": "Кто вошёл. Ответ на вопрос интерфейса «показывать приложение или вход».",
         "properties": {
@@ -1243,6 +1303,23 @@
           "created_at"
         ],
         "title": "DismissalRead",
+        "type": "object"
+      },
+      "DuplicateRead": {
+        "description": "Фразы, неразличимые для площадки.",
+        "properties": {
+          "phrases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Phrases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "phrases"
+        ],
+        "title": "DuplicateRead",
         "type": "object"
       },
       "EconomicsMode": {
@@ -6777,6 +6854,100 @@
         "summary": "Перепроверить конкурента",
         "tags": [
           "competitors"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/cross-minus": {
+      "get": {
+        "description": "Считает, какие фразы перехватывают запросы соседних.\n\nСчитается по всему ядру, а не внутри групп: перехват через границу группы\nзаметить труднее всего, а вредит он ровно так же.",
+        "operationId": "get_cross_minus_api_v1_projects__project_id__cross_minus_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrossMinusResultRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Пересечения фраз и кросс-минусовка",
+        "tags": [
+          "semantics"
         ]
       }
     },

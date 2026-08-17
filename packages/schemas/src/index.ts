@@ -62,6 +62,9 @@ export type AdDraftList = Schemas["AdDraftList"];
 export type AdViolationRead = Schemas["AdViolationRead"];
 export type MinusWordSetRead = Schemas["MinusWordSetRead"];
 export type MinusWordSetList = Schemas["MinusWordSetList"];
+export type CrossMinusResultRead = Schemas["CrossMinusResultRead"];
+export type CrossMinusRead = Schemas["CrossMinusRead"];
+export type DuplicateRead = Schemas["DuplicateRead"];
 export type AdPlatformStatusRead = Schemas["AdPlatformStatusRead"];
 export type AdPlatformAdvertiserRead = Schemas["AdPlatformAdvertiserRead"];
 export type NicheRead = Schemas["NicheRead"];
@@ -363,6 +366,15 @@ export class ApiClient {
   /** Справочник ниш. Одинаков для всех и меняется вместе с кодом, а не с данными. */
   listNiches(): Promise<NicheList> {
     return this.request<NicheList>(`/api/v1/niches`);
+  }
+
+  /**
+   * Пересечения фраз внутри ядра. Общая фраза, перехватывающая запросы
+   * уточнённой, — самая тихая утечка бюджета: в отчёте обе получают показы,
+   * и по цифрам всё выглядит нормально.
+   */
+  getCrossMinus(projectId: string): Promise<CrossMinusResultRead> {
+    return this.request<CrossMinusResultRead>(`/api/v1/projects/${projectId}/cross-minus`);
   }
 
   listMinusWords(projectId: string): Promise<MinusWordList> {

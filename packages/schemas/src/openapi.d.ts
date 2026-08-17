@@ -684,6 +684,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/cross-minus": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Пересечения фраз и кросс-минусовка
+         * @description Считает, какие фразы перехватывают запросы соседних.
+         *
+         *     Считается по всему ядру, а не внутри групп: перехват через границу группы
+         *     заметить труднее всего, а вредит он ровно так же.
+         */
+        get: operations["get_cross_minus_api_v1_projects__project_id__cross_minus_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/economics": {
         parameters: {
             query?: never;
@@ -1388,6 +1411,34 @@ export interface components {
             url: string;
         };
         /**
+         * CrossMinusRead
+         * @description Что добавить к фразе, чтобы она не перехватывала чужие запросы.
+         */
+        CrossMinusRead: {
+            /** Minus Words */
+            minus_words: string[];
+            /** Phrase */
+            phrase: string;
+            /** Shadows */
+            shadows: string[];
+        };
+        /**
+         * CrossMinusResultRead
+         * @description Пересечения внутри ядра.
+         *
+         *     Общая фраза, перехватывающая запросы уточнённой, — самая тихая утечка
+         *     бюджета: в отчёте обе фразы получают показы, и по цифрам всё выглядит
+         *     нормально.
+         */
+        CrossMinusResultRead: {
+            /** Analyzed */
+            analyzed: number;
+            /** Duplicates */
+            duplicates: components["schemas"]["DuplicateRead"][];
+            /** Items */
+            items: components["schemas"]["CrossMinusRead"][];
+        };
+        /**
          * CurrentUserRead
          * @description Кто вошёл. Ответ на вопрос интерфейса «показывать приложение или вход».
          */
@@ -1441,6 +1492,14 @@ export interface components {
             issue_key: string;
             /** Reason */
             reason: string | null;
+        };
+        /**
+         * DuplicateRead
+         * @description Фразы, неразличимые для площадки.
+         */
+        DuplicateRead: {
+            /** Phrases */
+            phrases: string[];
         };
         /**
          * EconomicsMode
@@ -3583,6 +3642,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompetitorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_cross_minus_api_v1_projects__project_id__cross_minus_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrossMinusResultRead"];
                 };
             };
             /** @description Validation Error */

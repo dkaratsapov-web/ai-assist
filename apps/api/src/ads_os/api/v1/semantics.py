@@ -16,6 +16,7 @@ from ...models.audit import ModuleStatus
 from ...services import niches
 from ...services.activity import record
 from ...services.ads import build_variants
+from ...services.cross_minus import cross_minus
 from ...services.export import ExportRow, file_name, to_csv
 from ...services.semantics import (
     INTENT_LABELS,
@@ -36,6 +37,9 @@ from ..schemas import (
     AdViolationRead,
     ClusterList,
     ClusterRead,
+    CrossMinusRead,
+    CrossMinusResultRead,
+    DuplicateRead,
     ImportSummary,
     KeywordImport,
     KeywordList,
@@ -601,6 +605,38 @@ async def list_ad_drafts(
 
 
 @router.get(
+    "/{project_id}/cross-minus",
+    response_model=CrossMinusResultRead,
+    summary="Пересечения фраз и кросс-минусовка",
+)
+async def get_cross_minus(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> CrossMinusResultRead:
+    """Считает, какие фразы перехватывают запросы соседних.
+
+    Считается по всему ядру, а не внутри групп: перехват через границу группы
+    заметить труднее всего, а вредит он ровно так же.
+    """
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    keywords = await _keywords(session, ctx, project_id)
+    result = cross_minus([k.phrase for k in _targeted(keywords)])
+
+    return CrossMinusResultRead(
+        items=[
+            CrossMinusRead(
+                phrase=item.phrase,
+                minus_words=list(item.minus_words),
+                shadows=list(item.shadows),
+            )
+            for item in result.items
+        ],
+        duplicates=[DuplicateRead(phrases=list(d.phrases)) for d in result.duplicates],
+        analyzed=result.analyzed,
+    )
+
+
+@router.get(
     "/{project_id}/campaign/export.csv",
     summary="Выгрузка кампании файлом",
     response_class=Response,
@@ -622,9 +658,18 @@ async def export_campaign(
     project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
     keywords = await _keywords(session, ctx, project_id)
-    groups = cluster(_targeted(keywords))
+    targeted = _targeted(keywords)
+    groups = cluster(targeted)
     points, links = await _page_content(session, ctx, project_id)
     minus = ", ".join(f"-{row.word}" for row in await _minus_word_rows(session, ctx, project_id))
+
+    # Кросс-минусовка считается по всему ядру сразу, а не внутри групп: фразы
+    # перехватывают запросы друг у друга и через границу группы, и именно эти
+    # пересечения заметить труднее всего.
+    crossing = {
+        item.phrase: ", ".join(f"-{word}" for word in item.minus_words)
+        for item in cross_minus([k.phrase for k in targeted]).items
+    }
 
     fallback = project.website_url or ""
     pages = await _landing_pages(session, ctx, project_id)
@@ -666,6 +711,7 @@ async def export_campaign(
                             f"{link.title} → {link.url}" for link in draft.sitelinks
                         ),
                         minus_words=minus,
+                        phrase_minus_words=crossing.get(phrase, ""),
                         warnings=warnings,
                     )
                 )

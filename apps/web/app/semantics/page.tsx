@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import type {
   ApiError,
   ClusterRead,
+  CrossMinusResultRead,
   ImportSummary,
   Intent,
   KeywordRead,
@@ -60,6 +61,7 @@ function SemanticsScreen() {
   const [keywords, setKeywords] = useState<KeywordRead[] | null>(null);
   const [clusters, setClusters] = useState<ClusterRead[]>([]);
   const [minus, setMinus] = useState<MinusWordList | null>(null);
+  const [cross, setCross] = useState<CrossMinusResultRead | null>(null);
   const [sets, setSets] = useState<MinusWordSetRead[]>([]);
   const [savingSet, setSavingSet] = useState(false);
   const [setName, setSetName] = useState("");
@@ -99,11 +101,12 @@ function SemanticsScreen() {
 
     void (async () => {
       try {
-        const [list, groups, minusWords, savedSets] = await Promise.all([
+        const [list, groups, minusWords, savedSets, crossing] = await Promise.all([
           api.listKeywords(selectedId),
           api.listClusters(selectedId),
           api.listMinusWords(selectedId),
           api.listMinusWordSets(),
+          api.getCrossMinus(selectedId),
         ]);
         if (ignore) return;
         setError(null);
@@ -111,6 +114,7 @@ function SemanticsScreen() {
         setClusters(groups.items);
         setMinus(minusWords);
         setSets(savedSets.items);
+        setCross(crossing);
       } catch (err) {
         if (!ignore) setError(toApiError(err));
       }
@@ -286,6 +290,59 @@ function SemanticsScreen() {
                       </div>
                     ))}
                   </div>
+                </Card>
+              )}
+
+              {cross && (cross.items.length > 0 || cross.duplicates.length > 0) && (
+                <Card>
+                  <CardHeader
+                    title="Фразы конкурируют между собой"
+                    description="Общая фраза перехватывает запросы уточнённой — в отчёте это выглядит нормально"
+                  />
+
+                  {cross.duplicates.length > 0 && (
+                    <div className="mb-3 flex flex-col gap-1.5">
+                      <p className="text-caption text-text-secondary">
+                        Одинаковые для Директа — порядок слов он не различает
+                      </p>
+                      {cross.duplicates.map((group) => (
+                        <p key={group.phrases[0]} className="text-body-sm text-text-primary">
+                          {group.phrases.join(" = ")}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {cross.items.length > 0 && (
+                    <div className="flex flex-col">
+                      {cross.items.slice(0, 20).map((item) => (
+                        <div
+                          key={item.phrase}
+                          className="border-border flex flex-col gap-1 border-b py-2.5 last:border-b-0"
+                        >
+                          <span className="text-body-sm text-text-primary font-medium">
+                            {item.phrase}
+                          </span>
+                          <span className="text-caption text-text-secondary">
+                            Отминусовать: {item.minus_words.map((word) => `−${word}`).join(", ")}
+                          </span>
+                          {/* Показываем, чьи запросы перехватываются: без этого
+                              совет нельзя проверить и непонятно, что сломается,
+                              если ему последовать. */}
+                          <span className="text-caption text-text-secondary">
+                            Иначе заберёт запросы: {item.shadows.slice(0, 3).join(", ")}
+                            {item.shadows.length > 3 && ` и ещё ${item.shadows.length - 3}`}
+                          </span>
+                        </div>
+                      ))}
+                      {cross.items.length > 20 && (
+                        <p className="text-caption text-text-secondary pt-2">
+                          Показаны первые 20 из {cross.items.length}. Остальные попадут в выгрузку —
+                          там они проставлены к каждой фразе.
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </Card>
               )}
 
