@@ -382,10 +382,28 @@ def audit_page(
     )
 
 
+#: Теги, содержимое которых человек на странице не видит. Их текст обязан быть
+#: выброшен до любого разбора.
+#:
+#: Иначе внутрь попадает всё, что лежит в скриптах: настройки, JSON с ценами,
+#: тексты сообщений. Последствия расходятся широко — в объявление уезжает
+#: фрагмент вида «__DATA__ = {"current_text":"57 890 ₽"}», цены считаются по
+#: разметке, а не по витрине, и страница с большим скриптом перестаёт
+#: опознаваться как собираемая в браузере, потому что «текста» на ней много.
+_INVISIBLE_TAGS = ("script", "style", "noscript", "template", "svg", "iframe")
+
+
 def collect_signals(html: str) -> PageSignals:
     """Разбирает страницу в набор признаков."""
     tree = HTMLParser(html)
     signals = PageSignals()
+
+    # Считаем скрипты до вырезания: их количество — признак страницы,
+    # собираемой в браузере, и терять его нельзя.
+    scripts_before = len(tree.css("script"))
+
+    for hidden in tree.css(",".join(_INVISIBLE_TAGS)):
+        hidden.decompose()
 
     if (node := tree.css_first("title")) is not None:
         signals.title = node.text(strip=True)
@@ -413,7 +431,7 @@ def collect_signals(html: str) -> PageSignals:
     signals.has_tel_link = "tel:" in hrefs.lower()
     signals.internal_links = _internal_links(links)
     signals.text_length = len(text)
-    signals.scripts = len(tree.css("script"))
+    signals.scripts = scripts_before
     # Пустой корневой контейнер — почерк React, Vue и подобных: разметка
     # появляется в нём уже в браузере.
     signals.has_app_root = any(

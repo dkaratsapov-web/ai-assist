@@ -291,6 +291,23 @@ def _trim_words(text: str, limit: int) -> str:
 DRAFTS_PER_GROUP = 3
 
 
+def _safe_first(points: tuple[str, ...]) -> tuple[str, ...]:
+    """Сначала фрагменты без стоп-слов модерации, потом остальные.
+
+    Порядок, а не отбор: состав фрагментов остаётся тем же, меняется лишь
+    очередь, в которой они попадают в заголовок и текст.
+    """
+    banned = {stem(word) for word in SUPERLATIVES}
+
+    def risky(fragment: str) -> bool:
+        lowered = fragment.lower()
+        if any(phrase in lowered for phrase in SUPERLATIVE_PHRASES):
+            return True
+        return any(stem(word) in banned for word in tokenize(fragment))
+
+    return tuple(p for p in points if not risky(p)) + tuple(p for p in points if risky(p))
+
+
 def build_variants(
     *,
     cluster_name: str,
@@ -310,6 +327,14 @@ def build_variants(
     чем собрать три почти одинаковых объявления: тест между ними ничего не
     покажет, а специалист потратит на него недели.
     """
+    # Фрагменты, из-за которых объявление заведомо отклонят, отодвигаются в
+    # конец, а не выбрасываются. Собирать черновик из «гарантируем лучшие
+    # условия», заранее зная, что «лучшие» — причина отказа, значит выдавать
+    # работу, которую придётся переделать целиком. Но и выбросить нельзя: если
+    # других фрагментов на странице нет, пустое объявление хуже спорного —
+    # его хотя бы видно и можно поправить одним словом.
+    selling_points = _safe_first(selling_points)
+
     if not selling_points:
         return (
             build_draft(

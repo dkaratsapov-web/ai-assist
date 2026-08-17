@@ -11,6 +11,7 @@ import {
   ProjectSwitcher,
   Skeleton,
   StatusBadge,
+  plural,
 } from "@ads-os/ui";
 import { IconMegaphone } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
@@ -84,6 +85,18 @@ function AdsScreen() {
     };
   }, [api, selectedId]);
 
+  // Варианты приходят плоским списком, по несколько на группу. Собираем их
+  // обратно: порядок сохраняется, поэтому группы идут так же, как пришли.
+  const groups: { name: string; drafts: AdDraftRead[] }[] = [];
+  for (const draft of drafts ?? []) {
+    const last = groups[groups.length - 1];
+    if (last && last.name === draft.cluster) {
+      last.drafts.push(draft);
+    } else {
+      groups.push({ name: draft.cluster, drafts: [draft] });
+    }
+  }
+
   return (
     <AppShell
       title="Объявления"
@@ -140,21 +153,20 @@ function AdsScreen() {
           ) : (
             <>
               <Card>
-                <p className="text-body-sm text-text-secondary">
-                  Черновиков: {drafts.length}, без замечаний: {ready}. На каждую группу их несколько
-                  — Директу для сравнения нужно минимум два, с одним тестировать нечего. Текст
-                  собран из фрагментов вашей страницы — итоговый пишете вы, система проверяет лимиты
-                  и слова, из-за которых приходит отказ.
+                <p className="text-body-sm text-text-primary">
+                  {groups.length} {plural(groups.length, "группа", "группы", "групп")}, в каждой по
+                  несколько вариантов объявления. Без замечаний: {ready} из {drafts.length}.
                 </p>
-                <p className="text-caption text-text-secondary mt-2">
-                  Кнопка «Выгрузить кампанию» отдаёт файл со всей структурой: группы, фразы,
-                  объявления и минус-слова. Его можно открыть в Excel и завести кампанию через
-                  Коммандер, не дожидаясь доступа к API Директа.
+                <p className="text-caption text-text-secondary mt-1.5">
+                  Варианты нужны для сравнения: с одним объявлением тестировать нечего. Текст собран
+                  из фрагментов вашей страницы — итоговый пишете вы, система лишь проверяет лимиты и
+                  слова, из-за которых приходит отказ. Кнопка сверху отдаёт всё это файлом для
+                  Коммандера.
                 </p>
               </Card>
 
-              {drafts.map((draft, index) => (
-                <DraftCard key={`${draft.cluster}-${index}`} draft={draft} />
+              {groups.map((group) => (
+                <GroupCard key={group.name} name={group.name} drafts={group.drafts} />
               ))}
             </>
           )}
@@ -164,14 +176,52 @@ function AdsScreen() {
   );
 }
 
-function DraftCard({ draft }: { draft: AdDraftRead }) {
+/**
+ * Все варианты одной группы под одним заголовком.
+ *
+ * Раньше каждый вариант был отдельной карточкой со своим заголовком группы и
+ * числом фраз. При трёх вариантах на группу экран превращался в ленту, где
+ * подряд идут три карточки «купить айфон · фраз в группе: 81» — и выглядело
+ * это как три одинаковые группы, а не как три объявления одной. Первое, что
+ * спрашивали, увидев экран: «почему всё повторяется».
+ */
+function GroupCard({ name, drafts }: { name: string; drafts: AdDraftRead[] }) {
+  const phrases = drafts[0]?.keywords.length ?? 0;
+  const clean = drafts.filter((d) => d.is_ready).length;
+
   return (
-    <Card className={draft.is_ready ? "" : "border-warning-border"}>
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <CardHeader title={draft.cluster} description={`Фраз в группе: ${draft.keywords.length}`} />
-        <StatusBadge tone={draft.is_ready ? "success" : "warning"}>
-          {draft.is_ready ? "Пройдёт модерацию" : "Есть замечания"}
+    <Card>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <CardHeader
+          title={name}
+          description={`${phrases} ${plural(phrases, "фраза", "фразы", "фраз")} · ${drafts.length} ${plural(drafts.length, "вариант", "варианта", "вариантов")}`}
+        />
+        <StatusBadge tone={clean > 0 ? "success" : "warning"}>
+          {clean > 0
+            ? `${clean} ${plural(clean, "вариант готов", "варианта готовы", "вариантов готовы")}`
+            : "все с замечаниями"}
         </StatusBadge>
+      </div>
+
+      <div className="flex flex-col gap-3">
+        {drafts.map((draft, index) => (
+          <DraftBlock key={index} draft={draft} number={index + 1} />
+        ))}
+      </div>
+    </Card>
+  );
+}
+
+function DraftBlock({ draft, number }: { draft: AdDraftRead; number: number }) {
+  return (
+    <div className="border-border rounded-control border p-3">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-caption text-text-secondary">Вариант {number}</span>
+        {!draft.is_ready && (
+          <StatusBadge tone="warning" size="sm">
+            не пройдёт
+          </StatusBadge>
+        )}
       </div>
 
       {/* Объявление показано так, как его увидит человек в выдаче: иначе лимиты
@@ -220,7 +270,7 @@ function DraftCard({ draft }: { draft: AdDraftRead }) {
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   );
 }
 

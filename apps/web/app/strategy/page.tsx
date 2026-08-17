@@ -3,7 +3,17 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type { ApiError, LaunchPlanRead, ProjectRead } from "@ads-os/schemas";
-import { Card, CardHeader, ErrorState, ProjectSwitcher, Skeleton, StatusBadge } from "@ads-os/ui";
+import {
+  Card,
+  CardHeader,
+  ErrorState,
+  ProjectSwitcher,
+  Skeleton,
+  StatusBadge,
+  formatCurrency,
+  formatNumber,
+  plural,
+} from "@ads-os/ui";
 import type { Tone } from "@ads-os/tokens";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient } from "@/lib/api";
@@ -143,7 +153,10 @@ function StrategyScreen() {
                   <ul className="flex flex-col gap-2">
                     <Line
                       label="Заявок в неделю"
-                      value={current.weekly_conversions}
+                      // Заявок не бывает 102,6 — округляем. Дробная доля здесь
+                      // не точность, а видимость точности: она берётся из
+                      // деления месяца на 4,33 недели.
+                      value={`около ${formatNumber(Math.round(Number(current.weekly_conversions)))}`}
                       note={
                         current.learning_ready === false
                           ? "мало для обучения автостратегии"
@@ -153,7 +166,9 @@ function StrategyScreen() {
                     <Line
                       label="До первых выводов"
                       value={
-                        current.test_weeks !== null ? `${current.test_weeks} нед.` : "слишком долго"
+                        current.test_weeks !== null
+                          ? `${current.test_weeks} ${plural(current.test_weeks, "неделя", "недели", "недель")}`
+                          : "слишком долго"
                       }
                       note={
                         current.test_weeks === null
@@ -162,7 +177,13 @@ function StrategyScreen() {
                       }
                     />
                     {current.test_budget !== null && (
-                      <Line label="Бюджет теста" value={`${current.test_budget} ₽`} />
+                      <Line
+                        label="Бюджет теста"
+                        // Копейки в плановом бюджете — ложная точность: сам
+                        // бюджет задан круглым числом, и до копеек он всё
+                        // равно не соблюдается.
+                        value={formatCurrency(Math.round(Number(current.test_budget)))}
+                      />
                     )}
                   </ul>
                 </Card>
