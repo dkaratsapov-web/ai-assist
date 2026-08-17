@@ -40,6 +40,25 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm --filter @ads-os/tokens build \
     && pnpm --filter @ads-os/web build
 
+# Next обходит зависимости статически и копирует в самодостаточную сборку
+# только те файлы, до которых дотянулся. До ESM-части @swc/helpers он не
+# дотягивается: её подключает внутренний загрузчик самого Next уже во время
+# работы. В образ попадает половина пакета — есть cjs, нет esm, — и контейнер
+# падает при старте с «Cannot find module .../esm/_interop_require_default.js».
+#
+# Досылаем пакет целиком. Версия не зашита: она меняется вместе с Next, и
+# зашитая однажды превратилась бы в поломку при следующем обновлении.
+RUN set -eu; \
+    src="$(ls -d node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers 2>/dev/null | head -1)"; \
+    dst="$(ls -d apps/web/.next/standalone/node_modules/.pnpm/@swc+helpers@*/node_modules/@swc/helpers 2>/dev/null | head -1)"; \
+    if [ -n "$src" ] && [ -n "$dst" ]; then \
+        cp -r "$src/." "$dst/"; \
+        echo "@swc/helpers дослан целиком"; \
+    else \
+        echo "@swc/helpers не нуждается в досылке"; \
+    fi; \
+    test -f apps/web/.next/standalone/apps/web/server.js
+
 
 FROM node:22-slim AS runtime
 
