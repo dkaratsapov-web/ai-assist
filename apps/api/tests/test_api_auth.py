@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -76,6 +77,18 @@ class TestНачалоВхода:
 
         assert response.status_code == 307
         assert response.headers["location"].startswith("https://oauth.yandex.ru/authorize")
+
+    async def test_просит_только_почту_и_имя(self, client: AsyncClient) -> None:
+        """Права запрашиваются явно, а не берутся из настроек приложения.
+
+        Без параметра scope Яндекс спрашивает у человека все права, какие есть
+        у приложения. Стоит однажды добавить туда доступ к Директу — и обычный
+        вход начнёт требовать разрешения на управление рекламными бюджетами.
+        """
+        response = await client.get("/api/v1/auth/login")
+        scope = parse_qs(urlsplit(response.headers["location"]).query)["scope"][0]
+
+        assert scope.split() == ["login:email", "login:info"]
 
     async def test_кладёт_state_в_куку(self, client: AsyncClient) -> None:
         """Без него можно подсунуть чужой код авторизации."""

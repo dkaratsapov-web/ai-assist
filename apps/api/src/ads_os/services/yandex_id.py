@@ -58,6 +58,18 @@ def new_state() -> str:
     return secrets.token_urlsafe(24)
 
 
+#: Права, которые запрашиваются при входе. Ровно два: опознать человека по
+#: почте и показать его имя в интерфейсе.
+#:
+#: Список задан явно, а не отдан на откуп настройкам приложения. Без параметра
+#: `scope` Яндекс запрашивает у человека все права, какие есть у приложения, —
+#: и стоит однажды добавить туда доступ к Директу, как обычный вход начнёт
+#: спрашивать разрешение на управление рекламными бюджетами. Человек, который
+#: зашёл посмотреть отчёт, такого разрешения не давал и давать не должен, а
+#: выданный токен оказался бы мощнее, чем нужно кому-либо для входа.
+LOGIN_SCOPES = ("login:email", "login:info")
+
+
 def authorize_url(*, client_id: str, redirect_uri: str, state: str) -> str:
     """Адрес, куда отправляем человека для входа."""
     query = urlencode(
@@ -66,6 +78,7 @@ def authorize_url(*, client_id: str, redirect_uri: str, state: str) -> str:
             "client_id": client_id,
             "redirect_uri": redirect_uri,
             "state": state,
+            "scope": " ".join(LOGIN_SCOPES),
         }
     )
     return f"{AUTHORIZE_URL}?{query}"
