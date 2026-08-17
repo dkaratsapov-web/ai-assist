@@ -103,6 +103,16 @@ services:
       AI_PROVIDER: stub
       AI_SENSITIVE_PROVIDER: none
       AD_PLATFORM_ADAPTER: mock
+    # Проверка живости своя: унаследованная от образа API стучится на порт 8000,
+    # которого у воркера нет. Она была бы вечно красной при исправно работающем
+    # процессе — а такая проверка хуже отсутствующей, потому что на неё
+    # перестают смотреть.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A ads_os.worker.app inspect ping -t 5 > /dev/null || exit 1"]
+      interval: 60s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
     depends_on:
       postgres:
         condition: service_healthy
@@ -123,7 +133,30 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
-    command: ["celery", "-A", "ads_os.worker.app", "beat", "--loglevel", "info"]
+    # Файл расписания кладётся в /tmp, а не в рабочую папку: она принадлежит
+    # root, а процесс работает под обычным пользователем и создать там ничего
+    # не может. Без этого beat падает при старте и уходит в вечный перезапуск.
+    command:
+      [
+        "celery",
+        "-A",
+        "ads_os.worker.app",
+        "beat",
+        "--loglevel",
+        "info",
+        "--schedule",
+        "/tmp/celerybeat-schedule",
+      ]
+    # Образ общий с API, а его проверка живости стучится на порт 8000. Beat
+    # ничего не обслуживает, порт молчит — и служба вечно числилась бы больной,
+    # работая при этом нормально. Проверяем то, что действительно важно: жив ли
+    # процесс планировщика.
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'celery.*beat' > /dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
     restart: unless-stopped
     environment:
       APP_ENV: staging
@@ -158,6 +191,14 @@ services:
       APP_ENV: staging
       LOG_LEVEL: info
       REDIS_URL: redis://redis:6379/0
+    # См. пояснение у обычного воркера: унаследованная проверка стучится на
+    # порт, которого здесь нет.
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A ads_os.worker.app inspect ping -t 5 > /dev/null || exit 1"]
+      interval: 60s
+      timeout: 15s
+      start_period: 30s
+      retries: 3
     depends_on:
       redis:
         condition: service_healthy
