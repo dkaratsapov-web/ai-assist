@@ -5,6 +5,7 @@ import {
   IconFolder,
   IconGlobe,
   IconHome,
+  IconLayers,
   IconMegaphone,
   IconSearch,
   IconSettings,
@@ -50,7 +51,10 @@ export const globalNavigation: NavGroup[] = [
   {
     key: "projects",
     title: "Проекты",
-    items: [{ key: "projects", label: "Проекты", href: "/projects", icon: IconFolder }],
+    items: [
+      { key: "projects", label: "Проекты", href: "/projects", icon: IconFolder },
+      { key: "overview", label: "Обзор всех", href: "/overview", icon: IconLayers },
+    ],
   },
   {
     key: "research",
