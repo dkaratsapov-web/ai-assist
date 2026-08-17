@@ -7,6 +7,7 @@ import type {
   ComparisonRead,
   CompetitorRead,
   FeatureRowRead,
+  OfferRowRead,
   ProjectRead,
 } from "@ads-os/schemas";
 import {
@@ -233,9 +234,30 @@ function CompetitorsScreen() {
                 </Card>
               )}
 
+              {/* Предметное сравнение идёт первым. К конкуренту приходят
+                  смотреть, чем он берёт — цену, срок, гарантию, — а не
+                  выяснять, есть ли у него телефон. Таблица признаков ниже
+                  остаётся: она отвечает на другой вопрос, о технической
+                  готовности страницы. */}
+              {comparison?.offer_has_data && (
+                <Card>
+                  <CardHeader
+                    title="Чем берут конкуренты"
+                    description="Условия дословно с их страниц — можно открыть и проверить"
+                  />
+                  <div className="flex flex-col">
+                    {comparison.offer_rows
+                      .filter((row) => row.mine || row.rivals.some((rival) => rival.value))
+                      .map((row) => (
+                        <OfferRow key={row.key} row={row} />
+                      ))}
+                  </div>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader
-                  title="Сравнение"
+                  title="Готовность страниц"
                   description={`Проверено конкурентов: ${comparison?.rivals_checked ?? 0}`}
                 />
                 <div className="overflow-x-auto">
@@ -314,6 +336,52 @@ function CompetitorsScreen() {
         </div>
       </Modal>
     </AppShell>
+  );
+}
+
+/**
+ * Одно условие предложения: наше, их и вывод.
+ *
+ * Цитаты показываются дословно и с адресом конкурента. В этом весь смысл:
+ * пересказ чужого предложения своими словами превращает факт в мнение, а так
+ * специалист открывает сайт и находит ту же строку глазами за десять секунд.
+ */
+function OfferRow({ row }: { row: OfferRowRead }) {
+  return (
+    <div className="border-border border-b py-3 last:border-b-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-body-sm text-text-primary font-medium">{row.label}</span>
+        {row.is_gap && <StatusBadge tone="warning">Смотреть в первую очередь</StatusBadge>}
+      </div>
+
+      <div className="mt-1.5 flex flex-col gap-1">
+        <div className="flex flex-wrap gap-x-2">
+          <span className="text-caption text-text-secondary w-28 shrink-0">У вас</span>
+          <span className="text-body-sm text-text-primary min-w-0 flex-1">
+            {row.mine || <span className="text-text-secondary">не указано</span>}
+          </span>
+        </div>
+
+        {row.rivals
+          .filter((rival) => rival.value)
+          .map((rival) => (
+            <div key={rival.url} className="flex flex-wrap gap-x-2">
+              <a
+                href={rival.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="text-caption text-info focus-visible:outline-focus w-28 shrink-0 truncate focus-visible:outline-2"
+                title={rival.url}
+              >
+                {rival.title}
+              </a>
+              <span className="text-body-sm text-text-secondary min-w-0 flex-1">{rival.value}</span>
+            </div>
+          ))}
+      </div>
+
+      {row.verdict && <p className="text-body-sm text-text-primary mt-2">{row.verdict}</p>}
+    </div>
   );
 }
 

@@ -22,6 +22,7 @@ from ...db.session import session_scope
 from ...models.audit import ModuleStatus
 from ...models.competitor import Competitor
 from ...models.usage import UsageService, UsageUnit
+from ...services import offer
 from ...services.audit import collect_signals
 from ...services.competitors import extract_features
 from ...services.usage import record as record_usage
@@ -64,7 +65,11 @@ async def _process(competitor_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         signals = collect_signals(fetched["html"])
         competitor.status = ModuleStatus.COMPLETED
         competitor.error_reason = None
-        competitor.features = {key.value: value for key, value in extract_features(signals).items()}
+        competitor.features = {
+            key.value: value for key, value in extract_features(signals).items()
+        }
+        # Условия предложения дословно: ради них сравнение и существует.
+        competitor.offer = offer.extract(fetched["html"]).as_dict()
 
         # Страница конкурента — такой же расход, как своя: тот же трафик и то же
         # время воркера. Считать только свои значило бы занижать потребление там,

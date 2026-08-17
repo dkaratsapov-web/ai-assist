@@ -94,6 +94,10 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: попадают только тогда, когда специалист их принял.
     client_profile: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
+    #: Условия предложения своей страницы — вторая половина сравнения с
+    #: конкурентами. Собираются тем же разбором, что и у них.
+    offer: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

@@ -12,8 +12,9 @@ from ...errors import AppError, ConflictError
 from ...models import Competitor, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
+from ...services import offer
 from ...services.activity import record
-from ...services.competitors import FeatureKey, Participant, compare
+from ...services.competitors import FeatureKey, Participant, compare, compare_offers
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.competitors import enqueue_competitor
 from ..deps import SessionDep, TenantDep, WriteDep
@@ -23,6 +24,8 @@ from ..schemas import (
     CompetitorList,
     CompetitorRead,
     FeatureRowRead,
+    OfferRowRead,
+    RivalValueRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -211,6 +214,17 @@ async def get_comparison(
 
     result = compare(mine, rivals)
 
+    # Предметное сравнение считается по тем же разобранным страницам, что и
+    # таблица признаков. Второй заход на сайты ради него был бы повтором той
+    # же работы — и чужие серверы этого не заслужили.
+    offers = compare_offers(
+        offer.from_stored(audit.offer if own_checked and audit else None),
+        tuple(
+            (c.title or c.url, c.url, offer.from_stored(c.offer))
+            for c in competitors
+        ),
+    )
+
     return ComparisonRead(
         project_id=project_id,
         own_site_checked=own_checked,
@@ -229,6 +243,21 @@ async def get_comparison(
             )
             for row in result.rows
         ],
+        offer_rows=[
+            OfferRowRead(
+                key=row.key.value,
+                label=row.label,
+                mine=row.mine,
+                rivals=[
+                    RivalValueRead(title=r.title, url=r.url, value=r.value)
+                    for r in row.rivals
+                ],
+                verdict=row.verdict,
+                is_gap=row.is_gap,
+            )
+            for row in offers.rows
+        ],
+        offer_has_data=offers.has_data,
     )
 
 

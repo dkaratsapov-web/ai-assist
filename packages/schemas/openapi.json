@@ -1263,6 +1263,17 @@
       },
       "ComparisonRead": {
         "properties": {
+          "offer_has_data": {
+            "title": "Offer Has Data",
+            "type": "boolean"
+          },
+          "offer_rows": {
+            "items": {
+              "$ref": "#/components/schemas/OfferRowRead"
+            },
+            "title": "Offer Rows",
+            "type": "array"
+          },
           "own_site_checked": {
             "title": "Own Site Checked",
             "type": "boolean"
@@ -1300,7 +1311,9 @@
           "own_site_checked",
           "rivals_checked",
           "summary",
-          "rows"
+          "rows",
+          "offer_rows",
+          "offer_has_data"
         ],
         "title": "ComparisonRead",
         "type": "object"
@@ -3220,6 +3233,48 @@
         "title": "NotificationRead",
         "type": "object"
       },
+      "OfferRowRead": {
+        "description": "Одно условие предложения: наше, их и вывод.\n\nЦитаты дословные. Пересказ чужого предложения своими словами превращает\nфакт в мнение, а вся ценность такого сравнения в том, что его можно\nпроверить, открыв сайт конкурента и найдя глазами ту же строку.",
+        "properties": {
+          "is_gap": {
+            "title": "Is Gap",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mine": {
+            "title": "Mine",
+            "type": "string"
+          },
+          "rivals": {
+            "items": {
+              "$ref": "#/components/schemas/RivalValueRead"
+            },
+            "title": "Rivals",
+            "type": "array"
+          },
+          "verdict": {
+            "title": "Verdict",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "mine",
+          "rivals",
+          "verdict",
+          "is_gap"
+        ],
+        "title": "OfferRowRead",
+        "type": "object"
+      },
       "OnboardingApply": {
         "description": "Что из прочитанного перенести в проект.\n\nПоля выбираются по одному, а не «применить всё»: разбор ошибается, и\nчеловек должен иметь возможность взять город, но не взять нишу.",
         "properties": {
@@ -3886,6 +3941,30 @@
         ],
         "title": "Reason",
         "type": "string"
+      },
+      "RivalValueRead": {
+        "description": "Условие у одного конкурента — как написано у него на странице.",
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "url",
+          "value"
+        ],
+        "title": "RivalValueRead",
+        "type": "object"
       },
       "SearchKeywordRead": {
         "description": "Найденная фраза вместе с проектом.\n\nБез указания проекта фраза не отвечает ни на один вопрос: «остекление\nбалконов» есть у половины клиентов.",

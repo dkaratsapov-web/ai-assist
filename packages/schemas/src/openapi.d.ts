@@ -1663,6 +1663,10 @@ export interface components {
         };
         /** ComparisonRead */
         ComparisonRead: {
+            /** Offer Has Data */
+            offer_has_data: boolean;
+            /** Offer Rows */
+            offer_rows: components["schemas"]["OfferRowRead"][];
             /** Own Site Checked */
             own_site_checked: boolean;
             /**
@@ -2366,6 +2370,28 @@ export interface components {
             title: string;
         };
         /**
+         * OfferRowRead
+         * @description Одно условие предложения: наше, их и вывод.
+         *
+         *     Цитаты дословные. Пересказ чужого предложения своими словами превращает
+         *     факт в мнение, а вся ценность такого сравнения в том, что его можно
+         *     проверить, открыв сайт конкурента и найдя глазами ту же строку.
+         */
+        OfferRowRead: {
+            /** Is Gap */
+            is_gap: boolean;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Mine */
+            mine: string;
+            /** Rivals */
+            rivals: components["schemas"]["RivalValueRead"][];
+            /** Verdict */
+            verdict: string;
+        };
+        /**
          * OnboardingApply
          * @description Что из прочитанного перенести в проект.
          *
@@ -2637,6 +2663,18 @@ export interface components {
          * @enum {string}
          */
         Reason: "geo" | "job" | "diy" | "free" | "used" | "study" | "media" | "marketplace" | "fraud" | "offtopic" | "minus_word";
+        /**
+         * RivalValueRead
+         * @description Условие у одного конкурента — как написано у него на странице.
+         */
+        RivalValueRead: {
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+            /** Value */
+            value: string;
+        };
         /**
          * SearchKeywordRead
          * @description Найденная фраза вместе с проектом.

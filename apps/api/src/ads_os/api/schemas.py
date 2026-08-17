@@ -305,6 +305,31 @@ class FeatureRowRead(BaseModel):
     is_advantage: bool
 
 
+class RivalValueRead(BaseModel):
+    """Условие у одного конкурента — как написано у него на странице."""
+
+    title: str
+    url: str
+    value: str
+
+
+class OfferRowRead(BaseModel):
+    """Одно условие предложения: наше, их и вывод.
+
+    Цитаты дословные. Пересказ чужого предложения своими словами превращает
+    факт в мнение, а вся ценность такого сравнения в том, что его можно
+    проверить, открыв сайт конкурента и найдя глазами ту же строку.
+    """
+
+    key: str
+    label: str
+    mine: str
+    rivals: list[RivalValueRead]
+    #: Вывод одной фразой. Пусто там, где из чисел ничего не следует.
+    verdict: str
+    is_gap: bool
+
+
 class ComparisonRead(BaseModel):
     project_id: uuid.UUID
     #: Проверялся ли наш сайт. Без этого колонка «у вас» читалась бы как
@@ -313,6 +338,12 @@ class ComparisonRead(BaseModel):
     rivals_checked: int
     summary: str | None
     rows: list[FeatureRowRead]
+    #: Предметное сравнение: цены, сроки, гарантии, что обещают бесплатно.
+    #: Ради него сравнение и существует — по галочкам «есть форма» решение о
+    #: том, чем отличаться от конкурента, принять нельзя.
+    offer_rows: list[OfferRowRead]
+    #: Есть ли у разобранных конкурентов хоть какие-то условия на страницах.
+    offer_has_data: bool
 
 
 class CurrentUserRead(BaseModel):

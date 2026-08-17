@@ -48,5 +48,10 @@ class Competitor(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: Набор «признак → есть/нет». Структура задаётся модулем сравнения.
     features: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
+    #: Условия предложения дословно: цены, сроки, гарантии, что бесплатно.
+    #: Ради них сравнение и существует — по галочкам «есть форма» решение о
+    #: том, чем отличаться от конкурента, принять нельзя.
+    offer: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     error_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

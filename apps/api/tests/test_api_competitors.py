@@ -360,3 +360,116 @@ class TestСравнение:
         )
 
         assert response.json()["rivals_checked"] == 0
+
+
+MY_PAGE = """
+<html><body><h1>Натяжные потолки</h1>
+<p>Монтаж от 450 ₽ за м². Гарантия 12 месяцев.</p>
+<form><input name="a"><input name="b"><input name="c"><input name="d"></form>
+</body></html>
+"""
+
+RIVAL_PAGE = """
+<html><body><h1>Натяжные потолки за 1 день</h1>
+<p>Цена от 290 ₽ за м². Замер бесплатно. Скидка 20%.</p>
+<form><input name="phone"></form>
+</body></html>
+"""
+
+
+class TestПредметноеСравнение:
+    """Не «есть цены — нет цен», а насколько именно ваша цена выше.
+
+    Ради этого сравнение и существует: по галочке «цены есть у обоих» решение о
+    том, чем отличаться от конкурента, принять невозможно.
+    """
+
+    async def _setup(
+        self, session: AsyncSession, project_ctx: tuple[Organization, User, Project]
+    ) -> None:
+        from ads_os.services.offer import extract
+
+        org, _, project = project_ctx
+        session.add(
+            SiteAudit(
+                organization_id=org.id,
+                project_id=project.id,
+                url="https://example.com/",
+                status=ModuleStatus.COMPLETED,
+                score=70,
+                categories=[],
+                issues=[],
+                features=ALL_FEATURES,
+                offer=extract(MY_PAGE).as_dict(),
+            )
+        )
+        session.add(
+            Competitor(
+                organization_id=org.id,
+                project_id=project.id,
+                url="https://rival.ru/",
+                title="Конкурент",
+                status=ModuleStatus.COMPLETED,
+                features=ALL_FEATURES,
+                offer=extract(RIVAL_PAGE).as_dict(),
+            )
+        )
+        await session.commit()
+
+    async def test_цены_сравниваются_числами(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_ctx
+        await self._setup(session, project_ctx)
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/comparison", headers=headers(org, user)
+            )
+        ).json()
+        row = next(r for r in body["offer_rows"] if r["key"] == "price")
+
+        assert body["offer_has_data"] is True
+        assert "450" in row["verdict"] and "290" in row["verdict"]
+        assert row["is_gap"] is True
+
+    async def test_цитата_конкурента_подписана_адресом(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        """Без адреса цитату не проверить, а вся её ценность в проверяемости."""
+        org, user, project = project_ctx
+        await self._setup(session, project_ctx)
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/comparison", headers=headers(org, user)
+            )
+        ).json()
+        row = next(r for r in body["offer_rows"] if r["key"] == "deadline")
+
+        assert row["rivals"][0]["url"] == "https://rival.ru/"
+        assert "1 день" in row["rivals"][0]["value"]
+
+    async def test_старые_разборы_без_условий_не_ломают_ответ(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        """Конкуренты, разобранные до появления условий, лежат с пустым полем."""
+        org, user, project = project_ctx
+        await add_audit(session, project_ctx, ALL_FEATURES)
+        await add_rival(session, project_ctx, "https://old.ru/", ALL_FEATURES)
+
+        response = await client.get(
+            f"/api/v1/projects/{project.id}/comparison", headers=headers(org, user)
+        )
+
+        assert response.status_code == 200
+        assert response.json()["offer_has_data"] is False

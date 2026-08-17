@@ -27,7 +27,7 @@ from ...db.session import session_scope
 from ...models.audit import ModuleStatus, SiteAudit
 from ...models.project import Project
 from ...models.usage import UsageService, UsageUnit
-from ...services import niches, profile
+from ...services import niches, offer, profile
 from ...services.audit import (
     audit_page,
     collect_signals,
@@ -142,6 +142,7 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         # Анкета клиента читается тем же заходом на страницу. Отдельный проход
         # ради неё был бы вторым визитом на чужой сайт за теми же данными.
         audit.client_profile = profile.extract(fetched["html"]).as_dict()
+        audit.offer = offer.extract(fetched["html"]).as_dict()
 
         # Учёт ведётся по факту разбора, а не по факту постановки в очередь:
         # задача может не дойти до воркера, и записанная заранее страница
