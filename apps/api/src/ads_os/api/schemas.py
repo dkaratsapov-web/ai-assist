@@ -19,6 +19,7 @@ from ..models.audit import ModuleStatus
 from ..models.notification import NotificationKind, NotificationLevel
 from ..models.project import MainConversion, ProjectStatus
 from ..services.ads import Problem
+from ..services.cleanup import Reason
 from ..services.competitors import FeatureKey
 from ..services.economics import Availability, EconomicsMode
 from ..services.progress import StepKey, StepState
@@ -653,6 +654,10 @@ class KeywordRead(BaseModel):
     #: Слово, из-за которого фраза отнесена к этому типу. Пусто, если признаков
     #: не нашлось и сработало правило по умолчанию.
     trigger: str | None
+    #: Вид мусора: другой город, поиск работы, «своими руками». Одного слова
+    #: мало — «москва» само по себе не объясняет, почему фраза лишняя.
+    reason: Reason | None = None
+    reason_label: str | None = None
     #: Тип назначен человеком, а не словарём. Повторный разбор такие фразы не
     #: трогает.
     is_manual: bool
@@ -689,6 +694,21 @@ class ImportSummary(BaseModel):
     informational: int
     irrelevant: int
     clusters: int
+    #: Из чего складывается нецелевая часть. Без разбивки число «нецелевых: 480»
+    #: остаётся числом: непонятно, вычистилось лишнее или вычистилось нужное.
+    cleaned: list[CleanupGroupRead]
+
+
+class CleanupGroupRead(BaseModel):
+    """Одна причина, по которой фразы признаны нецелевыми."""
+
+    reason: Reason
+    label: str
+    #: Что с этим делать. Для чужих городов — поправить регион, для остального —
+    #: перенести слово в минус-список.
+    hint: str
+    phrases: int
+    examples: list[str]
 
 
 class ClusterRead(BaseModel):
@@ -712,6 +732,8 @@ class MinusWordSuggestionRead(BaseModel):
     #: Сколько фраз оно уводит в нецелевые.
     phrases: int
     examples: list[str]
+    reason: Reason | None = None
+    reason_label: str | None = None
 
 
 class MinusWordRead(BaseModel):
@@ -766,6 +788,29 @@ class CrossMinusResultRead(BaseModel):
 
 class MinusWordCreate(BaseModel):
     word: str = Field(min_length=2, max_length=60)
+
+
+class MinusWordBulkCreate(BaseModel):
+    """Несколько минус-слов разом.
+
+    Стартовый набор ниши — это два десятка слов. Добавлять их по одному значит
+    двадцать раз нажать и двадцать раз дождаться перепроверки ядра.
+    """
+
+    words: list[str] = Field(min_length=1, max_length=200)
+
+
+class CleanupResult(BaseModel):
+    """Итог чистки ядра."""
+
+    #: Сколько фраз удалено или перемечено.
+    affected: int
+    #: Сколько осталось в проекте.
+    remaining: int
+    commercial: int
+    informational: int
+    irrelevant: int
+    clusters: int
 
 
 class AdViolationRead(BaseModel):

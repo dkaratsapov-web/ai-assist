@@ -677,3 +677,230 @@ class TestПовторённыеРешения:
         ).json()
 
         assert body["learned"] == []
+
+
+REGION_LIST = """\
+пластиковые окна тверь\t900
+пластиковые окна москва\t8000
+окна в московской области\t2000
+окна своими руками\t300
+"""
+
+
+class TestЧисткаЯдра:
+    """Чистка через API: что помечено, что удаляется и что остаётся."""
+
+    async def test_чужой_город_помечается_при_импорте(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        row.primary_region = "Тверь"
+        await session.commit()
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/import",
+                json={"text": REGION_LIST},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        reasons = {group["reason"]: group for group in body["cleaned"]}
+
+        assert reasons["geo"]["phrases"] == 2
+        assert reasons["diy"]["phrases"] == 1
+        assert body["commercial"] == 1
+
+    async def test_без_региона_города_не_трогаются(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Регион не заполнен — судить не по чему, и молчание честнее находки."""
+        org, user, row = project
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/import",
+                json={"text": REGION_LIST},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert [group["reason"] for group in body["cleaned"]] == ["diy"]
+
+    async def test_причина_видна_в_списке_фраз(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        row.primary_region = "Тверь"
+        await session.commit()
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+
+        items = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords?intent=irrelevant",
+                headers=headers(org, user),
+            )
+        ).json()["items"]
+        moscow = next(item for item in items if item["phrase"] == "пластиковые окна москва")
+
+        assert moscow["reason"] == "geo"
+        assert moscow["reason_label"] == "другой город"
+
+    async def test_перепроверка_после_смены_региона(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Ядро загружено вчера, регион уточнён сегодня. Без перепроверки
+        проект навсегда остался бы с прежней разметкой."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+
+        row.primary_region = "Тверь"
+        await session.commit()
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/recheck", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["affected"] == 2
+        assert body["irrelevant"] == 3
+
+    async def test_перепроверка_не_трогает_ручные_решения(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+        items = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords?intent=irrelevant",
+                headers=headers(org, user),
+            )
+        ).json()["items"]
+        await client.patch(
+            f"/api/v1/projects/{row.id}/keywords/{items[0]['id']}",
+            json={"intent": "commercial"},
+            headers=headers(org, user),
+        )
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/recheck", headers=headers(org, user)
+        )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
+            )
+        ).json()["items"]
+        kept = next(item for item in after if item["id"] == items[0]["id"])
+
+        assert kept["intent"] == "commercial"
+
+    async def test_массовое_удаление_убирает_только_нецелевые(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        row.primary_region = "Тверь"
+        await session.commit()
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.delete(
+                f"/api/v1/projects/{row.id}/keywords/irrelevant", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["affected"] == 3
+        assert body["remaining"] == 1
+        assert body["irrelevant"] == 0
+
+    async def test_массовое_удаление_щадит_ручные_решения(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Кнопка «убрать мусор» не должна стирать то, что человек решил сам."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+        items = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
+            )
+        ).json()["items"]
+        target = next(item for item in items if item["phrase"] == "пластиковые окна москва")
+        await client.patch(
+            f"/api/v1/projects/{row.id}/keywords/{target['id']}",
+            json={"intent": "irrelevant"},
+            headers=headers(org, user),
+        )
+
+        await client.delete(
+            f"/api/v1/projects/{row.id}/keywords/irrelevant", headers=headers(org, user)
+        )
+
+        left = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
+            )
+        ).json()["items"]
+
+        assert target["id"] in {item["id"] for item in left}
+
+    async def test_несколько_минус_слов_разом(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": REGION_LIST},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/minus-words/bulk",
+                json={"words": ["москва", "московская", "москва"]},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert {item["word"] for item in body["items"]} == {"москва", "московская"}
+
+        items = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords?intent=irrelevant",
+                headers=headers(org, user),
+            )
+        ).json()["items"]
+
+        assert len(items) == 3

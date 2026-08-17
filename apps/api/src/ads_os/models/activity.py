@@ -46,6 +46,7 @@ class ActivityAction(StrEnum):
     ISSUE_RESTORED = "issue_restored"
 
     KEYWORDS_IMPORTED = "keywords_imported"
+    KEYWORDS_CLEANED = "keywords_cleaned"
     MINUS_WORD_ADDED = "minus_word_added"
     MINUS_SET_SAVED = "minus_set_saved"
     MINUS_SET_APPLIED = "minus_set_applied"

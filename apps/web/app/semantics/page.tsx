@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type {
   ApiError,
+  CleanupGroupRead,
+  CleanupResult,
   ClusterRead,
   CrossMinusResultRead,
   ImportSummary,
@@ -25,6 +27,7 @@ import {
   ProjectSwitcher,
   Skeleton,
   StatusBadge,
+  plural,
 } from "@ads-os/ui";
 import type { Tone } from "@ads-os/tokens";
 import { IconSearch } from "@ads-os/ui/icons";
@@ -73,6 +76,9 @@ function SemanticsScreen() {
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [dropping, setDropping] = useState(false);
+  const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -186,6 +192,44 @@ function SemanticsScreen() {
     }
   };
 
+  const addAllMinus = async (words: string[]) => {
+    if (!selectedId) return;
+    try {
+      await api.addMinusWords(selectedId, words);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const recheck = async () => {
+    if (!selectedId) return;
+    setCleaning(true);
+    try {
+      setCleanup(await api.recheckKeywords(selectedId));
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    } finally {
+      setCleaning(false);
+    }
+  };
+
+  const dropIrrelevant = async () => {
+    if (!selectedId) return;
+    setCleaning(true);
+    try {
+      setCleanup(await api.dropIrrelevantKeywords(selectedId));
+      setDropping(false);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+      setDropping(false);
+    } finally {
+      setCleaning(false);
+    }
+  };
+
   const removeMinus = async (id: string) => {
     if (!selectedId) return;
     try {
@@ -242,6 +286,18 @@ function SemanticsScreen() {
                 {summary.skipped > 0 && `, пропущено строк ${summary.skipped}`}. Целевых{" "}
                 {summary.commercial}, информационных {summary.informational}, нецелевых{" "}
                 {summary.irrelevant}. Групп: {summary.clusters}.
+              </p>
+              {summary.cleaned.length > 0 && <CleanupBreakdown groups={summary.cleaned} />}
+            </Card>
+          )}
+
+          {cleanup && (
+            <Card>
+              <p className="text-body-sm text-text-primary">
+                Готово: затронуто {cleanup.affected}{" "}
+                {plural(cleanup.affected, "фраза", "фразы", "фраз")}. В ядре осталось{" "}
+                {cleanup.remaining}: целевых {cleanup.commercial}, информационных{" "}
+                {cleanup.informational}, нецелевых {cleanup.irrelevant}. Групп: {cleanup.clusters}.
               </p>
             </Card>
           )}
@@ -394,45 +450,23 @@ function SemanticsScreen() {
                       </div>
                     )}
                     {minus.from_niche.length > 0 && (
-                      <div className="border-border mb-3 border-t pt-3">
-                        <p className="text-caption text-text-secondary mb-1.5">
-                          Стартовый набор — минусуют почти всегда
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {minus.from_niche.map((word) => (
-                            <Button
-                              key={word}
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => void addMinus(word)}
-                            >
-                              + {word}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
+                      <SuggestedWords
+                        title="Стартовый набор — минусуют почти всегда"
+                        words={minus.from_niche}
+                        onAdd={addMinus}
+                        onAddAll={addAllMinus}
+                      />
                     )}
                     {minus.learned.length > 0 && (
-                      <div className="border-border mb-3 border-t pt-3">
-                        {/* Подсказка, а не автоматика: слово не добавляется само.
-                          Тихо отсечённый трафик — это то, о чём человек не
-                          просил и о чём не узнает. */}
-                        <p className="text-caption text-text-secondary mb-1.5">
-                          Вы относили это к нецелевым в других проектах
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {minus.learned.map((word) => (
-                            <Button
-                              key={word}
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => void addMinus(word)}
-                            >
-                              + {word}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
+                      // Подсказка, а не автоматика: слово не добавляется само.
+                      // Тихо отсечённый трафик — это то, о чём человек не
+                      // просил и о чём не узнает.
+                      <SuggestedWords
+                        title="Вы относили это к нецелевым в других проектах"
+                        words={minus.learned}
+                        onAdd={addMinus}
+                        onAddAll={addAllMinus}
+                      />
                     )}
                     {minus.suggestions.length > 0 && (
                       <>
@@ -444,7 +478,15 @@ function SemanticsScreen() {
                               className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
                             >
                               <div className="flex min-w-0 flex-col">
-                                <span className="text-body-sm text-text-primary">{item.word}</span>
+                                <span className="text-body-sm text-text-primary">
+                                  {item.word}
+                                  {item.reason_label && (
+                                    <span className="text-text-secondary">
+                                      {" "}
+                                      — {item.reason_label}
+                                    </span>
+                                  )}
+                                </span>
                                 {/* Пример нужен, чтобы видеть, не выбросит ли
                                   минус-слово что-то нужное. */}
                                 <span className="text-caption text-text-secondary">
@@ -465,6 +507,28 @@ function SemanticsScreen() {
                     )}
                   </Card>
                 )}
+
+              <Card>
+                <CardHeader
+                  title="Чистка ядра"
+                  description="Разметка — предложение, а не приговор: любую фразу можно вернуть одним нажатием"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={recheck} loading={cleaning}>
+                    Перепроверить заново
+                  </Button>
+                  {counts.irrelevant > 0 && (
+                    <Button size="sm" variant="ghost" onClick={() => setDropping(true)}>
+                      Убрать нецелевые ({counts.irrelevant})
+                    </Button>
+                  )}
+                </div>
+                <p className="text-caption text-text-secondary mt-2">
+                  Перепроверка нужна после того, как поменялся регион проекта или минус-слова:
+                  фразы, загруженные раньше, разбирались по старым условиям. Ваши решения она не
+                  трогает.
+                </p>
+              </Card>
 
               <FilterBar
                 label="Фильтр фраз"
@@ -493,6 +557,28 @@ function SemanticsScreen() {
           )}
         </>
       )}
+
+      <Modal
+        open={dropping}
+        onClose={() => setDropping(false)}
+        title={`Убрать нецелевые фразы (${counts.irrelevant})`}
+        description="Фразы удалятся из проекта. Те, тип которых поставили вы, останутся — кнопка убирает решения словаря, а не ваши. Загрузить список заново можно в любой момент."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDropping(false)}>
+              Отмена
+            </Button>
+            <Button onClick={dropIrrelevant} loading={cleaning}>
+              Убрать
+            </Button>
+          </>
+        }
+      >
+        <p className="text-body-sm text-text-secondary">
+          Перед удалением стоит пролистать список нецелевых с фильтром — у каждой фразы написано,
+          из-за чего она туда попала.
+        </p>
+      </Modal>
 
       <Modal
         open={savingSet}
@@ -547,6 +633,72 @@ function SemanticsScreen() {
   );
 }
 
+/**
+ * Список слов-подсказок с кнопкой «добавить все».
+ *
+ * Стартовый набор ниши — это два десятка слов, и принимают их обычно целиком.
+ * Двадцать нажатий с ожиданием перепроверки после каждого — та самая работа,
+ * ради снятия которой всё и делается.
+ */
+function SuggestedWords({
+  title,
+  words,
+  onAdd,
+  onAddAll,
+}: {
+  title: string;
+  words: string[];
+  onAdd: (word: string) => void;
+  onAddAll: (words: string[]) => void;
+}) {
+  return (
+    <div className="border-border mb-3 border-t pt-3">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-caption text-text-secondary">{title}</p>
+        {words.length > 1 && (
+          <Button size="sm" variant="ghost" onClick={() => onAddAll(words)}>
+            Добавить все ({words.length})
+          </Button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {words.map((word) => (
+          <Button key={word} size="sm" variant="ghost" onClick={() => onAdd(word)}>
+            + {word}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Из чего складывается нецелевая часть списка.
+ *
+ * Отвечает на единственный вопрос, который человек задаёт после загрузки трёх
+ * тысяч фраз: «а не выкинуло ли оно лишнего». Ответить на него можно только
+ * назвав причину и показав примеры — число «нецелевых: 480» само по себе не
+ * значит ничего.
+ */
+function CleanupBreakdown({ groups }: { groups: CleanupGroupRead[] }) {
+  return (
+    <div className="border-border mt-3 flex flex-col border-t pt-3">
+      <p className="text-caption text-text-secondary mb-1.5">Что ушло в нецелевые и почему</p>
+      {groups.map((group) => (
+        <div key={group.reason} className="border-border border-b py-2 last:border-b-0">
+          <p className="text-body-sm text-text-primary">
+            {group.label} — {group.phrases} {plural(group.phrases, "фраза", "фразы", "фраз")}
+          </p>
+          <p className="text-caption text-text-secondary">{group.hint}</p>
+          <p className="text-caption text-text-secondary mt-0.5">
+            например: {group.examples.join(", ")}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function KeywordRow({
   keyword,
   onMove,
@@ -561,8 +713,10 @@ function KeywordRow({
         <span className="text-caption text-text-secondary">
           {keyword.frequency !== null ? `${keyword.frequency} в месяц` : "частотность неизвестна"}
           {/* Слово-причина показывается всегда: без него непонятно, что
-              править, чтобы решение изменилось. */}
-          {keyword.trigger && ` · из-за слова «${keyword.trigger}»`}
+              править, чтобы решение изменилось. Вид причины — рядом: «москва»
+              сама по себе не объясняет ничего, «другой город» объясняет сразу. */}
+          {keyword.trigger && ` · из-за «${keyword.trigger}»`}
+          {keyword.reason_label && ` (${keyword.reason_label})`}
           {keyword.is_manual && " · решение ваше"}
         </span>
       </div>

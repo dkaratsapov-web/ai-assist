@@ -33,6 +33,7 @@ ACTION_LABELS: dict[ActivityAction, str] = {
     ActivityAction.ISSUE_DISMISSED: "отметил замечание неактуальным",
     ActivityAction.ISSUE_RESTORED: "вернул замечание в список",
     ActivityAction.KEYWORDS_IMPORTED: "загрузил список фраз",
+    ActivityAction.KEYWORDS_CLEANED: "убрал нецелевые фразы",
     ActivityAction.MINUS_WORD_ADDED: "добавил минус-слово",
     ActivityAction.MINUS_SET_SAVED: "сохранил набор минус-слов",
     ActivityAction.MINUS_SET_APPLIED: "применил набор минус-слов",

@@ -12,6 +12,7 @@
           "issue_dismissed",
           "issue_restored",
           "keywords_imported",
+          "keywords_cleaned",
           "minus_word_added",
           "minus_set_saved",
           "minus_set_applied",
@@ -900,6 +901,81 @@
           "score"
         ],
         "title": "CategoryRead",
+        "type": "object"
+      },
+      "CleanupGroupRead": {
+        "description": "Одна причина, по которой фразы признаны нецелевыми.",
+        "properties": {
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "phrases": {
+            "title": "Phrases",
+            "type": "integer"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/Reason"
+          }
+        },
+        "required": [
+          "reason",
+          "label",
+          "hint",
+          "phrases",
+          "examples"
+        ],
+        "title": "CleanupGroupRead",
+        "type": "object"
+      },
+      "CleanupResult": {
+        "description": "Итог чистки ядра.",
+        "properties": {
+          "affected": {
+            "title": "Affected",
+            "type": "integer"
+          },
+          "clusters": {
+            "title": "Clusters",
+            "type": "integer"
+          },
+          "commercial": {
+            "title": "Commercial",
+            "type": "integer"
+          },
+          "informational": {
+            "title": "Informational",
+            "type": "integer"
+          },
+          "irrelevant": {
+            "title": "Irrelevant",
+            "type": "integer"
+          },
+          "remaining": {
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "affected",
+          "remaining",
+          "commercial",
+          "informational",
+          "irrelevant",
+          "clusters"
+        ],
+        "title": "CleanupResult",
         "type": "object"
       },
       "ClusterList": {
@@ -1925,6 +2001,13 @@
             "title": "Added",
             "type": "integer"
           },
+          "cleaned": {
+            "items": {
+              "$ref": "#/components/schemas/CleanupGroupRead"
+            },
+            "title": "Cleaned",
+            "type": "array"
+          },
           "clusters": {
             "title": "Clusters",
             "type": "integer"
@@ -1957,7 +2040,8 @@
           "commercial",
           "informational",
           "irrelevant",
-          "clusters"
+          "clusters",
+          "cleaned"
         ],
         "title": "ImportSummary",
         "type": "object"
@@ -2051,6 +2135,27 @@
           "phrase": {
             "title": "Phrase",
             "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Label"
           },
           "trigger": {
             "anyOf": [
@@ -2391,6 +2496,25 @@
         "title": "MetricRead",
         "type": "object"
       },
+      "MinusWordBulkCreate": {
+        "description": "Несколько минус-слов разом.\n\nСтартовый набор ниши — это два десятка слов. Добавлять их по одному значит\nдвадцать раз нажать и двадцать раз дождаться перепроверки ядра.",
+        "properties": {
+          "words": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Words",
+            "type": "array"
+          }
+        },
+        "required": [
+          "words"
+        ],
+        "title": "MinusWordBulkCreate",
+        "type": "object"
+      },
       "MinusWordCreate": {
         "properties": {
           "word": {
@@ -2571,6 +2695,27 @@
           "phrases": {
             "title": "Phrases",
             "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Reason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Label"
           },
           "word": {
             "title": "Word",
@@ -3348,6 +3493,24 @@
         },
         "title": "ProjectUpdate",
         "type": "object"
+      },
+      "Reason": {
+        "description": "Почему фраза отнесена к нецелевым.",
+        "enum": [
+          "geo",
+          "job",
+          "diy",
+          "free",
+          "used",
+          "study",
+          "media",
+          "marketplace",
+          "fraud",
+          "offtopic",
+          "minus_word"
+        ],
+        "title": "Reason",
+        "type": "string"
       },
       "SearchKeywordRead": {
         "description": "Найденная фраза вместе с проектом.\n\nБез указания проекта фраза не отвечает ни на один вопрос: «остекление\nбалконов» есть у половины клиентов.",
@@ -7480,6 +7643,194 @@
         ]
       }
     },
+    "/api/v1/projects/{project_id}/keywords/irrelevant": {
+      "delete": {
+        "description": "Удаляет из ядра всё, что помечено нецелевым.\n\nОтдельное действие, а не часть загрузки. Разметка ошибается в обе стороны,\nи молча удалять по ней — значит лишить человека возможности заметить\nошибку: он увидел бы только итог, уже без того, что пропало.\n\nФразы, тип которых поставил человек, остаются даже если он сам отнёс их к\nнецелевым: удалять чужое решение по кнопке «убрать мусор» — не то, чего от\nнеё ждут. Такую фразу видно в списке, и убрать её можно поштучно.",
+        "operationId": "drop_irrelevant_api_v1_projects__project_id__keywords_irrelevant_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Убрать все нецелевые фразы",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/recheck": {
+      "post": {
+        "description": "Прогоняет уже загруженные фразы через разбор ещё раз.\n\nНужно после того, как изменилось что-то, от чего разбор зависит: регион\nпроекта, минус-слова, сам словарь. Без этого проект, загруженный вчера,\nнавсегда остался бы с прежней разметкой, а человек видел бы улучшения\nтолько на новых проектах и не понимал, почему.\n\nРучные решения не трогаются: специалист уже сказал своё слово.",
+        "operationId": "recheck_keywords_api_v1_projects__project_id__keywords_recheck_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CleanupResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Перепроверить ядро заново",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
     "/api/v1/projects/{project_id}/keywords/{keyword_id}": {
       "patch": {
         "description": "Переносит фразу в другой тип.\n\nРешение помечается ручным и переживает повторные импорты. Словарь не знает\nни ниши, ни клиента и ошибается в обе стороны — последнее слово всегда за\nспециалистом.",
@@ -7890,6 +8241,110 @@
         "summary": "Применить набор к проекту",
         "tags": [
           "minus-sets"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/minus-words/bulk": {
+      "post": {
+        "description": "Принимает список слов и перепроверяет ядро один раз, а не по разу на слово.\n\nТак работают подсказки: стартовый набор ниши и слова, повторённые в других\nпроектах, — это десятки слов, которые принимают одним решением.",
+        "operationId": "add_minus_words_api_v1_projects__project_id__minus_words_bulk_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MinusWordBulkCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinusWordList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Добавить несколько минус-слов",
+        "tags": [
+          "semantics"
         ]
       }
     },

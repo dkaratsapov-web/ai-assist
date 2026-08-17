@@ -53,6 +53,8 @@ export type PlanStatus = Schemas["PlanStatus"];
 export type KeywordRead = Schemas["KeywordRead"];
 export type KeywordList = Schemas["KeywordList"];
 export type ImportSummary = Schemas["ImportSummary"];
+export type CleanupGroupRead = Schemas["CleanupGroupRead"];
+export type CleanupResult = Schemas["CleanupResult"];
 export type ClusterRead = Schemas["ClusterRead"];
 export type ClusterList = Schemas["ClusterList"];
 export type MinusWordRead = Schemas["MinusWordRead"];
@@ -355,6 +357,26 @@ export class ApiClient {
   }
 
   /**
+   * Перепроверить уже загруженное ядро.
+   *
+   * Нужно после того, как изменилось что-то, от чего зависит разбор: регион
+   * проекта, минус-слова, словарь. Без этого вчерашний проект навсегда остался
+   * бы с прежней разметкой.
+   */
+  recheckKeywords(projectId: string): Promise<CleanupResult> {
+    return this.request<CleanupResult>(`/api/v1/projects/${projectId}/keywords/recheck`, {
+      method: "POST",
+    });
+  }
+
+  /** Убрать из ядра всё, что помечено нецелевым. Ручные решения остаются. */
+  dropIrrelevantKeywords(projectId: string): Promise<CleanupResult> {
+    return this.request<CleanupResult>(`/api/v1/projects/${projectId}/keywords/irrelevant`, {
+      method: "DELETE",
+    });
+  }
+
+  /**
    * Состояние подключения к Директу. Делает настоящий пробный запрос: токен
    * бывает истёкшим, отозванным и выпущенным не на то приложение, и все три
    * случая выглядят одинаково, пока не спросишь площадку.
@@ -385,6 +407,19 @@ export class ApiClient {
     return this.request<MinusWordRead>(`/api/v1/projects/${projectId}/minus-words`, {
       method: "POST",
       body: JSON.stringify({ word }),
+    });
+  }
+
+  /**
+   * Несколько минус-слов разом.
+   *
+   * Ядро перепроверяется один раз, а не по разу на слово: стартовый набор ниши
+   * — это два десятка слов, и добавлять их по одному значит двадцать раз ждать.
+   */
+  addMinusWords(projectId: string, words: string[]): Promise<MinusWordList> {
+    return this.request<MinusWordList>(`/api/v1/projects/${projectId}/minus-words/bulk`, {
+      method: "POST",
+      body: JSON.stringify({ words }),
     });
   }
 

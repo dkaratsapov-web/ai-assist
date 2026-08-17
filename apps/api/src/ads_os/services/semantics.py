@@ -17,7 +17,9 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import StrEnum
+from functools import lru_cache
 
+from .cleanup import MARKERS, PHRASES, Reason, foreign_city, reason_for
 from .morphology import fold_beglye, stem, tokenize
 
 
@@ -69,20 +71,14 @@ INFORMATIONAL_MARKERS = frozenset(
     ]
 )
 
-#: Признаки того, что человек ищет не наш товар. Список начальный: каждая ниша
-#: добавляет свои, поэтому он расширяется на уровне проекта.
-IRRELEVANT_MARKERS = frozenset(
-    [
-        "бесплатно", "бесплатный", "даром", "скачать", "торрент", "онлайн", "смотреть",
-        "вакансия", "вакансии", "работа", "резюме", "зарплата", "обучение", "курсы", "училище",
-        "реферат", "курсовая", "диплом", "гост", "снип", "бу", "подержанный", "самому",
-        "самостоятельно", "своими", "руками", "порно", "игра", "игры", "мем", "прикол",
-    ]
-)
+#: Признаки того, что человек ищет не наш товар. Список живёт в `cleanup`: там
+#: он разложен по причинам, и каждая находка может объяснить себя. Здесь он
+#: остаётся под прежними именами — по ним обращается остальной код.
+IRRELEVANT_MARKERS = MARKERS
 
 #: Многословные признаки: по одному слову их не поймать. «Своими руками» —
 #: самый частый из них, и он однозначно нецелевой для услуги.
-IRRELEVANT_PHRASES = ("своими руками", "сделать самому", "своими силами")
+IRRELEVANT_PHRASES = PHRASES
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,27 +143,55 @@ class Classification:
     #: Слово, из-за которого принято решение. Показывается человеку: без него
     #: непонятно, что именно нужно поправить, чтобы решение изменилось.
     trigger: str | None = None
+    #: К какому виду мусора отнесена фраза. Одного слова мало: «москва» само по
+    #: себе ничего не объясняет, а «другой город» объясняет сразу.
+    reason: Reason | None = None
 
 
-def classify(phrase: str, *, extra_irrelevant: frozenset[str] = frozenset()) -> Classification:
+def classify(
+    phrase: str,
+    *,
+    extra_irrelevant: frozenset[str] = frozenset(),
+    region: str | None = None,
+) -> Classification:
     """Определяет тип запроса.
 
     Порядок проверок важен. Нецелевые слова сильнее коммерческих: «купить
     диплом» — это не заявка, сколько бы в ней ни было признаков покупки.
     Информационные слабее коммерческих: «какая цена» — это всё-таки покупка.
+
+    Чужой город проверяется первым. Причина в том, что такая фраза чаще всего
+    выглядит образцово коммерческой — «купить пластиковые окна в москве», — и
+    любая другая проверка признает её целевой раньше, чем дело дойдёт до
+    географии. Именно поэтому чужой регион и остаётся в кампаниях дольше всего
+    прочего мусора.
     """
     lowered = phrase.lower()
 
-    for marker in IRRELEVANT_PHRASES:
+    city = foreign_city(phrase, region)
+    if city is not None:
+        return Classification(Intent.IRRELEVANT, city, Reason.GEO)
+
+    # Минус-слово из двух слов — обычное дело: «ремонт окон» в проекте про
+    # остекление отсекается только целиком. По отдельности «ремонт» и «окон»
+    # вырезали бы половину ядра.
+    for marker in IRRELEVANT_PHRASES + _multiword(extra_irrelevant):
         if marker in lowered:
-            return Classification(Intent.IRRELEVANT, marker)
+            return Classification(
+                Intent.IRRELEVANT, marker, reason_for(marker, minus_words=extra_irrelevant)
+            )
 
     words = tokenize(phrase)
+    by_stem = _stems(IRRELEVANT_MARKERS | extra_irrelevant)
 
-    irrelevant = IRRELEVANT_MARKERS | extra_irrelevant
     for word in words:
-        if word in irrelevant or stem(word) in {stem(m) for m in irrelevant}:
-            return Classification(Intent.IRRELEVANT, word)
+        hit = by_stem.get(word) or by_stem.get(stem(word))
+        if hit is not None:
+            # Показывается слово из фразы, а не из словаря: человек ищет
+            # глазами то, что видит перед собой, а не основу «работ».
+            return Classification(
+                Intent.IRRELEVANT, word, reason_for(hit, minus_words=extra_irrelevant)
+            )
 
     for word in words:
         if word in COMMERCIAL_MARKERS or stem(word) in {stem(m) for m in COMMERCIAL_MARKERS}:
@@ -181,6 +205,29 @@ def classify(phrase: str, *, extra_irrelevant: frozenset[str] = frozenset()) -> 
     # тверь» не содержит слова «купить», но приводит покупателей. Считать их
     # нецелевыми по умолчанию значило бы выбросить ядро семантики.
     return Classification(Intent.COMMERCIAL, None)
+
+
+@lru_cache(maxsize=64)
+def _stems(markers: frozenset[str]) -> dict[str, str]:
+    """Основа → слово словаря. Считается один раз на набор, а не на фразу.
+
+    Разница не косметическая: при двадцати тысячах фраз пересчёт основ словаря
+    на каждое слово каждой фразы — это десятки миллионов лишних вызовов, и
+    импорт из секунды превращается в минуту.
+    """
+    index: dict[str, str] = {}
+    for marker in markers:
+        if " " in marker:
+            continue
+        index.setdefault(stem(marker), marker)
+        index[marker] = marker
+    return index
+
+
+@lru_cache(maxsize=64)
+def _multiword(markers: frozenset[str]) -> tuple[str, ...]:
+    """Минус-слова из нескольких слов — их ищут по строке целиком."""
+    return tuple(sorted((m for m in markers if " " in m), key=lambda item: -len(item)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,26 +357,43 @@ class MinusWordSuggestion:
     #: решение внимания: слово из одной фразы и слово из двухсот — разные вещи.
     phrases: int
     examples: tuple[str, ...] = field(default_factory=tuple)
+    reason: Reason | None = None
 
 
 def suggest_minus_words(
-    keywords: list[ParsedKeyword], *, extra_irrelevant: frozenset[str] = frozenset()
+    keywords: list[ParsedKeyword],
+    *,
+    extra_irrelevant: frozenset[str] = frozenset(),
+    region: str | None = None,
 ) -> list[MinusWordSuggestion]:
     """Собирает слова, из-за которых фразы признаны нецелевыми.
 
     Это готовый минус-список: его остаётся проверить и перенести в кампанию.
     Собирать его вручную по тысяче фраз — самая механическая часть работы
     специалиста, и именно её имеет смысл снимать.
+
+    Города сюда не попадают. Минусовать их по одному бессмысленно: городов в
+    выгрузке десятки, и правильное решение — не минус-слово, а регион показа.
     """
     counts: dict[str, list[str]] = defaultdict(list)
+    reasons: dict[str, Reason | None] = {}
 
     for keyword in keywords:
-        result = classify(keyword.phrase, extra_irrelevant=extra_irrelevant)
-        if result.intent is Intent.IRRELEVANT and result.trigger:
-            counts[result.trigger].append(keyword.phrase)
+        result = classify(keyword.phrase, extra_irrelevant=extra_irrelevant, region=region)
+        if result.intent is not Intent.IRRELEVANT or not result.trigger:
+            continue
+        if result.reason is Reason.GEO:
+            continue
+        counts[result.trigger].append(keyword.phrase)
+        reasons[result.trigger] = result.reason
 
     suggestions = [
-        MinusWordSuggestion(word=word, phrases=len(phrases), examples=tuple(phrases[:3]))
+        MinusWordSuggestion(
+            word=word,
+            phrases=len(phrases),
+            examples=tuple(phrases[:3]),
+            reason=reasons.get(word),
+        )
         for word, phrases in counts.items()
     ]
     suggestions.sort(key=lambda s: (-s.phrases, s.word))

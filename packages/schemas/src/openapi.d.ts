@@ -792,6 +792,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/keywords/irrelevant": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Убрать все нецелевые фразы
+         * @description Удаляет из ядра всё, что помечено нецелевым.
+         *
+         *     Отдельное действие, а не часть загрузки. Разметка ошибается в обе стороны,
+         *     и молча удалять по ней — значит лишить человека возможности заметить
+         *     ошибку: он увидел бы только итог, уже без того, что пропало.
+         *
+         *     Фразы, тип которых поставил человек, остаются даже если он сам отнёс их к
+         *     нецелевым: удалять чужое решение по кнопке «убрать мусор» — не то, чего от
+         *     неё ждут. Такую фразу видно в списке, и убрать её можно поштучно.
+         */
+        delete: operations["drop_irrelevant_api_v1_projects__project_id__keywords_irrelevant_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/recheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Перепроверить ядро заново
+         * @description Прогоняет уже загруженные фразы через разбор ещё раз.
+         *
+         *     Нужно после того, как изменилось что-то, от чего разбор зависит: регион
+         *     проекта, минус-слова, сам словарь. Без этого проект, загруженный вчера,
+         *     навсегда остался бы с прежней разметкой, а человек видел бы улучшения
+         *     только на новых проектах и не понимал, почему.
+         *
+         *     Ручные решения не трогаются: специалист уже сказал своё слово.
+         */
+        post: operations["recheck_keywords_api_v1_projects__project_id__keywords_recheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/keywords/{keyword_id}": {
         parameters: {
             query?: never;
@@ -859,6 +914,29 @@ export interface paths {
          *     нашёл именно здесь, — и восстановить это было бы неоткуда.
          */
         post: operations["apply_set_api_v1_projects__project_id__minus_words_apply__set_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/minus-words/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Добавить несколько минус-слов
+         * @description Принимает список слов и перепроверяет ядро один раз, а не по разу на слово.
+         *
+         *     Так работают подсказки: стартовый набор ниши и слова, повторённые в других
+         *     проектах, — это десятки слов, которые принимают одним решением.
+         */
+        post: operations["add_minus_words_api_v1_projects__project_id__minus_words_bulk_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -974,7 +1052,7 @@ export interface components {
          *     похожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.
          * @enum {string}
          */
-        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "minus_word_added" | "minus_set_saved" | "minus_set_applied" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
+        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "keywords_cleaned" | "minus_word_added" | "minus_set_saved" | "minus_set_applied" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
         /** ActivityList */
         ActivityList: {
             /** Items */
@@ -1333,6 +1411,39 @@ export interface components {
             /** Score */
             score: number;
         };
+        /**
+         * CleanupGroupRead
+         * @description Одна причина, по которой фразы признаны нецелевыми.
+         */
+        CleanupGroupRead: {
+            /** Examples */
+            examples: string[];
+            /** Hint */
+            hint: string;
+            /** Label */
+            label: string;
+            /** Phrases */
+            phrases: number;
+            reason: components["schemas"]["Reason"];
+        };
+        /**
+         * CleanupResult
+         * @description Итог чистки ядра.
+         */
+        CleanupResult: {
+            /** Affected */
+            affected: number;
+            /** Clusters */
+            clusters: number;
+            /** Commercial */
+            commercial: number;
+            /** Informational */
+            informational: number;
+            /** Irrelevant */
+            irrelevant: number;
+            /** Remaining */
+            remaining: number;
+        };
         /** ClusterList */
         ClusterList: {
             /** Items */
@@ -1664,6 +1775,8 @@ export interface components {
         ImportSummary: {
             /** Added */
             added: number;
+            /** Cleaned */
+            cleaned: components["schemas"]["CleanupGroupRead"][];
             /** Clusters */
             clusters: number;
             /** Commercial */
@@ -1716,6 +1829,9 @@ export interface components {
             is_manual: boolean;
             /** Phrase */
             phrase: string;
+            reason?: components["schemas"]["Reason"] | null;
+            /** Reason Label */
+            reason_label?: string | null;
             /** Trigger */
             trigger: string | null;
         };
@@ -1833,6 +1949,17 @@ export interface components {
             /** Value */
             value: string | null;
         };
+        /**
+         * MinusWordBulkCreate
+         * @description Несколько минус-слов разом.
+         *
+         *     Стартовый набор ниши — это два десятка слов. Добавлять их по одному значит
+         *     двадцать раз нажать и двадцать раз дождаться перепроверки ядра.
+         */
+        MinusWordBulkCreate: {
+            /** Words */
+            words: string[];
+        };
         /** MinusWordCreate */
         MinusWordCreate: {
             /** Word */
@@ -1903,6 +2030,9 @@ export interface components {
             examples: string[];
             /** Phrases */
             phrases: number;
+            reason?: components["schemas"]["Reason"] | null;
+            /** Reason Label */
+            reason_label?: string | null;
             /** Word */
             word: string;
         };
@@ -2223,6 +2353,12 @@ export interface components {
             /** Website Url */
             website_url?: string | null;
         };
+        /**
+         * Reason
+         * @description Почему фраза отнесена к нецелевым.
+         * @enum {string}
+         */
+        Reason: "geo" | "job" | "diy" | "free" | "used" | "study" | "media" | "marketplace" | "fraud" | "offtopic" | "minus_word";
         /**
          * SearchKeywordRead
          * @description Найденная фраза вместе с проектом.
@@ -3877,6 +4013,76 @@ export interface operations {
             };
         };
     };
+    drop_irrelevant_api_v1_projects__project_id__keywords_irrelevant_delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recheck_keywords_api_v1_projects__project_id__keywords_recheck_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CleanupResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_keyword_api_v1_projects__project_id__keywords__keyword_id__patch: {
         parameters: {
             query?: never;
@@ -4014,6 +4220,45 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApplySetResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_minus_words_api_v1_projects__project_id__minus_words_bulk_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MinusWordBulkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MinusWordList"];
                 };
             };
             /** @description Validation Error */

@@ -16,6 +16,7 @@ from ...models.audit import ModuleStatus
 from ...services import niches
 from ...services.activity import record
 from ...services.ads import build_variants
+from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
 from ...services.cross_minus import cross_minus
 from ...services.export import ExportRow, file_name, to_csv
 from ...services.semantics import (
@@ -35,6 +36,8 @@ from ..schemas import (
     AdDraftList,
     AdDraftRead,
     AdViolationRead,
+    CleanupGroupRead,
+    CleanupResult,
     ClusterList,
     ClusterRead,
     CrossMinusRead,
@@ -45,6 +48,7 @@ from ..schemas import (
     KeywordList,
     KeywordRead,
     KeywordUpdate,
+    MinusWordBulkCreate,
     MinusWordCreate,
     MinusWordList,
     MinusWordRead,
@@ -134,7 +138,7 @@ async def import_keywords(
         row = existing.get(item.phrase)
 
         if row is None:
-            result = classify(item.phrase, extra_irrelevant=extra)
+            result = classify(item.phrase, extra_irrelevant=extra, region=project.primary_region)
             row = Keyword(
                 project_id=project_id,
                 phrase=item.phrase,
@@ -149,7 +153,9 @@ async def import_keywords(
             if item.frequency is not None:
                 row.frequency = item.frequency
             if not row.is_manual:
-                result = classify(item.phrase, extra_irrelevant=extra)
+                result = classify(
+                    item.phrase, extra_irrelevant=extra, region=project.primary_region
+                )
                 row.intent = result.intent
                 row.trigger = result.trigger
             updated += 1
@@ -177,7 +183,39 @@ async def import_keywords(
         informational=sum(1 for r in rows if r.intent is Intent.INFORMATIONAL),
         irrelevant=sum(1 for r in rows if r.intent is Intent.IRRELEVANT),
         clusters=clusters,
+        cleaned=_cleanup_groups(rows, minus_words=extra),
     )
+
+
+def _cleanup_groups(rows: list[Keyword], *, minus_words: frozenset[str]) -> list[CleanupGroupRead]:
+    """Разбивка нецелевых фраз по причинам.
+
+    Нужна ровно для одного вопроса, который человек задаёт после загрузки:
+    «а не выкинуло ли оно лишнего». Ответить на него можно только показав, что
+    именно и по какой причине ушло — с примерами, которые видно с экрана.
+    """
+    by_reason: dict[Reason, list[str]] = defaultdict(list)
+
+    for row in rows:
+        if row.intent is not Intent.IRRELEVANT or row.is_manual:
+            continue
+        reason = reason_for(row.trigger, minus_words=minus_words)
+        if reason is None:
+            continue
+        by_reason[reason].append(row.phrase)
+
+    groups = [
+        CleanupGroupRead(
+            reason=reason,
+            label=REASON_LABELS[reason],
+            hint=REASON_HINTS[reason],
+            phrases=len(phrases),
+            examples=sorted(phrases)[:3],
+        )
+        for reason, phrases in by_reason.items()
+    ]
+    groups.sort(key=lambda group: (-group.phrases, group.label))
+    return groups
 
 
 @router.get("/{project_id}/keywords", response_model=KeywordList, summary="Фразы проекта")
@@ -203,7 +241,10 @@ async def list_keywords(
     # хуже, а потому что о них ничего не известно.
     rows.sort(key=lambda row: (-(row.frequency or 0), row.phrase))
 
-    return KeywordList(items=[_to_read(row) for row in rows[:limit]], total=len(rows))
+    minus = await _minus_words_set(session, ctx, project_id)
+    return KeywordList(
+        items=[_to_read(row, minus_words=minus) for row in rows[:limit]], total=len(rows)
+    )
 
 
 @router.patch(
@@ -238,6 +279,100 @@ async def update_keyword(
     await session.flush()
 
     return _to_read(row)
+
+
+@router.post(
+    "/{project_id}/keywords/recheck",
+    response_model=CleanupResult,
+    summary="Перепроверить ядро заново",
+)
+async def recheck_keywords(
+    project_id: uuid.UUID, session: SessionDep, ctx: WriteDep
+) -> CleanupResult:
+    """Прогоняет уже загруженные фразы через разбор ещё раз.
+
+    Нужно после того, как изменилось что-то, от чего разбор зависит: регион
+    проекта, минус-слова, сам словарь. Без этого проект, загруженный вчера,
+    навсегда остался бы с прежней разметкой, а человек видел бы улучшения
+    только на новых проектах и не понимал, почему.
+
+    Ручные решения не трогаются: специалист уже сказал своё слово.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    extra = await _minus_words_set(session, ctx, project_id)
+    rows = await _keywords(session, ctx, project_id)
+
+    changed = 0
+    for row in rows:
+        if row.is_manual:
+            continue
+        result = classify(row.phrase, extra_irrelevant=extra, region=project.primary_region)
+        if row.intent is not result.intent or row.trigger != result.trigger:
+            changed += 1
+        row.intent = result.intent
+        row.trigger = result.trigger
+
+    clusters = _recluster(rows)
+    await session.flush()
+
+    return _cleanup_result(rows, affected=changed, clusters=clusters)
+
+
+@router.delete(
+    "/{project_id}/keywords/irrelevant",
+    response_model=CleanupResult,
+    summary="Убрать все нецелевые фразы",
+)
+async def drop_irrelevant(
+    project_id: uuid.UUID, session: SessionDep, ctx: WriteDep
+) -> CleanupResult:
+    """Удаляет из ядра всё, что помечено нецелевым.
+
+    Отдельное действие, а не часть загрузки. Разметка ошибается в обе стороны,
+    и молча удалять по ней — значит лишить человека возможности заметить
+    ошибку: он увидел бы только итог, уже без того, что пропало.
+
+    Фразы, тип которых поставил человек, остаются даже если он сам отнёс их к
+    нецелевым: удалять чужое решение по кнопке «убрать мусор» — не то, чего от
+    неё ждут. Такую фразу видно в списке, и убрать её можно поштучно.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _keywords(session, ctx, project_id)
+    doomed = [row for row in rows if row.intent is Intent.IRRELEVANT and not row.is_manual]
+
+    for row in doomed:
+        await session.delete(row)
+    await session.flush()
+
+    remaining = [row for row in rows if row not in doomed]
+    clusters = _recluster(remaining)
+    await session.flush()
+
+    if doomed:
+        await record(
+            session,
+            ctx,
+            ActivityAction.KEYWORDS_CLEANED,
+            subject=project.name,
+            actor_name=ctx.user_name,
+            project_id=project_id,
+            details={"удалено": str(len(doomed))},
+        )
+
+    return _cleanup_result(remaining, affected=len(doomed), clusters=clusters)
+
+
+def _cleanup_result(rows: list[Keyword], *, affected: int, clusters: int) -> CleanupResult:
+    return CleanupResult(
+        affected=affected,
+        remaining=len(rows),
+        commercial=sum(1 for r in rows if r.intent is Intent.COMMERCIAL),
+        informational=sum(1 for r in rows if r.intent is Intent.INFORMATIONAL),
+        irrelevant=sum(1 for r in rows if r.intent is Intent.IRRELEVANT),
+        clusters=clusters,
+    )
 
 
 @router.get(
@@ -295,11 +430,16 @@ async def list_minus_words(
     keywords = await _keywords(session, ctx, project_id)
     suggestions = [
         MinusWordSuggestionRead(
-            word=item.word, phrases=item.phrases, examples=list(item.examples)
+            word=item.word,
+            phrases=item.phrases,
+            examples=list(item.examples),
+            reason=item.reason,
+            reason_label=REASON_LABELS[item.reason] if item.reason else None,
         )
         for item in suggest_minus_words(
             [ParsedKeyword(row.phrase, row.frequency) for row in keywords],
             extra_irrelevant=frozenset(saved),
+            region=project.primary_region,
         )
         # Уже добавленное не предлагается повторно: список предложений должен
         # быть списком дел, а не отчётом о проделанной работе.
@@ -388,14 +528,7 @@ async def add_minus_word(
     await session.flush()
 
     extra = {r.word for r in rows} | {word}
-    for keyword in await _keywords(session, ctx, project_id):
-        if keyword.is_manual:
-            continue
-        result = classify(keyword.phrase, extra_irrelevant=frozenset(extra))
-        keyword.intent = result.intent
-        keyword.trigger = result.trigger
-
-    await session.flush()
+    await _reclassify(session, ctx, project, extra_irrelevant=frozenset(extra))
 
     await record(
         session,
@@ -410,6 +543,71 @@ async def add_minus_word(
     return MinusWordRead(id=row.id, word=row.word)
 
 
+@router.post(
+    "/{project_id}/minus-words/bulk",
+    response_model=MinusWordList,
+    status_code=status.HTTP_201_CREATED,
+    summary="Добавить несколько минус-слов",
+)
+async def add_minus_words(
+    project_id: uuid.UUID, payload: MinusWordBulkCreate, session: SessionDep, ctx: WriteDep
+) -> MinusWordList:
+    """Принимает список слов и перепроверяет ядро один раз, а не по разу на слово.
+
+    Так работают подсказки: стартовый набор ниши и слова, повторённые в других
+    проектах, — это десятки слов, которые принимают одним решением.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _minus_word_rows(session, ctx, project_id)
+    known = {row.word for row in rows}
+    added: list[str] = []
+
+    for raw in payload.words:
+        word = raw.strip().lower()
+        if not word or word in known:
+            continue
+        known.add(word)
+        added.append(word)
+        await MinusWordRepository(session, ctx).add(MinusWord(project_id=project_id, word=word))
+
+    await session.flush()
+
+    if added:
+        await _reclassify(session, ctx, project, extra_irrelevant=frozenset(known))
+        await record(
+            session,
+            ctx,
+            ActivityAction.MINUS_WORD_ADDED,
+            subject=project.name,
+            actor_name=ctx.user_name,
+            project_id=project_id,
+            details={"слов": str(len(added)), "первое": added[0]},
+        )
+
+    return await list_minus_words(project_id, session, ctx)
+
+
+async def _reclassify(
+    session: SessionDep, ctx: TenantDep, project: Project, *, extra_irrelevant: frozenset[str]
+) -> None:
+    """Перепроверяет ядро после изменения минус-списка.
+
+    Обязательна: минус-слово, не изменившее ни одной фразы, выглядит как
+    принятое решение, хотя не сделало ничего. Ручные решения не трогаются.
+    """
+    for keyword in await _keywords(session, ctx, project.id):
+        if keyword.is_manual:
+            continue
+        result = classify(
+            keyword.phrase, extra_irrelevant=extra_irrelevant, region=project.primary_region
+        )
+        keyword.intent = result.intent
+        keyword.trigger = result.trigger
+
+    await session.flush()
+
+
 @router.delete(
     "/{project_id}/minus-words/{minus_word_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -418,7 +616,7 @@ async def add_minus_word(
 async def delete_minus_word(
     project_id: uuid.UUID, minus_word_id: uuid.UUID, session: SessionDep, ctx: WriteDep
 ) -> None:
-    await ProjectRepository(session, ctx).get_or_404(project_id)
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
     rows = await _minus_word_rows(session, ctx, project_id)
     row = next((r for r in rows if r.id == minus_word_id), None)
@@ -429,14 +627,7 @@ async def delete_minus_word(
     await session.flush()
 
     remaining = frozenset(r.word for r in rows if r.id != minus_word_id)
-    for keyword in await _keywords(session, ctx, project_id):
-        if keyword.is_manual:
-            continue
-        result = classify(keyword.phrase, extra_irrelevant=remaining)
-        keyword.intent = result.intent
-        keyword.trigger = result.trigger
-
-    await session.flush()
+    await _reclassify(session, ctx, project, extra_irrelevant=remaining)
 
 
 def _targeted(rows: list[Keyword]) -> list[ParsedKeyword]:
@@ -486,7 +677,8 @@ async def _minus_words_set(
     return frozenset(row.word for row in await _minus_word_rows(session, ctx, project_id))
 
 
-def _to_read(row: Keyword) -> KeywordRead:
+def _to_read(row: Keyword, *, minus_words: frozenset[str] = frozenset()) -> KeywordRead:
+    reason = None if row.is_manual else reason_for(row.trigger, minus_words=minus_words)
     return KeywordRead(
         id=row.id,
         phrase=row.phrase,
@@ -494,6 +686,8 @@ def _to_read(row: Keyword) -> KeywordRead:
         intent=row.intent,
         intent_label=INTENT_LABELS[row.intent],
         trigger=row.trigger,
+        reason=reason,
+        reason_label=REASON_LABELS[reason] if reason else None,
         is_manual=row.is_manual,
         cluster_name=row.cluster_name,
     )
