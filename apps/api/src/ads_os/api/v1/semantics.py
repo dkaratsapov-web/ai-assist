@@ -15,7 +15,7 @@ from ...errors import AppError
 from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
-from ...services import niches
+from ...services import niches, profile
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -44,6 +44,7 @@ from ..schemas import (
     BriefUpdate,
     CleanupGroupRead,
     CleanupResult,
+    ClientProfileRead,
     ClusterList,
     ClusterRead,
     CrossMinusRead,
@@ -61,6 +62,9 @@ from ..schemas import (
     MinusWordList,
     MinusWordRead,
     MinusWordSuggestionRead,
+    OnboardingApply,
+    OnboardingRead,
+    QuestionRead,
     SearchKeywordRead,
     SearchProjectRead,
     SearchResult,
@@ -342,6 +346,130 @@ async def update_keyword(
     await session.flush()
 
     return _to_read(row)
+
+
+@router.get(
+    "/{project_id}/onboarding",
+    response_model=OnboardingRead,
+    summary="Что прочитано с сайта и что осталось спросить",
+)
+async def get_onboarding(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> OnboardingRead:
+    """Анкета клиента с его же сайта плюс вопросы, на которые сайт не отвечает.
+
+    Разделение принципиальное. Название, город, услуги и контакты на странице
+    написаны — их незачем спрашивать. Средний чек, маржа и то, чего клиент не
+    делает, на сайте не пишут никогда, и подставить сюда правдоподобные числа
+    значило бы построить весь расчёт экономики на выдумке.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+    audit = await _last_audit(session, ctx, project_id)
+
+    data = profile.from_stored(audit.client_profile if audit else None)
+
+    return OnboardingRead(
+        has_audit=audit is not None,
+        source_url=(audit.final_url or audit.url) if audit else None,
+        profile=ClientProfileRead(**data.as_dict()),
+        filled=data.filled,
+        can_apply=_appliable(project, data, await _brief_row(session, ctx, project_id)),
+        questions=[
+            QuestionRead(key=q.key, text=q.text, why=q.why) for q in profile.open_questions(data)
+        ],
+        niche_questions=[
+            QuestionRead(key=q.key, text=q.text, why=q.why)
+            for q in profile.niche_questions(project.niche or data.niche_key)
+        ],
+    )
+
+
+@router.post(
+    "/{project_id}/onboarding/apply",
+    response_model=OnboardingRead,
+    summary="Перенести прочитанное в проект",
+)
+async def apply_onboarding(
+    project_id: uuid.UUID, payload: OnboardingApply, session: SessionDep, ctx: WriteDep
+) -> OnboardingRead:
+    """Переносит выбранные поля анкеты в проект и бриф.
+
+    Только по явному выбору и только в пустые поля. Разбор чужой страницы
+    ошибается, и молча проставленный не тот город — это месяц рекламы в чужом
+    регионе, который по интерфейсу, ничего не спросившему, не заметить.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+    audit = await _last_audit(session, ctx, project_id)
+    data = profile.from_stored(audit.client_profile if audit else None)
+
+    changed: dict[str, str] = {}
+
+    if payload.region and data.city and not project.primary_region:
+        project.primary_region = data.city
+        changed["регион"] = data.city
+
+    if payload.niche and data.niche_key and not project.niche:
+        project.niche = data.niche_key
+        changed["ниша"] = data.niche_label or data.niche_key
+
+    if payload.brief and (data.services or data.city):
+        row = await _brief_row(session, ctx, project_id)
+        if row is None:
+            row = KeywordBrief(project_id=project_id)
+            await BriefRepository(session, ctx).add(row)
+        if data.services and not row.sells:
+            row.sells = ", ".join(data.services)
+            changed["что продаём"] = row.sells[:60]
+        if data.city and not row.cities:
+            row.cities = data.city
+
+    await session.flush()
+
+    if changed:
+        await record(
+            session,
+            ctx,
+            ActivityAction.PROJECT_UPDATED,
+            subject=project.name,
+            actor_name=ctx.user_name,
+            project_id=project_id,
+            details={"заполнено с сайта": ", ".join(changed)},
+        )
+
+    return await get_onboarding(project_id, session, ctx)
+
+
+def _appliable(
+    project: Project, data: profile.ClientProfile, brief: KeywordBrief | None
+) -> list[str]:
+    """Что из прочитанного ещё не перенесено.
+
+    Уже заполненное не предлагается: подсказка, повторяющая сделанное, — это не
+    помощь, а шум, из-за которого пропускают настоящие подсказки.
+    """
+    ready: list[str] = []
+    if data.city and not project.primary_region:
+        ready.append("region")
+    if data.niche_key and not project.niche:
+        ready.append("niche")
+    if data.services and not (brief and brief.sells):
+        ready.append("brief")
+    return ready
+
+
+async def _last_audit(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> SiteAudit | None:
+    return (
+        await session.execute(
+            select(SiteAudit)
+            .where(SiteAudit.organization_id == ctx.organization_id)
+            .where(SiteAudit.project_id == project_id)
+            .where(SiteAudit.status == ModuleStatus.COMPLETED)
+            .order_by(SiteAudit.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
 
 
 @router.get("/{project_id}/brief", response_model=BriefRead, summary="Бриф и маски для Вордстата")

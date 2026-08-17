@@ -700,6 +700,66 @@ class BriefUpdate(BaseModel):
     cities: str = Field(default="", max_length=2000)
 
 
+class QuestionRead(BaseModel):
+    """Вопрос клиенту: сайт на него не отвечает."""
+
+    key: str
+    text: str
+    #: Почему без ответа не обойтись. Вопрос без обоснования выглядит анкетой
+    #: ради анкеты, и его пропускают.
+    why: str
+
+
+class ClientProfileRead(BaseModel):
+    """Что удалось прочитать на сайте клиента."""
+
+    company: str | None
+    city: str | None
+    niche_key: str | None
+    niche_label: str | None
+    services: list[str]
+    prices: list[str]
+    phones: list[str]
+    emails: list[str]
+    messengers: list[str]
+    address: str | None
+    company_details: str | None
+    working_hours: str | None
+
+
+class OnboardingRead(BaseModel):
+    """Онбординг: что система прочитала сама и что осталось спросить."""
+
+    #: Была ли вообще проверка сайта. Без неё читать нечего, и это надо сказать
+    #: прямо, а не показывать пустую анкету.
+    has_audit: bool
+    #: Адрес, с которого читали. Человек должен видеть источник: анкета,
+    #: собранная с тестовой копии сайта, выглядит так же, как настоящая.
+    source_url: str | None
+    profile: ClientProfileRead
+    #: Сколько полей удалось заполнить.
+    filled: int
+    #: Что из прочитанного ещё не перенесено в проект.
+    can_apply: list[str]
+    #: Вопросы клиенту: на них сайт не отвечает никогда.
+    questions: list[QuestionRead]
+    #: Вопросы, специфичные для угаданной ниши.
+    niche_questions: list[QuestionRead]
+
+
+class OnboardingApply(BaseModel):
+    """Что из прочитанного перенести в проект.
+
+    Поля выбираются по одному, а не «применить всё»: разбор ошибается, и
+    человек должен иметь возможность взять город, но не взять нишу.
+    """
+
+    region: bool = False
+    niche: bool = False
+    #: Услуги и город — в бриф для сбора запросов.
+    brief: bool = False
+
+
 class MaskRead(BaseModel):
     """Строка, которую человек вставит в Вордстат."""
 

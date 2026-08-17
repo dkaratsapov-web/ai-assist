@@ -1020,3 +1020,159 @@ class TestБрифИВыгрузка:
 
         assert response.status_code == 422
         assert response.json()["error_code"] == "bad_file"
+
+
+SITE = """
+<html lang="ru"><head><title>Натяжные потолки в Твери</title></head><body>
+  <h1>Натяжные потолки в Твери за 1 день</h1>
+  <h2>Глянцевые полотна</h2><h2>Многоуровневые потолки</h2>
+  <p>Монтаж от 350 ₽ за м². Багет в подарок.</p>
+  <p>Адрес: г. Тверь, ул. Советская, д. 10</p>
+</body></html>
+"""
+
+
+class TestОнбординг:
+    """Что система прочитала с сайта и что осталось спросить руками."""
+
+    async def _with_audit(
+        self, session: AsyncSession, org: Organization, project_id: object
+    ) -> None:
+        from ads_os.services.profile import extract
+
+        session.add(
+            SiteAudit(
+                organization_id=org.id,
+                project_id=project_id,
+                url="https://potolok.ru/",
+                status=ModuleStatus.COMPLETED,
+                client_profile=extract(SITE).as_dict(),
+            )
+        )
+        await session.commit()
+
+    async def test_без_проверки_сайта_говорится_прямо(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Пустая анкета без объяснения выглядит как поломка."""
+        org, user, row = project
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/onboarding", headers=headers(org, user))
+        ).json()
+
+        assert body["has_audit"] is False
+        assert body["filled"] == 0
+        assert len(body["questions"]) > 0
+
+    async def test_анкета_читается_с_сайта(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        await self._with_audit(session, org, row.id)
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/onboarding", headers=headers(org, user))
+        ).json()
+
+        assert body["profile"]["city"] == "Тверь"
+        assert body["profile"]["niche_key"] == "stretch_ceilings"
+        assert set(body["can_apply"]) == {"region", "niche", "brief"}
+
+    async def test_принятое_переносится_в_проект(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        await self._with_audit(session, org, row.id)
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/onboarding/apply",
+                json={"region": True, "niche": True, "brief": True},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        await session.refresh(row)
+        assert row.primary_region == "Тверь"
+        assert row.niche == "stretch_ceilings"
+        assert body["can_apply"] == []
+
+        brief = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+        assert "Глянцевые полотна" in brief["sells"]
+
+    async def test_заполненное_человеком_не_переписывается(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Разбор чужой страницы ошибается. Молча заменить решение человека —
+        это месяц рекламы не в том регионе, который никто не заметит."""
+        org, user, row = project
+        row.primary_region = "Конаково"
+        await session.commit()
+        await self._with_audit(session, org, row.id)
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/onboarding/apply",
+            json={"region": True, "niche": False, "brief": False},
+            headers=headers(org, user),
+        )
+
+        await session.refresh(row)
+        assert row.primary_region == "Конаково"
+
+    async def test_выборочный_перенос(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Взять город, но не взять нишу — обычное дело."""
+        org, user, row = project
+        await self._with_audit(session, org, row.id)
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/onboarding/apply",
+            json={"region": True, "niche": False, "brief": False},
+            headers=headers(org, user),
+        )
+
+        await session.refresh(row)
+        assert row.primary_region == "Тверь"
+        assert row.niche is None
+
+    async def test_после_переноса_география_начинает_работать(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        """Ради этого перенос и нужен: регион включает чистку по городам."""
+        org, user, row = project
+        await self._with_audit(session, org, row.id)
+        await client.post(
+            f"/api/v1/projects/{row.id}/onboarding/apply",
+            json={"region": True, "niche": False, "brief": False},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/import",
+                json={"text": "натяжные потолки москва\t900"},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert body["irrelevant"] == 1
+        assert body["cleaned"][0]["reason"] == "geo"

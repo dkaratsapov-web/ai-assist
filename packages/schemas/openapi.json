@@ -1075,6 +1075,139 @@
         "title": "CleanupResult",
         "type": "object"
       },
+      "ClientProfileRead": {
+        "description": "Что удалось прочитать на сайте клиента.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "city": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "City"
+          },
+          "company": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company"
+          },
+          "company_details": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Company Details"
+          },
+          "emails": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Emails",
+            "type": "array"
+          },
+          "messengers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Messengers",
+            "type": "array"
+          },
+          "niche_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche Key"
+          },
+          "niche_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche Label"
+          },
+          "phones": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Phones",
+            "type": "array"
+          },
+          "prices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Prices",
+            "type": "array"
+          },
+          "services": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Services",
+            "type": "array"
+          },
+          "working_hours": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Working Hours"
+          }
+        },
+        "required": [
+          "company",
+          "city",
+          "niche_key",
+          "niche_label",
+          "services",
+          "prices",
+          "phones",
+          "emails",
+          "messengers",
+          "address",
+          "company_details",
+          "working_hours"
+        ],
+        "title": "ClientProfileRead",
+        "type": "object"
+      },
       "ClusterList": {
         "properties": {
           "items": {
@@ -3087,6 +3220,87 @@
         "title": "NotificationRead",
         "type": "object"
       },
+      "OnboardingApply": {
+        "description": "Что из прочитанного перенести в проект.\n\nПоля выбираются по одному, а не «применить всё»: разбор ошибается, и\nчеловек должен иметь возможность взять город, но не взять нишу.",
+        "properties": {
+          "brief": {
+            "default": false,
+            "title": "Brief",
+            "type": "boolean"
+          },
+          "niche": {
+            "default": false,
+            "title": "Niche",
+            "type": "boolean"
+          },
+          "region": {
+            "default": false,
+            "title": "Region",
+            "type": "boolean"
+          }
+        },
+        "title": "OnboardingApply",
+        "type": "object"
+      },
+      "OnboardingRead": {
+        "description": "Онбординг: что система прочитала сама и что осталось спросить.",
+        "properties": {
+          "can_apply": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Can Apply",
+            "type": "array"
+          },
+          "filled": {
+            "title": "Filled",
+            "type": "integer"
+          },
+          "has_audit": {
+            "title": "Has Audit",
+            "type": "boolean"
+          },
+          "niche_questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionRead"
+            },
+            "title": "Niche Questions",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ClientProfileRead"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/QuestionRead"
+            },
+            "title": "Questions",
+            "type": "array"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          }
+        },
+        "required": [
+          "has_audit",
+          "source_url",
+          "profile",
+          "filled",
+          "can_apply",
+          "questions",
+          "niche_questions"
+        ],
+        "title": "OnboardingRead",
+        "type": "object"
+      },
       "OrganizationRead": {
         "properties": {
           "ad_platform_adapter": {
@@ -3629,6 +3843,30 @@
           }
         },
         "title": "ProjectUpdate",
+        "type": "object"
+      },
+      "QuestionRead": {
+        "description": "Вопрос клиенту: сайт на него не отвечает.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "why": {
+            "title": "Why",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "text",
+          "why"
+        ],
+        "title": "QuestionRead",
         "type": "object"
       },
       "Reason": {
@@ -8898,6 +9136,204 @@
           }
         },
         "summary": "Убрать минус-слово",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/onboarding": {
+      "get": {
+        "description": "Анкета клиента с его же сайта плюс вопросы, на которые сайт не отвечает.\n\nРазделение принципиальное. Название, город, услуги и контакты на странице\nнаписаны — их незачем спрашивать. Средний чек, маржа и то, чего клиент не\nделает, на сайте не пишут никогда, и подставить сюда правдоподобные числа\nзначило бы построить весь расчёт экономики на выдумке.",
+        "operationId": "get_onboarding_api_v1_projects__project_id__onboarding_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Что прочитано с сайта и что осталось спросить",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/onboarding/apply": {
+      "post": {
+        "description": "Переносит выбранные поля анкеты в проект и бриф.\n\nТолько по явному выбору и только в пустые поля. Разбор чужой страницы\nошибается, и молча проставленный не тот город — это месяц рекламы в чужом\nрегионе, который по интерфейсу, ничего не спросившему, не заметить.",
+        "operationId": "apply_onboarding_api_v1_projects__project_id__onboarding_apply_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OnboardingApply"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Перенести прочитанное в проект",
         "tags": [
           "semantics"
         ]

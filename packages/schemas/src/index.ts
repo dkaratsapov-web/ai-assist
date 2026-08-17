@@ -55,6 +55,9 @@ export type KeywordList = Schemas["KeywordList"];
 export type ImportSummary = Schemas["ImportSummary"];
 export type CleanupGroupRead = Schemas["CleanupGroupRead"];
 export type BriefRead = Schemas["BriefRead"];
+export type OnboardingRead = Schemas["OnboardingRead"];
+export type ClientProfileRead = Schemas["ClientProfileRead"];
+export type QuestionRead = Schemas["QuestionRead"];
 export type BriefUpdate = Schemas["BriefUpdate"];
 export type MaskRead = Schemas["MaskRead"];
 export type CleanupResult = Schemas["CleanupResult"];
@@ -357,6 +360,28 @@ export class ApiClient {
     return this.request<ImportSummary>(`/api/v1/projects/${projectId}/keywords/import-file`, {
       method: "POST",
       body: JSON.stringify({ filename, content_base64: contentBase64 }),
+    });
+  }
+
+  /**
+   * Что система прочитала с сайта клиента и что осталось спросить у него.
+   *
+   * Половина анкеты собирается разбором страницы, половина остаётся вопросами:
+   * средний чек и маржу на сайте не пишут, а подставить сюда правдоподобные
+   * числа значило бы построить расчёт экономики на выдумке.
+   */
+  getOnboarding(projectId: string): Promise<OnboardingRead> {
+    return this.request<OnboardingRead>(`/api/v1/projects/${projectId}/onboarding`);
+  }
+
+  /** Переносит выбранные поля анкеты в проект. Только пустые поля. */
+  applyOnboarding(
+    projectId: string,
+    fields: { region?: boolean; niche?: boolean; brief?: boolean },
+  ): Promise<OnboardingRead> {
+    return this.request<OnboardingRead>(`/api/v1/projects/${projectId}/onboarding/apply`, {
+      method: "POST",
+      body: JSON.stringify(fields),
     });
   }
 

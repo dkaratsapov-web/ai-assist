@@ -88,6 +88,12 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
         JSONB, default=list, nullable=False
     )
 
+    #: Анкета клиента, прочитанная со страницы: название, город, услуги, цены,
+    #: контакты, реквизиты. Хранится вместе с проверкой, а не в проекте: это
+    #: снимок сайта на момент разбора, а не решение человека. В проект значения
+    #: попадают только тогда, когда специалист их принял.
+    client_profile: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

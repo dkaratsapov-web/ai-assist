@@ -11,6 +11,8 @@ import type {
   CrossMinusResultRead,
   ImportSummary,
   Intent,
+  OnboardingRead,
+  QuestionRead,
   KeywordRead,
   MinusWordList,
   MinusWordSetRead,
@@ -81,6 +83,9 @@ function SemanticsScreen() {
   const [dropping, setDropping] = useState(false);
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
   const [brief, setBrief] = useState<BriefRead | null>(null);
+  const [onboarding, setOnboarding] = useState<OnboardingRead | null>(null);
+  const [applying, setApplying] = useState(false);
+  const [questionsOpen, setQuestionsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
   const [briefDraft, setBriefDraft] = useState({
     sells: "",
@@ -116,14 +121,16 @@ function SemanticsScreen() {
 
     void (async () => {
       try {
-        const [list, groups, minusWords, savedSets, crossing, briefData] = await Promise.all([
-          api.listKeywords(selectedId),
-          api.listClusters(selectedId),
-          api.listMinusWords(selectedId),
-          api.listMinusWordSets(),
-          api.getCrossMinus(selectedId),
-          api.getBrief(selectedId),
-        ]);
+        const [list, groups, minusWords, savedSets, crossing, briefData, onboardingData] =
+          await Promise.all([
+            api.listKeywords(selectedId),
+            api.listClusters(selectedId),
+            api.listMinusWords(selectedId),
+            api.listMinusWordSets(),
+            api.getCrossMinus(selectedId),
+            api.getBrief(selectedId),
+            api.getOnboarding(selectedId),
+          ]);
         if (ignore) return;
         setError(null);
         setKeywords(list.items);
@@ -132,6 +139,7 @@ function SemanticsScreen() {
         setSets(savedSets.items);
         setCross(crossing);
         setBrief(briefData);
+        setOnboarding(onboardingData);
         setBriefDraft({
           sells: briefData.sells ?? "",
           synonyms: briefData.synonyms ?? "",
@@ -163,6 +171,23 @@ function SemanticsScreen() {
       setImporting(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const applyOnboarding = async (fields: {
+    region?: boolean;
+    niche?: boolean;
+    brief?: boolean;
+  }) => {
+    if (!selectedId) return;
+    setApplying(true);
+    try {
+      setOnboarding(await api.applyOnboarding(selectedId, fields));
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -360,6 +385,16 @@ function SemanticsScreen() {
           {/* Бриф стоит выше списка фраз намеренно: сначала человек отвечает,
               что продаёт, потом идёт собирать. В обратном порядке он собирает
               наугад и приносит список, половину которого потом вычищает. */}
+          {onboarding && (
+            <OnboardingCard
+              data={onboarding}
+              onApply={applyOnboarding}
+              busy={applying}
+              questionsOpen={questionsOpen}
+              onToggleQuestions={() => setQuestionsOpen((open) => !open)}
+            />
+          )}
+
           {brief && <BriefCard brief={brief} onEdit={() => setBriefOpen(true)} />}
 
           {keywords === null ? (
@@ -757,6 +792,156 @@ function SemanticsScreen() {
         />
       </Modal>
     </AppShell>
+  );
+}
+
+const APPLY_LABELS: Record<string, string> = {
+  region: "регион проекта",
+  niche: "нишу",
+  brief: "услуги в бриф",
+};
+
+/**
+ * Анкета клиента: что прочитано с сайта и что осталось спросить.
+ *
+ * Граница между половинами не косметическая. Слева то, что на сайте написано, —
+ * это факты, их видно и можно проверить глазами. Справа то, чего на сайте не
+ * бывает: средний чек, маржа, что клиент на самом деле не делает. Подставить
+ * туда правдоподобные числа значило бы построить весь расчёт экономики на
+ * выдумке — поэтому там вопросы, а не значения.
+ */
+function OnboardingCard({
+  data,
+  onApply,
+  busy,
+  questionsOpen,
+  onToggleQuestions,
+}: {
+  data: OnboardingRead;
+  onApply: (fields: { region?: boolean; niche?: boolean; brief?: boolean }) => void;
+  busy: boolean;
+  questionsOpen: boolean;
+  onToggleQuestions: () => void;
+}) {
+  const p = data.profile;
+  const questions = [...data.questions, ...data.niche_questions];
+
+  const facts: [string, string][] = [
+    ["Компания", p.company ?? ""],
+    ["Город", p.city ?? ""],
+    ["Ниша", p.niche_label ?? ""],
+    ["Услуги", (p.services ?? []).join(", ")],
+    ["Цены на сайте", (p.prices ?? []).join(", ")],
+    ["Телефоны", (p.phones ?? []).join(", ")],
+    ["Мессенджеры", (p.messengers ?? []).join(", ")],
+    ["Почта", (p.emails ?? []).join(", ")],
+    ["Адрес", p.address ?? ""],
+    ["Реквизиты", p.company_details ?? ""],
+    ["Режим работы", p.working_hours ?? ""],
+  ];
+
+  return (
+    <Card>
+      <CardHeader
+        title="Что известно о клиенте"
+        description={
+          data.has_audit
+            ? "Слева — прочитанное с сайта, справа — то, чего на сайте не бывает"
+            : "Сайт ещё не проверяли — читать нечего"
+        }
+      />
+
+      {!data.has_audit ? (
+        <p className="text-body-sm text-text-secondary mt-2">
+          Запустите проверку сайта на экране «Аудит». Тем же заходом система прочитает название,
+          город, услуги, цены и контакты — вписывать их руками не придётся.
+        </p>
+      ) : (
+        <>
+          {data.source_url && (
+            // Источник виден намеренно: анкета, собранная с тестовой копии
+            // сайта, выглядит точно так же, как настоящая.
+            <p className="text-caption text-text-secondary mt-2 break-all">
+              Прочитано со страницы {data.source_url}
+            </p>
+          )}
+
+          <dl className="mt-3 flex flex-col">
+            {facts
+              .filter(([, value]) => value !== "")
+              .map(([label, value]) => (
+                <div
+                  key={label}
+                  className="border-border flex flex-wrap gap-x-3 border-b py-2 last:border-b-0"
+                >
+                  <dt className="text-caption text-text-secondary w-36 shrink-0">{label}</dt>
+                  <dd className="text-body-sm text-text-primary min-w-0 flex-1">{value}</dd>
+                </div>
+              ))}
+          </dl>
+
+          {data.filled === 0 && (
+            <p className="text-body-sm text-text-secondary mt-2">
+              На странице не нашлось ни города, ни услуг, ни контактов. Так бывает, если сайт
+              собирается скриптами: наш разбор видит пустой каркас. Заполните бриф руками.
+            </p>
+          )}
+
+          {data.can_apply.length > 0 && (
+            <div className="border-border mt-3 flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-caption text-text-secondary">
+                Перенести в проект: {data.can_apply.map((key) => APPLY_LABELS[key]).join(", ")}
+              </span>
+              <Button
+                size="sm"
+                loading={busy}
+                onClick={() =>
+                  onApply({
+                    region: data.can_apply.includes("region"),
+                    niche: data.can_apply.includes("niche"),
+                    brief: data.can_apply.includes("brief"),
+                  })
+                }
+              >
+                Заполнить по сайту
+              </Button>
+              {/* Выборочно — потому что разбор ошибается, и взять город, но не
+                  взять нишу, это обычное дело. */}
+              {data.can_apply.includes("region") && data.can_apply.length > 1 && (
+                <Button size="sm" variant="ghost" onClick={() => onApply({ region: true })}>
+                  Только регион
+                </Button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      <div className="border-border mt-3 border-t pt-3">
+        <button
+          type="button"
+          onClick={onToggleQuestions}
+          className="text-body-sm text-text-primary focus-visible:outline-focus text-left font-medium focus-visible:outline-2"
+        >
+          Спросить у клиента — {questions.length}{" "}
+          {plural(questions.length, "вопрос", "вопроса", "вопросов")} {questionsOpen ? "▲" : "▼"}
+        </button>
+        <p className="text-caption text-text-secondary mt-1">
+          Этого нет ни на одном сайте, а без ответов расчёт окупаемости строить не на чем.
+        </p>
+
+        {questionsOpen && (
+          <ol className="mt-2 flex flex-col">
+            {questions.map((question: QuestionRead) => (
+              <li key={question.key} className="border-border border-b py-2 last:border-b-0">
+                <p className="text-body-sm text-text-primary">{question.text}</p>
+                <p className="text-caption text-text-secondary">{question.why}</p>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+    </Card>
   );
 }
 

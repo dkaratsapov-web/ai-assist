@@ -1017,6 +1017,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/onboarding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Что прочитано с сайта и что осталось спросить
+         * @description Анкета клиента с его же сайта плюс вопросы, на которые сайт не отвечает.
+         *
+         *     Разделение принципиальное. Название, город, услуги и контакты на странице
+         *     написаны — их незачем спрашивать. Средний чек, маржа и то, чего клиент не
+         *     делает, на сайте не пишут никогда, и подставить сюда правдоподобные числа
+         *     значило бы построить весь расчёт экономики на выдумке.
+         */
+        get: operations["get_onboarding_api_v1_projects__project_id__onboarding_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/onboarding/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Перенести прочитанное в проект
+         * @description Переносит выбранные поля анкеты в проект и бриф.
+         *
+         *     Только по явному выбору и только в пустые поля. Разбор чужой страницы
+         *     ошибается, и молча проставленный не тот город — это месяц рекламы в чужом
+         *     регионе, который по интерфейсу, ничего не спросившему, не заметить.
+         */
+        post: operations["apply_onboarding_api_v1_projects__project_id__onboarding_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/progress": {
         parameters: {
             query?: never;
@@ -1560,6 +1609,36 @@ export interface components {
             irrelevant: number;
             /** Remaining */
             remaining: number;
+        };
+        /**
+         * ClientProfileRead
+         * @description Что удалось прочитать на сайте клиента.
+         */
+        ClientProfileRead: {
+            /** Address */
+            address: string | null;
+            /** City */
+            city: string | null;
+            /** Company */
+            company: string | null;
+            /** Company Details */
+            company_details: string | null;
+            /** Emails */
+            emails: string[];
+            /** Messengers */
+            messengers: string[];
+            /** Niche Key */
+            niche_key: string | null;
+            /** Niche Label */
+            niche_label: string | null;
+            /** Phones */
+            phones: string[];
+            /** Prices */
+            prices: string[];
+            /** Services */
+            services: string[];
+            /** Working Hours */
+            working_hours: string | null;
         };
         /** ClusterList */
         ClusterList: {
@@ -2286,6 +2365,49 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * OnboardingApply
+         * @description Что из прочитанного перенести в проект.
+         *
+         *     Поля выбираются по одному, а не «применить всё»: разбор ошибается, и
+         *     человек должен иметь возможность взять город, но не взять нишу.
+         */
+        OnboardingApply: {
+            /**
+             * Brief
+             * @default false
+             */
+            brief: boolean;
+            /**
+             * Niche
+             * @default false
+             */
+            niche: boolean;
+            /**
+             * Region
+             * @default false
+             */
+            region: boolean;
+        };
+        /**
+         * OnboardingRead
+         * @description Онбординг: что система прочитала сама и что осталось спросить.
+         */
+        OnboardingRead: {
+            /** Can Apply */
+            can_apply: string[];
+            /** Filled */
+            filled: number;
+            /** Has Audit */
+            has_audit: boolean;
+            /** Niche Questions */
+            niche_questions: components["schemas"]["QuestionRead"][];
+            profile: components["schemas"]["ClientProfileRead"];
+            /** Questions */
+            questions: components["schemas"]["QuestionRead"][];
+            /** Source Url */
+            source_url: string | null;
+        };
         /** OrganizationRead */
         OrganizationRead: {
             /** Ad Platform Adapter */
@@ -2496,6 +2618,18 @@ export interface components {
             status?: components["schemas"]["ProjectStatus"] | null;
             /** Website Url */
             website_url?: string | null;
+        };
+        /**
+         * QuestionRead
+         * @description Вопрос клиенту: сайт на него не отвечает.
+         */
+        QuestionRead: {
+            /** Key */
+            key: string;
+            /** Text */
+            text: string;
+            /** Why */
+            why: string;
         };
         /**
          * Reason
@@ -4562,6 +4696,80 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_onboarding_api_v1_projects__project_id__onboarding_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_onboarding_api_v1_projects__project_id__onboarding_apply_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingApply"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingRead"];
+                };
             };
             /** @description Validation Error */
             422: {
