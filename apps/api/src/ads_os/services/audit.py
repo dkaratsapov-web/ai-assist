@@ -248,6 +248,32 @@ class PageSignals:
     #: этого просто не делает.
     has_tel_link: bool = False
 
+    #: Страница закрыта от индексации. Рекламе это не мешает, но почти всегда
+    #: означает, что дали адрес тестовой версии, а не боевой.
+    has_noindex: bool = False
+    #: Сколько ресурсов подключено по незащищённому протоколу.
+    insecure_resources: int = 0
+    #: Размер исходного кода. Тяжёлая страница долго едет по мобильной сети,
+    #: а платный клик уже совершён.
+    html_bytes: int = 0
+    has_description: bool = False
+    has_lang: bool = False
+    #: Есть ли в форме галочка согласия. Директ требует её отдельно от ссылки
+    #: на политику: политика объясняет, галочка фиксирует согласие.
+    form_has_consent: bool = False
+    #: Реквизиты и физический адрес: по ним видно, что за компанией кто-то
+    #: стоит. Их отсутствие снижает и доверие, и шансы на модерации.
+    has_company_details: bool = False
+    has_address: bool = False
+    social_links: list[str] = field(default_factory=list)
+    has_reviews: bool = False
+    #: Все найденные счётчики Метрики. Двух быть не должно: данные раздваиваются,
+    #: и обе картины оказываются неполными.
+    metrica_counters: list[str] = field(default_factory=list)
+    #: Есть ли чужая аналитика. Она не заменяет Метрику: Директ умеет
+    #: оптимизироваться только по своим целям.
+    has_foreign_analytics: bool = False
+
 
 _PHONE_RE = re.compile(r"(?:\+7|8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
@@ -261,6 +287,42 @@ _MESSENGERS = {
 }
 
 _TRUST_WORDS = ("гарант", "отзыв", "сертифик", "лиценз", "опыт работы", "кейс", "лет на рынке")
+
+#: Реквизиты юрлица. Ищутся вместе с номером: слово «инн» встречается внутри
+#: других слов, а «ИНН 7701234567» — уже однозначно.
+_COMPANY_DETAILS_RE = re.compile(r"\b(инн|огрн|огрнип)\b[\s:№]*\d{5,}", re.IGNORECASE)
+
+#: Признаки физического адреса.
+#:
+#: Слова вроде «офис» или «дом» сами по себе не годятся: «забираем технику из
+#: офиса» — это не адрес, а страница получала за него балл доверия. Поэтому тип
+#: улицы засчитывается сам по себе, а дом, корпус и офис — только с номером.
+_ADDRESS_RE = re.compile(
+    r"адрес\s*[:.]"
+    r"|\bул\.|\bулиц[аеыу]\b"
+    r"|\bпросп|\bпр-т\b|\bшоссе\b|\bпереул|\bбульвар|\bнабережн|\bпроезд\b"
+    r"|\bмикрорайон|\bмкр\b"
+    r"|\bд\.\s?\d|\bдом\s\d|\bофис\s?\d|\bкорп\.?\s?\d",
+    re.IGNORECASE,
+)
+
+#: Ссылки на соцсети и площадки, где обычно лежат живые отзывы.
+_SOCIAL_HOSTS = ("vk.com", "ok.ru", "t.me", "dzen.ru", "rutube.ru", "youtube.com", "instagram")
+
+#: Чужие системы аналитики. Директ по ним оптимизироваться не умеет.
+_FOREIGN_ANALYTICS = ("google-analytics.com", "googletagmanager.com", "gtag(", "mc.ya", "top100")
+
+#: Порог тяжёлой страницы. Полтора мегабайта одного только кода — это секунды
+#: ожидания на мобильной сети, за которые посетитель успевает уйти.
+HEAVY_PAGE_BYTES = 1_500_000
+
+#: Ниже этого объёма видимого текста посадочная не рассказывает о предложении
+#: ничего. Порог намеренно ниже, чем у признака страницы на скриптах: там речь
+#: о том, что мы не разглядели, здесь — что рассказывать нечего.
+THIN_CONTENT_LIMIT = 600
+
+#: Заголовки, которые ничего не говорят о предложении.
+_GENERIC_TITLES = ("главная", "home", "index", "сайт", "страница", "untitled", "document")
 _OFFER_WORDS = ("скидк", "акци", "бесплатн", "в подарок", "от ", "срок", "за 1 час", "выезд")
 _PRIVACY_WORDS = (
     "политика конфиденциальности",
@@ -465,9 +527,52 @@ def collect_signals(html: str) -> PageSignals:
     # склеивается со следующим абзацем в одну бессмысленную строку.
     signals.selling_points = _selling_points(tree.text(separator="\n", strip=True))
 
-    if match := _METRICA_RE.search(html):
-        signals.metrica_counter = match.group(1) or match.group(2)
+    # Счётчики ищутся по исходному коду: они живут как раз в скриптах, которые
+    # из дерева вырезаны.
+    counters: dict[str, None] = {}
+    for match in _METRICA_RE.finditer(html):
+        counters.setdefault(match.group(1) or match.group(2), None)
+
+    signals.metrica_counters = list(counters)
+    if signals.metrica_counters:
+        signals.metrica_counter = signals.metrica_counters[0]
         signals.has_analytics = True
+
+    lowered_html = html.lower()
+    signals.has_foreign_analytics = any(m in lowered_html for m in _FOREIGN_ANALYTICS)
+
+    signals.html_bytes = len(html.encode("utf-8", errors="ignore"))
+
+    for meta in tree.css("meta"):
+        name = (meta.attributes.get("name") or "").lower()
+        content = (meta.attributes.get("content") or "").lower()
+        if name == "robots" and "noindex" in content:
+            signals.has_noindex = True
+        if name == "description" and content.strip():
+            signals.has_description = True
+
+    if (root := tree.css_first("html")) is not None:
+        signals.has_lang = bool((root.attributes.get("lang") or "").strip())
+
+    # Ресурсы по незащищённому протоколу. Считаются только подключаемые файлы:
+    # обычная ссылка на чужой сайт по http браузер не блокирует и смешанным
+    # содержимым не считается.
+    for node in tree.css("img, script, link, source, iframe"):
+        for attr in ("src", "href"):
+            value = (node.attributes.get(attr) or "").strip().lower()
+            if value.startswith("http://"):
+                signals.insecure_resources += 1
+
+    for form in tree.css("form"):
+        if form.css("input[type=checkbox]"):
+            signals.form_has_consent = True
+
+    signals.has_company_details = bool(_COMPANY_DETAILS_RE.search(text))
+    signals.has_address = bool(_ADDRESS_RE.search(text))
+    signals.has_reviews = "отзыв" in lowered
+    signals.social_links = sorted(
+        {host for host in _SOCIAL_HOSTS if host in hrefs.lower()}
+    )
 
     return signals
 
@@ -577,6 +682,73 @@ def _technical(
         else:
             findings.append(f"Открывается за {seconds:.1f} с")
 
+    if s.has_noindex:
+        issues.append(
+            Issue(
+                IssueKey.NOINDEX,
+                Category.TECHNICAL,
+                Severity.WARNING,
+                "Страница закрыта от индексации",
+                "Проверьте, тот ли это адрес: тег noindex почти всегда стоит на "
+                "тестовой версии. Рекламе он не мешает, но вести трафик на "
+                "черновик обычно не собирались.",
+            )
+        )
+        score -= 20
+
+    if s.insecure_resources and urlsplit(url).scheme == "https":
+        issues.append(
+            Issue(
+                IssueKey.MIXED_CONTENT,
+                Category.TECHNICAL,
+                Severity.WARNING,
+                f"Часть ресурсов грузится без защиты: {s.insecure_resources}",
+                "Замените адреса с http:// на https://. Браузер блокирует такие "
+                "файлы, и страница ломается — чаще всего пропадают картинки или "
+                "перестаёт работать форма.",
+            )
+        )
+        score -= 20
+
+    if s.html_bytes > HEAVY_PAGE_BYTES:
+        issues.append(
+            Issue(
+                IssueKey.HEAVY_PAGE,
+                Category.TECHNICAL,
+                Severity.RECOMMENDATION,
+                f"Тяжёлый код страницы: {s.html_bytes // 1024} КБ",
+                "Уберите лишнее из разметки. На мобильной сети это лишние "
+                "секунды ожидания, а клик уже оплачен.",
+            )
+        )
+        score -= 10
+
+    if not s.has_description:
+        issues.append(
+            Issue(
+                IssueKey.NO_DESCRIPTION,
+                Category.TECHNICAL,
+                Severity.RECOMMENDATION,
+                "Нет краткого описания страницы",
+                "Заполните meta description: он попадает в выдачу и в превью "
+                "при отправке ссылки в мессенджере.",
+            )
+        )
+        score -= 8
+
+    if not s.has_lang:
+        issues.append(
+            Issue(
+                IssueKey.NO_LANG,
+                Category.TECHNICAL,
+                Severity.RECOMMENDATION,
+                "Не указан язык страницы",
+                "Добавьте lang=\"ru\" в тег html: без него браузеры предлагают "
+                "перевести русскую страницу на русский.",
+            )
+        )
+        score -= 5
+
     return CategoryResult(Category.TECHNICAL, _clamp(score), tuple(findings))
 
 
@@ -616,6 +788,35 @@ def _offer(s: PageSignals, issues: list[Issue]) -> CategoryResult:
         score -= 20
     else:
         findings.append("Есть акции или условия предложения")
+
+    # Тонкая страница проверяется отдельно от «собирается скриптами»: там мы не
+    # разглядели содержимое, здесь его действительно нет.
+    if 0 < s.text_length < THIN_CONTENT_LIMIT and not looks_js_rendered(s):
+        issues.append(
+            Issue(
+                IssueKey.THIN_CONTENT,
+                Category.OFFER,
+                Severity.WARNING,
+                f"На странице мало текста: {s.text_length} символов",
+                "Расскажите о предложении подробнее: что входит, сроки, условия. "
+                "Посетитель с рекламы не знает о вас ничего и уходит за ответами "
+                "к конкурентам.",
+            )
+        )
+        score -= 30
+
+    if s.title and s.title.strip().lower() in _GENERIC_TITLES:
+        issues.append(
+            Issue(
+                IssueKey.GENERIC_TITLE,
+                Category.OFFER,
+                Severity.RECOMMENDATION,
+                f"Заголовок вкладки ничего не говорит: «{s.title}»",
+                "Напишите в title суть предложения и город. Он виден в выдаче и "
+                "во вкладке — это первое, что читают о вас.",
+            )
+        )
+        score -= 10
 
     return CategoryResult(Category.OFFER, _clamp(score), tuple(findings))
 
@@ -699,6 +900,47 @@ def _conversion(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     else:
         findings.append(f"Кнопок действия: {s.cta_buttons}")
 
+    if not s.messengers:
+        issues.append(
+            Issue(
+                IssueKey.NO_MESSENGERS,
+                Category.CONVERSION,
+                Severity.RECOMMENDATION,
+                "Нет кнопок мессенджеров",
+                "Добавьте Telegram или WhatsApp: заметная часть людей не звонит "
+                "незнакомым и не заполняет формы, но пишет охотно.",
+            )
+        )
+        score -= 10
+
+    if s.phones > 2:
+        issues.append(
+            Issue(
+                IssueKey.MANY_PHONES,
+                Category.CONVERSION,
+                Severity.RECOMMENDATION,
+                f"На странице {s.phones} разных телефонов",
+                "Оставьте один номер для рекламного трафика. Несколько номеров "
+                "путают посетителя и делают невозможным колтрекинг: непонятно, "
+                "какой звонок пришёл из рекламы.",
+            )
+        )
+        score -= 10
+
+    if s.forms and not s.form_has_consent:
+        issues.append(
+            Issue(
+                IssueKey.FORM_WITHOUT_CONSENT,
+                Category.CONVERSION,
+                Severity.WARNING,
+                "В форме нет галочки согласия",
+                "Добавьте чекбокс «Согласен на обработку персональных данных» "
+                "со ссылкой на политику. Ссылки в подвале недостаточно: политика "
+                "объясняет, а галочка фиксирует согласие.",
+            )
+        )
+        score -= 15
+
     return CategoryResult(Category.CONVERSION, _clamp(score), tuple(findings))
 
 
@@ -744,6 +986,63 @@ def _trust(s: PageSignals, issues: list[Issue]) -> CategoryResult:
     elif s.has_privacy_policy:
         findings.append("Есть политика обработки данных")
 
+    if not s.has_company_details:
+        issues.append(
+            Issue(
+                IssueKey.NO_COMPANY_DETAILS,
+                Category.TRUST,
+                Severity.RECOMMENDATION,
+                "Не указаны реквизиты компании",
+                "Добавьте в подвал название юрлица и ИНН. Это видно всем — и "
+                "посетителю, и модератору: за сайтом без реквизитов может не "
+                "стоять никого.",
+            )
+        )
+        score -= 15
+
+    if not s.has_address:
+        issues.append(
+            Issue(
+                IssueKey.NO_ADDRESS,
+                Category.TRUST,
+                Severity.RECOMMENDATION,
+                "Нет физического адреса",
+                "Укажите адрес офиса или зону работы. Для местного бизнеса это "
+                "одно из первых, что ищут на странице.",
+            )
+        )
+        score -= 10
+    else:
+        findings.append("Указан адрес")
+
+    if not s.social_links:
+        issues.append(
+            Issue(
+                IssueKey.NO_SOCIAL,
+                Category.TRUST,
+                Severity.RECOMMENDATION,
+                "Нет ссылок на соцсети",
+                "Живая группа показывает, что компания работает сегодня, а не "
+                "закрылась год назад. Сайт этого не показывает.",
+            )
+        )
+        score -= 8
+    else:
+        findings.append("Соцсети: " + ", ".join(s.social_links[:3]))
+
+    if not s.has_reviews:
+        issues.append(
+            Issue(
+                IssueKey.NO_REVIEWS,
+                Category.TRUST,
+                Severity.RECOMMENDATION,
+                "На странице нет отзывов",
+                "Добавьте отзывы с именами и, если можно, ссылками на источник. "
+                "Безымянные отзывы работают заметно хуже, чем никаких.",
+            )
+        )
+        score -= 12
+
     return CategoryResult(Category.TRUST, _clamp(score), tuple(findings))
 
 
@@ -761,13 +1060,43 @@ def _tracking(s: PageSignals, issues: list[Issue]) -> CategoryResult:
                 "приносят заявки, и оптимизировать рекламу невозможно.",
             )
         )
+
+        if s.has_foreign_analytics:
+            # Отдельная находка, потому что реакция другая: человек уверен, что
+            # аналитика есть, и замечание про её отсутствие выглядит ошибкой
+            # проверки. Нужно объяснить, почему чужой счётчик не считается.
+            issues.append(
+                Issue(
+                    IssueKey.FOREIGN_ANALYTICS_ONLY,
+                    Category.TRACKING,
+                    Severity.WARNING,
+                    "Аналитика есть, но не Яндекс Метрика",
+                    "Директ умеет оптимизироваться только по своим целям. "
+                    "Счётчик другой системы для рекламы бесполезен — Метрику "
+                    "придётся поставить дополнительно.",
+                )
+            )
+
         return CategoryResult(Category.TRACKING, 0)
 
-    return CategoryResult(
-        Category.TRACKING,
-        100,
-        (f"Метрика установлена, счётчик {s.metrica_counter}",),
-    )
+    score = 100
+    findings = [f"Метрика установлена, счётчик {s.metrica_counter}"]
+
+    if len(s.metrica_counters) > 1:
+        issues.append(
+            Issue(
+                IssueKey.MANY_METRICA_COUNTERS,
+                Category.TRACKING,
+                Severity.WARNING,
+                f"На странице {len(s.metrica_counters)} счётчика Метрики",
+                "Оставьте один: " + ", ".join(s.metrica_counters) + ". Два счётчика "
+                "делят визиты между собой, и обе картины оказываются неполными — "
+                "а решения принимаются по каждой как по целой.",
+            )
+        )
+        score -= 30
+
+    return CategoryResult(Category.TRACKING, _clamp(score), tuple(findings))
 
 
 def _clamp(value: int) -> int:

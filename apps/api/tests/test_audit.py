@@ -20,21 +20,48 @@ from ads_os.services.audit import (
     issues_from_stored,
 )
 
+#: Эталон: страница, на которую можно вести платный трафик без оговорок.
+#:
+#: Она заодно служит описанием того, что система считает готовностью. Каждая
+#: строка здесь появилась не для красоты, а потому что без неё срабатывает
+#: какая-то из проверок: язык, описание, галочка согласия, реквизиты, адрес.
 GOOD_PAGE = """
-<html><head>
+<html lang="ru"><head>
   <title>Ремонт техники Apple в Твери</title>
+  <meta name="description" content="Ремонт iPhone за час с гарантией 12 месяцев">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script>ym(12345678, 'init', {});</script>
 </head><body>
   <h1>Ремонт iPhone за 1 час с гарантией</h1>
   <p>Замена экрана от 3 500 ₽. Диагностика бесплатно. Гарантия 12 месяцев.</p>
   <p>Более 2000 отзывов, сертифицированный сервис, 8 лет на рынке.</p>
+  <p>Работаем с оригинальными комплектующими. Мастер приезжает в день обращения.
+     Забираем технику из офиса и возвращаем после ремонта. Пишем в договоре срок
+     и стоимость: итоговая цена не меняется после диагностики.</p>
+  <p>Ремонтируем iPhone, iPad, MacBook и Apple Watch: замена стекла, аккумулятора,
+     разъёма зарядки, восстановление после попадания воды. Перед началом работ
+     согласуем смету, после ремонта выдаём чек и гарантийный талон.</p>
   <a href="https://t.me/example">Написать в Telegram</a>
-  <p>Телефон: +7 (900) 123-45-67</p>
-  <form action="/lead"><input name="phone"><button>Оставить заявку</button></form>
+  <a href="https://vk.com/example">Мы во ВКонтакте</a>
+  <p>Телефон: <a href="tel:+79001234567">+7 (900) 123-45-67</a></p>
+  <p>Адрес: г. Тверь, ул. Советская, д. 10, офис 3</p>
+  <p>ООО «Ремонт», ИНН 6950123456</p>
+  <form action="/lead">
+    <input name="phone">
+    <label><input type="checkbox" name="consent"> Согласен на обработку персональных данных</label>
+    <button>Оставить заявку</button>
+  </form>
   <a href="/privacy">Политика конфиденциальности</a>
 </body></html>
 """
+
+#: Форма из эталона. Вынесена, чтобы проверки «страницы без формы» не
+#: разъезжались с самим эталоном при его правке.
+FORM = """<form action="/lead">
+    <input name="phone">
+    <label><input type="checkbox" name="consent"> Согласен на обработку персональных данных</label>
+    <button>Оставить заявку</button>
+  </form>"""
 
 BARE_PAGE = "<html><head><title>Сайт</title></head><body><p>Мы работаем</p></body></html>"
 
@@ -118,9 +145,7 @@ class TestЗамечания:
 
     def test_телефон_без_формы_не_блокирует(self) -> None:
         """Связаться можно — значит трафик не пропадёт впустую."""
-        html = GOOD_PAGE.replace(
-            '<form action="/lead"><input name="phone"><button>Оставить заявку</button></form>', ""
-        )
+        html = GOOD_PAGE.replace(FORM, "")
         result = audit_page("https://example.com/", html)
 
         assert result.can_launch is True
@@ -153,7 +178,9 @@ class TestПерсональныеДанные:
     """Проверка, которая отвечает не за конверсию, а за допуск к показам."""
 
     def test_форма_без_политики_запрещает_запуск(self) -> None:
-        html = GOOD_PAGE.replace('<a href="/privacy">Политика конфиденциальности</a>', "")
+        html = GOOD_PAGE.replace(
+            '<a href="/privacy">Политика конфиденциальности</a>', ""
+        ).replace("Согласен на обработку персональных данных", "Согласен с условиями")
         result = audit_page("https://example.com/", html)
 
         blocking = [i for i in result.issues if i.severity is Severity.CRITICAL]
@@ -162,9 +189,9 @@ class TestПерсональныеДанные:
 
     def test_страница_без_формы_политику_не_требует(self) -> None:
         """Ничего не собираем — нечего и обосновывать."""
-        html = GOOD_PAGE.replace(
-            '<form action="/lead"><input name="phone"><button>Оставить заявку</button></form>', ""
-        ).replace('<a href="/privacy">Политика конфиденциальности</a>', "")
+        html = GOOD_PAGE.replace(FORM, "").replace(
+            '<a href="/privacy">Политика конфиденциальности</a>', ""
+        )
         result = audit_page("https://example.com/", html)
 
         assert not any("политик" in i.title.lower() for i in result.issues)
@@ -225,16 +252,16 @@ class TestУдобствоЗаявки:
         assert not any("полей" in i.title for i in result.issues)
 
     def test_телефон_без_ссылки_это_рекомендация(self) -> None:
-        result = audit_page("https://example.com/", GOOD_PAGE)
+        html = GOOD_PAGE.replace(
+            '<a href="tel:+79001234567">+7 (900) 123-45-67</a>', "+7 (900) 123-45-67"
+        )
+        result = audit_page("https://example.com/", html)
 
         clickable = [i for i in result.issues if "нажать" in i.title]
         assert clickable and clickable[0].severity is Severity.RECOMMENDATION
 
     def test_телефон_ссылкой_замечаний_не_даёт(self) -> None:
-        html = GOOD_PAGE.replace(
-            "Телефон: +7 (900) 123-45-67",
-            'Телефон: <a href="tel:+79001234567">+7 (900) 123-45-67</a>',
-        )
+        html = GOOD_PAGE
         result = audit_page("https://example.com/", html)
 
         assert not any("нажать" in i.title for i in result.issues)
