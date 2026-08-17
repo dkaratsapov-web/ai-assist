@@ -292,7 +292,8 @@ function SemanticsScreen() {
               {minus &&
                 (minus.items.length > 0 ||
                   minus.suggestions.length > 0 ||
-                  minus.learned.length > 0) && (
+                  minus.learned.length > 0 ||
+                  minus.from_niche.length > 0) && (
                   <Card>
                     <CardHeader
                       title="Минус-слова"
@@ -333,6 +334,25 @@ function SemanticsScreen() {
                             Сохранить свой
                           </Button>
                         )}
+                      </div>
+                    )}
+                    {minus.from_niche.length > 0 && (
+                      <div className="border-border mb-3 border-t pt-3">
+                        <p className="text-caption text-text-secondary mb-1.5">
+                          Стартовый набор — минусуют почти всегда
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {minus.from_niche.map((word) => (
+                            <Button
+                              key={word}
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => void addMinus(word)}
+                            >
+                              + {word}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {minus.learned.length > 0 && (

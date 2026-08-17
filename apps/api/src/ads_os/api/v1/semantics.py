@@ -13,6 +13,7 @@ from ...errors import AppError
 from ...models import Keyword, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
+from ...services import niches
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.export import ExportRow, file_name, to_csv
@@ -282,7 +283,7 @@ REPEATED_DECISION_PROJECTS = 2
 async def list_minus_words(
     project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
 ) -> MinusWordList:
-    await ProjectRepository(session, ctx).get_or_404(project_id)
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
     rows = await _minus_word_rows(session, ctx, project_id)
     saved = {row.word for row in rows}
@@ -305,6 +306,11 @@ async def list_minus_words(
         items=[MinusWordRead(id=row.id, word=row.word) for row in rows],
         suggestions=suggestions,
         learned=await _learned_words(session, ctx, project_id, already=saved),
+        from_niche=[
+            word
+            for word in niches.minus_words(niches.get(project.niche))
+            if word not in saved
+        ],
         total=len(rows),
     )
 

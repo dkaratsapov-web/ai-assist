@@ -56,6 +56,12 @@ class Project(UUIDPrimaryKey, Timestamps, SoftDelete, OrganizationScoped, Base):
     website_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
     primary_region: Mapped[str | None] = mapped_column(String(120), nullable=True)
 
+    #: Ключ шаблона ниши. Обычная строка, а не перечисление в базе: список ниш
+    #: живёт в коде и будет пополняться, а каждое пополнение через миграцию типа
+    #: означало бы простой ради добавления слова. Неизвестный ключ трактуется
+    #: как «ниша не задана» и ничего не ломает.
+    niche: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
     status: Mapped[ProjectStatus] = mapped_column(
         SAEnum(ProjectStatus, name="project_status", native_enum=False, length=20),
         default=ProjectStatus.DRAFT,

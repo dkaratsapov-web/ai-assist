@@ -30,6 +30,7 @@ class ProjectCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     website_url: str | None = Field(default=None, max_length=2048)
     primary_region: str | None = Field(default=None, max_length=120)
+    niche: str | None = Field(default=None, max_length=50)
 
 
 class ProjectRead(BaseModel):
@@ -39,6 +40,7 @@ class ProjectRead(BaseModel):
     name: str
     website_url: str | None
     primary_region: str | None
+    niche: str | None
     status: ProjectStatus
     version: int
     created_at: datetime
@@ -55,6 +57,7 @@ class ProjectUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     website_url: str | None = Field(default=None, max_length=2048)
     primary_region: str | None = Field(default=None, max_length=120)
+    niche: str | None = Field(default=None, max_length=50)
     status: ProjectStatus | None = None
 
     #: Версия, на которой пользователь редактировал (v0.4 §100).
@@ -64,6 +67,35 @@ class ProjectUpdate(BaseModel):
 class ProjectList(BaseModel):
     items: list[ProjectRead]
     total: int
+
+
+class NicheRequirementRead(BaseModel):
+    """Требование площадки к посадочной в этой нише."""
+
+    key: str
+    title: str
+    hint: str
+    blocking: bool
+
+
+class NicheRead(BaseModel):
+    """Шаблон ниши.
+
+    Цифр экономики здесь нет намеренно: конверсия и цена клика зависят от
+    региона, сезона и самого сайта сильнее, чем от отрасли, и отраслевое
+    среднее в поле проекта выглядело бы как факт о бизнесе клиента.
+    """
+
+    key: str
+    label: str
+    minus_words: list[str]
+    requirements: list[NicheRequirementRead]
+    main_conversion: MainConversion | None
+    notes: list[str]
+
+
+class NicheList(BaseModel):
+    items: list[NicheRead]
 
 
 class StepRead(BaseModel):
@@ -659,6 +691,11 @@ class MinusWordList(BaseModel):
     #: Словарь не знает ниши — а человек знает, и повторённое решение стоит
     #: заметить, а не заставлять принимать заново.
     learned: list[str]
+    #: Стартовый набор: слова, которые минусуют почти всегда, плюс нишевые —
+    #: если у проекта задана ниша. Как и остальные подсказки, ничего не
+    #: добавляет само: отсечённый трафик, о котором человек не просил, заметить
+    #: труднее всего.
+    from_niche: list[str]
     total: int
 
 

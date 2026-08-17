@@ -3,7 +3,13 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type ApiError, type ProgressRead, type ProjectRead, type StepRead } from "@ads-os/schemas";
+import {
+  type ApiError,
+  type NicheRead,
+  type ProgressRead,
+  type ProjectRead,
+  type StepRead,
+} from "@ads-os/schemas";
 import {
   Button,
   Card,
@@ -40,12 +46,17 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
+  const [niches, setNiches] = useState<NicheRead[]>([]);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState({ name: "", website: "", region: "" });
+  const [draft, setDraft] = useState({ name: "", website: "", region: "", niche: "" });
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const router = useRouter();
+
+  // Ниша могла быть удалена из справочника с тех пор, как её выбрали. Тогда
+  // карточки просто нет — это лучше, чем пустой блок с заголовком.
+  const activeNiche = niches.find((n) => n.key === project?.niche) ?? null;
 
   useEffect(() => {
     let ignore = false;
@@ -54,14 +65,16 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       try {
         // Оба запроса идут вместе: прогресс без проекта показывать нечему, а
         // проект без прогресса — половина экрана.
-        const [loadedProject, loadedProgress] = await Promise.all([
+        const [loadedProject, loadedProgress, loadedNiches] = await Promise.all([
           api.getProject(id),
           api.getProgress(id),
+          api.listNiches(),
         ]);
         if (ignore) return;
         setError(null);
         setProject(loadedProject);
         setProgress(loadedProgress);
+        setNiches(loadedNiches.items);
       } catch (err) {
         if (ignore) return;
         setError(toApiError(err));
@@ -79,6 +92,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
       name: project.name,
       website: project.website_url ?? "",
       region: project.primary_region ?? "",
+      niche: project.niche ?? "",
     });
     setEditing(true);
   };
@@ -91,6 +105,7 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         name: draft.name.trim(),
         website_url: draft.website.trim() || null,
         primary_region: draft.region.trim() || null,
+        niche: draft.niche || null,
         // Версия, на которой правили: защищает от записи поверх чужого
         // изменения (v0.4 §100).
         expected_version: project.version,
@@ -197,6 +212,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             />
           </Card>
 
+          {activeNiche ? <NicheCard niche={activeNiche} /> : null}
+
           <section className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <StepLink
               href={STEP_LINKS.research(project.id)}
@@ -264,6 +281,24 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             value={draft.region}
             onChange={(e) => setDraft((d) => ({ ...d, region: e.target.value }))}
           />
+          <label className="flex flex-col gap-1.5">
+            <span className="text-caption text-text-secondary">Ниша</span>
+            <select
+              value={draft.niche}
+              onChange={(e) => setDraft((d) => ({ ...d, niche: e.target.value }))}
+              className="border-border-input rounded-control text-body-sm text-text-primary bg-bg focus-visible:outline-focus h-10 border px-3 focus-visible:outline-2"
+            >
+              <option value="">Не выбрана</option>
+              {niches.map((niche) => (
+                <option key={niche.key} value={niche.key}>
+                  {niche.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-caption text-text-secondary">
+              Добавляет стартовые минус-слова и проверку требований Директа к этой нише
+            </span>
+          </label>
         </div>
       </Modal>
       <ConfirmationDialog
@@ -284,6 +319,52 @@ function describe(progress: ProgressRead, key: string): string {
   if (!step) return "";
   if (step.state === "completed") return "Готово";
   return step.hint ?? "";
+}
+
+/**
+ * Что известно про нишу проекта.
+ *
+ * Требования площадки идут первыми и отдельно от заметок: без них объявления
+ * не выходят на показы вообще, а заметка — это повод подумать. Мешать одно с
+ * другим значит уравнивать «сайт не пройдёт модерацию» и «уточните у клиента».
+ */
+function NicheCard({ niche }: { niche: NicheRead }) {
+  return (
+    <Card>
+      <CardHeader
+        title={`Ниша: ${niche.label}`}
+        description="Что в этой нише проверяется дополнительно"
+      />
+      <div className="flex flex-col gap-4">
+        {niche.requirements.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-caption text-text-secondary">Требования Яндекс Директа</span>
+            {niche.requirements.map((requirement) => (
+              <div key={requirement.key} className="flex items-start gap-2">
+                <StatusBadge tone={requirement.blocking ? "critical" : "warning"} size="sm">
+                  {requirement.blocking ? "Обязательно" : "Желательно"}
+                </StatusBadge>
+                <span className="text-body-sm text-text-primary">{requirement.title}</span>
+              </div>
+            ))}
+            <span className="text-caption text-text-secondary">
+              Проверяются при аудите сайта вместе с остальными.
+            </span>
+          </div>
+        ) : null}
+
+        {niche.notes.length > 0 ? (
+          <ul className="flex flex-col gap-1.5">
+            {niche.notes.map((note) => (
+              <li key={note} className="text-body-sm text-text-secondary">
+                {note}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </Card>
+  );
 }
 
 function StepLink({

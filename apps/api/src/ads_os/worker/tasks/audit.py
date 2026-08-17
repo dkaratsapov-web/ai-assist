@@ -27,6 +27,7 @@ from ...db.session import session_scope
 from ...models.audit import ModuleStatus, SiteAudit
 from ...models.project import Project
 from ...models.usage import UsageService, UsageUnit
+from ...services import niches
 from ...services.audit import (
     audit_page,
     collect_signals,
@@ -102,6 +103,15 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             await _notify(session, audit, failed_reason=audit.error_reason)
             return ModuleStatus.FAILED.value
 
+        # Ниша добавляет к разбору требования площадки: клинике нужна лицензия,
+        # БАДу — оговорка «не является лекарством». Сам разбор о нишах не знает
+        # намеренно — он одинаков для своего сайта и для сайта конкурента.
+        niche = niches.get(
+            (
+                await session.execute(select(Project.niche).where(Project.id == audit.project_id))
+            ).scalar_one_or_none()
+        )
+
         result = audit_page(
             fetched["final_url"],
             fetched["html"],
@@ -109,6 +119,7 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             # Задача могла быть поставлена в очередь до появления этого поля —
             # тогда времени просто нет, и проверка скорости не проводится.
             elapsed_ms=fetched.get("elapsed_ms"),
+            extra_issues=niches.requirement_issues(niche, fetched["html"]),
         )
 
         audit.status = ModuleStatus.COMPLETED

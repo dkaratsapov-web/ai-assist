@@ -62,6 +62,9 @@ export type AdDraftList = Schemas["AdDraftList"];
 export type AdViolationRead = Schemas["AdViolationRead"];
 export type MinusWordSetRead = Schemas["MinusWordSetRead"];
 export type MinusWordSetList = Schemas["MinusWordSetList"];
+export type NicheRead = Schemas["NicheRead"];
+export type NicheList = Schemas["NicheList"];
+export type NicheRequirementRead = Schemas["NicheRequirementRead"];
 export type ApplySetResult = Schemas["ApplySetResult"];
 export type SearchResult = Schemas["SearchResult"];
 export type SearchProjectRead = Schemas["SearchProjectRead"];
@@ -344,6 +347,11 @@ export class ApiClient {
 
   listClusters(projectId: string): Promise<ClusterList> {
     return this.request<ClusterList>(`/api/v1/projects/${projectId}/keywords/clusters`);
+  }
+
+  /** Справочник ниш. Одинаков для всех и меняется вместе с кодом, а не с данными. */
+  listNiches(): Promise<NicheList> {
+    return this.request<NicheList>(`/api/v1/niches`);
   }
 
   listMinusWords(projectId: string): Promise<MinusWordList> {

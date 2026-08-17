@@ -210,6 +210,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/niches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Справочник ниш */
+        get: operations["list_niches_api_v1_niches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -1684,6 +1701,8 @@ export interface components {
         };
         /** MinusWordList */
         MinusWordList: {
+            /** From Niche */
+            from_niche: string[];
             /** Items */
             items: components["schemas"]["MinusWordRead"][];
             /** Learned */
@@ -1758,6 +1777,46 @@ export interface components {
          * @enum {string}
          */
         ModuleStatus: "not_started" | "queued" | "running" | "needs_review" | "completed" | "failed";
+        /** NicheList */
+        NicheList: {
+            /** Items */
+            items: components["schemas"]["NicheRead"][];
+        };
+        /**
+         * NicheRead
+         * @description Шаблон ниши.
+         *
+         *     Цифр экономики здесь нет намеренно: конверсия и цена клика зависят от
+         *     региона, сезона и самого сайта сильнее, чем от отрасли, и отраслевое
+         *     среднее в поле проекта выглядело бы как факт о бизнесе клиента.
+         */
+        NicheRead: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            main_conversion: components["schemas"]["MainConversion"] | null;
+            /** Minus Words */
+            minus_words: string[];
+            /** Notes */
+            notes: string[];
+            /** Requirements */
+            requirements: components["schemas"]["NicheRequirementRead"][];
+        };
+        /**
+         * NicheRequirementRead
+         * @description Требование площадки к посадочной в этой нише.
+         */
+        NicheRequirementRead: {
+            /** Blocking */
+            blocking: boolean;
+            /** Hint */
+            hint: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
         /**
          * NotificationKind
          * @description О чём уведомление.
@@ -1915,6 +1974,8 @@ export interface components {
         ProjectCreate: {
             /** Name */
             name: string;
+            /** Niche */
+            niche?: string | null;
             /** Primary Region */
             primary_region?: string | null;
             /** Website Url */
@@ -1941,6 +2002,8 @@ export interface components {
             id: string;
             /** Name */
             name: string;
+            /** Niche */
+            niche: string | null;
             /** Primary Region */
             primary_region: string | null;
             status: components["schemas"]["ProjectStatus"];
@@ -2013,6 +2076,8 @@ export interface components {
             expected_version?: number | null;
             /** Name */
             name?: string | null;
+            /** Niche */
+            niche?: string | null;
             /** Primary Region */
             primary_region?: string | null;
             status?: components["schemas"]["ProjectStatus"] | null;
@@ -2465,6 +2530,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_niches_api_v1_niches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NicheList"];
                 };
             };
         };

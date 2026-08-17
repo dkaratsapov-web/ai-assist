@@ -73,6 +73,14 @@ class IssueKey(StrEnum):
     #: Страница собирается скриптами: в присланном HTML содержимого почти нет.
     JS_RENDERED = "js_rendered"
 
+    #: Требования площадки к отдельным нишам. Проверяются только там, где ниша
+    #: задана: искать лицензию на сайте по продаже окон бессмысленно, а вот её
+    #: отсутствие у клиники означает отклонённые объявления.
+    NO_MEDICAL_LICENCE = "no_medical_licence"
+    NO_CONTRAINDICATION_WARNING = "no_contraindication_warning"
+    NO_SUPPLEMENT_DISCLAIMER = "no_supplement_disclaimer"
+    NO_LEGAL_REQUISITES = "no_legal_requisites"
+
 
 class Verdict(StrEnum):
     READY = "ready"
@@ -98,6 +106,12 @@ BLOCKING_ISSUE_KEYS = frozenset(
         IssueKey.NO_CONTACTS,
         IssueKey.NO_PRIVACY_POLICY,
         IssueKey.NO_METRICA,
+        # Нишевые требования площадки блокируют по той же причине, что и
+        # политика обработки данных: без них объявления не пройдут модерацию,
+        # и запускаться попросту не с чем.
+        IssueKey.NO_MEDICAL_LICENCE,
+        IssueKey.NO_CONTRAINDICATION_WARNING,
+        IssueKey.NO_SUPPLEMENT_DISCLAIMER,
     }
 )
 
@@ -260,16 +274,28 @@ def looks_js_rendered(s: PageSignals) -> bool:
 
 
 def audit_page(
-    url: str, html: str, *, status_code: int = 200, elapsed_ms: int | None = None
+    url: str,
+    html: str,
+    *,
+    status_code: int = 200,
+    elapsed_ms: int | None = None,
+    extra_issues: Sequence[Issue] = (),
 ) -> AuditResult:
     """Разбирает страницу и считает готовность к рекламе.
 
     `elapsed_ms` — время загрузки, если оно известно. Необязательное: страницу
     можно разобрать и из сохранённого HTML, и тогда времени нет. Отсутствие
     времени не считается хорошим результатом — проверка просто не проводится.
+
+    `extra_issues` — находки, которые нашёл кто-то другой: сейчас это требования
+    площадки к отдельным нишам. Они приходят снаружи, а не считаются здесь,
+    чтобы разбор не знал про ниши: проверка страницы обязана оставаться одной и
+    той же для своего сайта и для сайта конкурента, иначе сравнение перестанет
+    что-либо значить. На вердикт они при этом влияют наравне с остальными —
+    отсутствие лицензии у клиники это не примечание.
     """
     signals = collect_signals(html)
-    issues: list[Issue] = []
+    issues: list[Issue] = list(extra_issues)
 
     technical = _technical(url, status_code, signals, issues, elapsed_ms)
     offer = _offer(signals, issues)

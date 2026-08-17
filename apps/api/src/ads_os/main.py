@@ -17,6 +17,7 @@ from .api.v1 import (
     competitors,
     health,
     minus_sets,
+    niches,
     notifications,
     organization,
     overview,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(semantics.router, prefix="/api/v1")
     app.include_router(semantics.search_router, prefix="/api/v1")
     app.include_router(minus_sets.router, prefix="/api/v1")
+    app.include_router(niches.router, prefix="/api/v1")
     app.include_router(overview.router, prefix="/api/v1")
     app.include_router(activity.router, prefix="/api/v1")
     app.include_router(notifications.router, prefix="/api/v1")

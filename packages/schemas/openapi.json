@@ -2234,6 +2234,13 @@
       },
       "MinusWordList": {
         "properties": {
+          "from_niche": {
+            "items": {
+              "type": "string"
+            },
+            "title": "From Niche",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/MinusWordRead"
@@ -2264,6 +2271,7 @@
           "items",
           "suggestions",
           "learned",
+          "from_niche",
           "total"
         ],
         "title": "MinusWordList",
@@ -2415,6 +2423,105 @@
         ],
         "title": "ModuleStatus",
         "type": "string"
+      },
+      "NicheList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NicheRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "NicheList",
+        "type": "object"
+      },
+      "NicheRead": {
+        "description": "Шаблон ниши.\n\nЦифр экономики здесь нет намеренно: конверсия и цена клика зависят от\nрегиона, сезона и самого сайта сильнее, чем от отрасли, и отраслевое\nсреднее в поле проекта выглядело бы как факт о бизнесе клиента.",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "main_conversion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MainConversion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "minus_words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Minus Words",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/NicheRequirementRead"
+            },
+            "title": "Requirements",
+            "type": "array"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "minus_words",
+          "requirements",
+          "main_conversion",
+          "notes"
+        ],
+        "title": "NicheRead",
+        "type": "object"
+      },
+      "NicheRequirementRead": {
+        "description": "Требование площадки к посадочной в этой нише.",
+        "properties": {
+          "blocking": {
+            "title": "Blocking",
+            "type": "boolean"
+          },
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title",
+          "hint",
+          "blocking"
+        ],
+        "title": "NicheRequirementRead",
+        "type": "object"
       },
       "NotificationKind": {
         "description": "О чём уведомление.\n\nЗакрытый список: свободная строка со временем превратилась бы в набор\nпохожих формулировок, по которому нельзя ни отфильтровать, ни настроить\nправила доставки.",
@@ -2735,6 +2842,18 @@
             "title": "Name",
             "type": "string"
           },
+          "niche": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche"
+          },
           "primary_region": {
             "anyOf": [
               {
@@ -2803,6 +2922,17 @@
             "title": "Name",
             "type": "string"
           },
+          "niche": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche"
+          },
           "primary_region": {
             "anyOf": [
               {
@@ -2843,6 +2973,7 @@
           "name",
           "website_url",
           "primary_region",
+          "niche",
           "status",
           "version",
           "created_at",
@@ -2993,6 +3124,18 @@
               }
             ],
             "title": "Name"
+          },
+          "niche": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Niche"
           },
           "primary_region": {
             "anyOf": [
@@ -3931,6 +4074,27 @@
         "summary": "Удалить набор",
         "tags": [
           "minus-sets"
+        ]
+      }
+    },
+    "/api/v1/niches": {
+      "get": {
+        "operationId": "list_niches_api_v1_niches_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NicheList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Справочник ниш",
+        "tags": [
+          "niches"
         ]
       }
     },
