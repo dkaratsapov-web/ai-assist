@@ -81,6 +81,37 @@ class IssueKey(StrEnum):
     NO_SUPPLEMENT_DISCLAIMER = "no_supplement_disclaimer"
     NO_LEGAL_REQUISITES = "no_legal_requisites"
 
+    #: Страница закрыта от индексации. Рекламе это не мешает, но почти всегда
+    #: означает, что дали адрес тестовой версии.
+    NOINDEX = "noindex"
+    #: Защищённая страница тянет часть ресурсов по незащищённому протоколу.
+    MIXED_CONTENT = "mixed_content"
+    #: Слишком тяжёлый код страницы.
+    HEAVY_PAGE = "heavy_page"
+    NO_DESCRIPTION = "no_description"
+    NO_LANG = "no_lang"
+
+    #: Содержимого мало даже для посадочной.
+    THIN_CONTENT = "thin_content"
+    #: Заголовок вкладки не описывает предложение.
+    GENERIC_TITLE = "generic_title"
+
+    NO_MESSENGERS = "no_messengers"
+    #: Несколько разных номеров на одной странице.
+    MANY_PHONES = "many_phones"
+    #: Форма собирает данные без галочки согласия.
+    FORM_WITHOUT_CONSENT = "form_without_consent"
+
+    NO_COMPANY_DETAILS = "no_company_details"
+    NO_ADDRESS = "no_address"
+    NO_SOCIAL = "no_social"
+    NO_REVIEWS = "no_reviews"
+
+    #: Несколько счётчиков Метрики на странице.
+    MANY_METRICA_COUNTERS = "many_metrica_counters"
+    #: Аналитика есть, но не та: Директ умеет оптимизироваться по Метрике.
+    FOREIGN_ANALYTICS_ONLY = "foreign_analytics_only"
+
 
 class Verdict(StrEnum):
     READY = "ready"

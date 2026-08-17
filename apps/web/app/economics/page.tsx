@@ -36,7 +36,11 @@ const REQUIRED_FIELDS = [
 
 const RECOMMENDED_FIELDS = [
   { key: "margin_percent", label: "Маржинальность, %", hint: "Валовая маржа со сделки" },
-  { key: "lead_to_sale_rate", label: "Конверсия из лида в продажу", hint: "Доля от 0 до 1" },
+  {
+    key: "lead_to_sale_rate",
+    label: "Конверсия из лида в продажу, %",
+    hint: "Сколько заявок доходит до сделки: например, 20",
+  },
   { key: "target_cac", label: "Целевой CAC, ₽", hint: "Если не задан — считается по марже" },
   { key: "target_cpl", label: "Целевой CPL, ₽", hint: "Если не задан — считается по CAC" },
 ] as const;
@@ -56,8 +60,8 @@ const FORECAST_FIELDS = [
   },
   {
     key: "site_conversion_rate",
-    label: "Конверсия посадочной",
-    hint: "Доля от 0 до 1: 0.03 — это 3 %",
+    label: "Конверсия посадочной, %",
+    hint: "Сколько посетителей оставляют заявку: например, 3",
   },
 ] as const;
 
@@ -92,6 +96,9 @@ function EconomicsScreen() {
   const [economics, setEconomics] = useState<EconomicsResponse | null>(null);
   const [draft, setDraft] = useState<Partial<Record<FieldKey, string>>>({});
   const [error, setError] = useState<ApiError | null>(null);
+  //: Ошибка сохранения живёт отдельно от ошибки загрузки: первая показывается
+  //: рядом с формой и не трогает введённое, вторая заменяет экран.
+  const [saveError, setSaveError] = useState<ApiError | null>(null);
   const [saving, setSaving] = useState(false);
   // Счётчик повторов: увеличение перезапускает загрузку, не дублируя её код.
   const [reloadToken, setReloadToken] = useState(0);
@@ -152,7 +159,7 @@ function EconomicsScreen() {
   const save = async () => {
     if (!selectedId) return;
     setSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
       const payload: EconomicsUpdate = {
         ...toPayload(draft),
@@ -164,7 +171,10 @@ function EconomicsScreen() {
       setEconomics(response);
       setDraft(toDraft(response));
     } catch (err) {
-      setError(toApiError(err));
+      // Ошибка сохранения не заменяет экран целиком: иначе вместе с ним
+      // исчезает всё, что человек только что набрал, — и повторить ввод он
+      // может уже не так, как в первый раз.
+      setSaveError(toApiError(err));
     } finally {
       setSaving(false);
     }
@@ -289,6 +299,13 @@ function EconomicsScreen() {
                   />
                 ))}
 
+                {saveError && (
+                  <p className="text-body-sm text-status-critical-fg mt-2">
+                    Не удалось сохранить: {saveError.message}. Проверьте, что проценты введены
+                    числом от 0 до 100, а суммы — без пробелов и знака рубля.
+                  </p>
+                )}
+
                 <Button onClick={save} loading={saving} fullWidth className="mt-2">
                   Сохранить
                 </Button>
@@ -401,31 +418,59 @@ function MetricCard({
   );
 }
 
+/**
+ * Поля, которые человек вводит в процентах, а система хранит долей.
+ *
+ * Никто не говорит «конверсия ноль целых три сотых» — говорят «три процента».
+ * Поле, требующее долю, читается как опечатка и приводит к отказу сервера с
+ * невнятным «данные не прошли проверку». Пересчёт делается здесь, у самого
+ * поля ввода, а не в расчётах: дальше по системе величина везде одна и та же.
+ */
+const PERCENT_FIELDS: readonly FieldKey[] = ["lead_to_sale_rate", "site_conversion_rate"];
+
+/** Все поля формы. Пропущенное здесь не вернётся в форму после сохранения. */
+const ALL_FIELDS: readonly FieldKey[] = [
+  ...REQUIRED_FIELDS.map((f) => f.key),
+  ...RECOMMENDED_FIELDS.map((f) => f.key),
+  ...FORECAST_FIELDS.map((f) => f.key),
+];
+
 function toDraft(response: EconomicsResponse): Partial<Record<FieldKey, string>> {
   const input = response.input;
   if (!input) return {};
+
   const entries: [FieldKey, string][] = [];
-  for (const key of [
-    "monthly_budget",
-    "average_order_value",
-    "margin_percent",
-    "lead_to_sale_rate",
-    "target_cac",
-    "target_cpl",
-  ] as FieldKey[]) {
+  for (const key of ALL_FIELDS) {
     const value = (input as Record<string, unknown>)[key];
-    if (value !== null && value !== undefined) entries.push([key, String(value)]);
+    if (value === null || value === undefined) continue;
+
+    if (PERCENT_FIELDS.includes(key)) {
+      // Округление до сотых процента: без него 0.03 возвращается как
+      // 3.0000000000000004 и выглядит поломкой.
+      entries.push([key, String(Math.round(Number(value) * 10000) / 100)]);
+    } else {
+      entries.push([key, String(value)]);
+    }
   }
   return Object.fromEntries(entries) as Partial<Record<FieldKey, string>>;
 }
 
 function toPayload(draft: Partial<Record<FieldKey, string>>): EconomicsUpdate {
   const payload: Record<string, string | null> = {};
+
   for (const [key, value] of Object.entries(draft)) {
     // Пустое поле означает «не задано», а не ноль: разница принципиальная,
     // нулевая маржа и незаполненная маржа — разные состояния.
-    payload[key] = value && value.trim() !== "" ? value.trim() : null;
+    const cleaned = value && value.trim() !== "" ? value.trim() : null;
+
+    if (cleaned !== null && PERCENT_FIELDS.includes(key as FieldKey)) {
+      const percent = Number(cleaned.replace(",", "."));
+      payload[key] = Number.isFinite(percent) ? String(percent / 100) : cleaned;
+    } else {
+      payload[key] = cleaned;
+    }
   }
+
   payload.main_conversion = "lead";
   return payload as EconomicsUpdate;
 }
