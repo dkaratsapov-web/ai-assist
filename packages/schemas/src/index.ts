@@ -48,6 +48,9 @@ export type CompetitorCreate = Schemas["CompetitorCreate"];
 export type ComparisonRead = Schemas["ComparisonRead"];
 export type FeatureRowRead = Schemas["FeatureRowRead"];
 export type OfferRowRead = Schemas["OfferRowRead"];
+export type RivalSuggestionsRead = Schemas["RivalSuggestionsRead"];
+export type SuggestionRead = Schemas["SuggestionRead"];
+export type SearchQueryRead = Schemas["SearchQueryRead"];
 export type RivalValueRead = Schemas["RivalValueRead"];
 export type LaunchPlanRead = Schemas["LaunchPlanRead"];
 export type BidStrategy = Schemas["BidStrategy"];
@@ -525,6 +528,19 @@ export class ApiClient {
     return this.request<ApplySetResult>(
       `/api/v1/projects/${projectId}/minus-words/apply/${setId}`,
       { method: "POST" },
+    );
+  }
+
+  /**
+   * Кого предложить добавить в конкуренты.
+   *
+   * Точного списка соперников по аукциону здесь нет: его знает только Директ.
+   * Отдаётся то, что можно предложить честно, — разобранные сайты той же ниши
+   * и города плюс готовые запросы для поиска.
+   */
+  getRivalSuggestions(projectId: string): Promise<RivalSuggestionsRead> {
+    return this.request<RivalSuggestionsRead>(
+      `/api/v1/projects/${projectId}/competitors/suggestions`,
     );
   }
 

@@ -8,6 +8,7 @@ import type {
   CompetitorRead,
   FeatureRowRead,
   OfferRowRead,
+  RivalSuggestionsRead,
   ProjectRead,
 } from "@ads-os/schemas";
 import {
@@ -53,6 +54,7 @@ function CompetitorsScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [competitors, setCompetitors] = useState<CompetitorRead[] | null>(null);
   const [comparison, setComparison] = useState<ComparisonRead | null>(null);
+  const [suggestions, setSuggestions] = useState<RivalSuggestionsRead | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
@@ -98,14 +100,16 @@ function CompetitorsScreen() {
       try {
         // Список и сравнение читаются вместе: сравнение без списка непонятно,
         // а список без сравнения — просто набор ссылок.
-        const [list, result] = await Promise.all([
+        const [list, result, hints] = await Promise.all([
           api.listCompetitors(selectedId),
           api.getComparison(selectedId),
+          api.getRivalSuggestions(selectedId),
         ]);
         if (ignore) return;
         setError(null);
         setCompetitors(list.items);
         setComparison(result);
+        setSuggestions(hints);
 
         const pending = list.items.some((c) => c.status === "queued" || c.status === "running");
         if (pending) timer = setTimeout(() => void poll(), POLL_INTERVAL_MS);
@@ -141,6 +145,16 @@ function CompetitorsScreen() {
       setAdding(false);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addSuggested = async (url: string, title: string) => {
+    if (!selectedId) return;
+    try {
+      await api.addCompetitor(selectedId, { url, title });
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
     }
   };
 
@@ -200,6 +214,12 @@ function CompetitorsScreen() {
               />
             )}
           </div>
+
+          {/* Подсказки стоят выше списка и показываются всегда: чаще всего
+              человек приходит сюда с пустым экраном и вопросом «а кто,
+              собственно?». Отвечать на него надо до того, как он уйдёт искать
+              вручную, а не после. */}
+          {suggestions && <SuggestionsCard data={suggestions} onAdd={addSuggested} />}
 
           {competitors === null ? (
             <Card>
@@ -336,6 +356,93 @@ function CompetitorsScreen() {
         </div>
       </Modal>
     </AppShell>
+  );
+}
+
+/**
+ * Кого добавить в конкуренты.
+ *
+ * Две половины, и обе честные. Сверху — сайты, которые агентство уже разбирало
+ * в проектах той же ниши и города: их можно добавить одним нажатием. Снизу —
+ * готовые запросы к поиску, потому что кто именно крутит рекламу прямо сейчас,
+ * видно только в выдаче, и увидеть это может лишь человек.
+ *
+ * Чего здесь нет и не будет до подключения Директа — списка соперников по
+ * аукциону с долей пересечения. Нарисовать такой список из головы значило бы
+ * выдать выдумку за данные площадки, и об этом сказано прямо на экране.
+ */
+function SuggestionsCard({
+  data,
+  onAdd,
+}: {
+  data: RivalSuggestionsRead;
+  onAdd: (url: string, title: string) => void;
+}) {
+  if (data.known.length === 0 && data.queries.length === 0) {
+    return (
+      <Card>
+        <CardHeader title="Кого добавить" description="Подсказать пока не из чего" />
+        <p className="text-body-sm text-text-secondary">
+          {data.missing.length > 0
+            ? `Заполните в проекте: ${data.missing.join(", ")}. Тогда система предложит сайты той же ниши и города и соберёт запросы для поиска.`
+            : "Других проектов этой ниши у вас пока нет — предлагать нечего."}
+        </p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Кого добавить"
+        description="Подсказки из ваших проектов и запросы, по которым видно рекламодателей"
+      />
+
+      {data.known.length > 0 && (
+        <div className="mb-3 flex flex-col">
+          {data.known.map((item) => (
+            <div
+              key={item.url}
+              className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0"
+            >
+              <div className="flex min-w-0 flex-col">
+                <span className="text-body-sm text-text-primary">{item.title}</span>
+                <span className="text-caption text-text-secondary break-all">{item.url}</span>
+                {/* Объяснение обязательно: адрес неизвестно чей не добавляют. */}
+                <span className="text-caption text-text-secondary">{item.reason}</span>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => onAdd(item.url, item.title)}>
+                Добавить
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.queries.length > 0 && (
+        <div className="border-border border-t pt-3">
+          <p className="text-body-sm text-text-primary mb-1.5">Найти остальных в поиске</p>
+          <p className="text-caption text-text-secondary mb-2">{data.hint}</p>
+          <div className="flex flex-wrap gap-2">
+            {data.queries.map((item) => (
+              <a
+                key={item.query}
+                href={item.url}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-pill bg-bg-secondary text-caption text-text-primary hover:bg-surface-active focus-visible:outline-focus px-3 py-1.5 focus-visible:outline-2"
+              >
+                {item.query} ↗
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <p className="text-caption text-text-secondary border-border mt-3 border-t pt-3">
+        {data.why_manual}
+      </p>
+    </Card>
   );
 }
 

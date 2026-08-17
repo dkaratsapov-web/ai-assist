@@ -3942,6 +3942,49 @@
         "title": "Reason",
         "type": "string"
       },
+      "RivalSuggestionsRead": {
+        "description": "Подсказки по конкурентам: из своей истории и через поиск.",
+        "properties": {
+          "hint": {
+            "title": "Hint",
+            "type": "string"
+          },
+          "known": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestionRead"
+            },
+            "title": "Known",
+            "type": "array"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          },
+          "queries": {
+            "items": {
+              "$ref": "#/components/schemas/SearchQueryRead"
+            },
+            "title": "Queries",
+            "type": "array"
+          },
+          "why_manual": {
+            "title": "Why Manual",
+            "type": "string"
+          }
+        },
+        "required": [
+          "known",
+          "queries",
+          "hint",
+          "why_manual",
+          "missing"
+        ],
+        "title": "RivalSuggestionsRead",
+        "type": "object"
+      },
       "RivalValueRead": {
         "description": "Условие у одного конкурента — как написано у него на странице.",
         "properties": {
@@ -4028,6 +4071,25 @@
           "status"
         ],
         "title": "SearchProjectRead",
+        "type": "object"
+      },
+      "SearchQueryRead": {
+        "description": "Запрос, по которому в выдаче видно рекламодателей.",
+        "properties": {
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "url"
+        ],
+        "title": "SearchQueryRead",
         "type": "object"
       },
       "SearchResult": {
@@ -4217,6 +4279,35 @@
         ],
         "title": "StepState",
         "type": "string"
+      },
+      "SuggestionRead": {
+        "description": "Кого предлагается добавить в конкуренты.",
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "title",
+          "source",
+          "reason"
+        ],
+        "title": "SuggestionRead",
+        "type": "object"
       },
       "UsageRead": {
         "description": "Потребление за последние 30 дней вместе с лимитом.\n\nОкно скользящее, а не календарный месяц: лимит, обнуляющийся первого\nчисла, позволяет израсходовать двойную норму за два дня на стыке.",
@@ -7488,6 +7579,100 @@
           }
         },
         "summary": "Добавить конкурента",
+        "tags": [
+          "competitors"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/competitors/suggestions": {
+      "get": {
+        "description": "Подсказывает конкурентов из своей истории и даёт запросы для поиска.\n\nТочного списка соперников по аукциону здесь нет и быть не может: его знает\nтолько Директ. Всё, что можно честно предложить, — сайты, уже разобранные в\nдругих проектах той же ниши и города, и готовые запросы, по которым человек\nсам увидит, кто сейчас покупает рекламу.",
+        "operationId": "get_suggestions_api_v1_projects__project_id__competitors_suggestions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RivalSuggestionsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Кого добавить в конкуренты",
         "tags": [
           "competitors"
         ]

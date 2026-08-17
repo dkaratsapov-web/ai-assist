@@ -473,3 +473,157 @@ class TestПредметноеСравнение:
 
         assert response.status_code == 200
         assert response.json()["offer_has_data"] is False
+
+
+class TestПодсказкиКонкурентов:
+    """Кого предложить добавить — из своей истории и через поиск."""
+
+    async def test_сайт_из_другого_проекта_той_же_ниши(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_ctx
+        project.niche = "plastic_windows"
+        project.primary_region = "Тверь"
+
+        other = Project(
+            organization_id=org.id,
+            name="Окна Конаково",
+            niche="plastic_windows",
+            primary_region="Тверь",
+            created_by_id=user.id,
+        )
+        session.add(other)
+        await session.flush()
+        session.add(
+            Competitor(
+                organization_id=org.id,
+                project_id=other.id,
+                url="https://okna-tver.ru/",
+                title="Окна Твери",
+                status=ModuleStatus.COMPLETED,
+                features=ALL_FEATURES,
+            )
+        )
+        await session.commit()
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/competitors/suggestions",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert [item["url"] for item in body["known"]] == ["https://okna-tver.ru/"]
+        assert "Окна Конаково" in body["known"][0]["reason"]
+
+    async def test_уже_добавленный_не_предлагается(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_ctx
+        project.niche = "plastic_windows"
+
+        other = Project(
+            organization_id=org.id,
+            name="Соседний",
+            niche="plastic_windows",
+            created_by_id=user.id,
+        )
+        session.add(other)
+        await session.flush()
+        session.add(
+            Competitor(
+                organization_id=org.id,
+                project_id=other.id,
+                url="https://okna-tver.ru/",
+                title="Окна Твери",
+                status=ModuleStatus.COMPLETED,
+                features=ALL_FEATURES,
+            )
+        )
+        await session.commit()
+        await add_rival(session, project_ctx, "https://okna-tver.ru/", ALL_FEATURES)
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/competitors/suggestions",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert body["known"] == []
+
+    async def test_запросы_строятся_из_ниши_и_региона(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+    ) -> None:
+        """Брифа ещё нет — но название ниши это и есть то, что люди ищут."""
+        org, user, project = project_ctx
+        project.niche = "plastic_windows"
+        project.primary_region = "Тверь"
+        await session.commit()
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/competitors/suggestions",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert any(item["query"] == "пластиковые окна Тверь" for item in body["queries"])
+        # Ниша и регион заполнены, запросы построились — просить нечего.
+        assert body["missing"] == []
+
+    async def test_без_ниши_сказано_чего_не_хватает(
+        self, client: AsyncClient, project_ctx: tuple[Organization, User, Project]
+    ) -> None:
+        """Пустой список без объяснения читается как поломка."""
+        org, user, project = project_ctx
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/competitors/suggestions",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert body["known"] == []
+        assert "ниша проекта" in body["missing"]
+        assert body["why_manual"]
+
+    async def test_чужая_организация_в_подсказки_не_попадает(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_ctx: tuple[Organization, User, Project],
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        """Сайты чужого агентства — это чужие данные, и здесь их быть не может."""
+        org, user, project = project_ctx
+        _, stranger = two_organizations
+        project.niche = "plastic_windows"
+
+        alien = Project(
+            organization_id=stranger.id,
+            name="Чужой проект",
+            niche="plastic_windows",
+            website_url="https://alien.ru/",
+        )
+        session.add(alien)
+        await session.commit()
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{project.id}/competitors/suggestions",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert all("alien.ru" not in item["url"] for item in body["known"])

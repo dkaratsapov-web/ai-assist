@@ -305,6 +305,38 @@ class FeatureRowRead(BaseModel):
     is_advantage: bool
 
 
+class SuggestionRead(BaseModel):
+    """Кого предлагается добавить в конкуренты."""
+
+    url: str
+    title: str
+    source: str
+    #: Почему предлагается именно он. Адрес без объяснения не добавляют.
+    reason: str
+
+
+class SearchQueryRead(BaseModel):
+    """Запрос, по которому в выдаче видно рекламодателей."""
+
+    query: str
+    url: str
+
+
+class RivalSuggestionsRead(BaseModel):
+    """Подсказки по конкурентам: из своей истории и через поиск."""
+
+    #: Сайты, которые уже разбирались в других проектах той же ниши и города.
+    known: list[SuggestionRead]
+    #: Готовые запросы для поиска. Пусто, если не из чего их составить.
+    queries: list[SearchQueryRead]
+    #: Что сделать с этими запросами.
+    hint: str
+    #: Почему точного списка соперников по аукциону пока нет.
+    why_manual: str
+    #: Чего не хватает, чтобы подсказки заработали: ниши, региона, брифа.
+    missing: list[str]
+
+
 class RivalValueRead(BaseModel):
     """Условие у одного конкурента — как написано у него на странице."""
 

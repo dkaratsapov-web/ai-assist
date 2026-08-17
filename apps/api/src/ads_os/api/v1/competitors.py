@@ -9,12 +9,13 @@ from fastapi import APIRouter, status
 from sqlalchemy import Select, select
 
 from ...errors import AppError, ConflictError
-from ...models import Competitor, Project, SiteAudit
+from ...models import Competitor, KeywordBrief, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
-from ...services import offer
+from ...services import niches, offer, rivals, wordstat
 from ...services.activity import record
 from ...services.competitors import FeatureKey, Participant, compare, compare_offers
+from ...services.wordstat import Brief
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.competitors import enqueue_competitor
 from ..deps import SessionDep, TenantDep, WriteDep
@@ -25,7 +26,10 @@ from ..schemas import (
     CompetitorRead,
     FeatureRowRead,
     OfferRowRead,
+    RivalSuggestionsRead,
     RivalValueRead,
+    SearchQueryRead,
+    SuggestionRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -207,12 +211,12 @@ async def get_comparison(
         title=project.name,
         features=_features_from_audit(audit if own_checked else None),
     )
-    rivals = tuple(
+    others = tuple(
         Participant(url=c.url, title=c.title or c.url, features=_features(c.features))
         for c in competitors
     )
 
-    result = compare(mine, rivals)
+    result = compare(mine, others)
 
     # Предметное сравнение считается по тем же разобранным страницам, что и
     # таблица признаков. Второй заход на сайты ради него был бы повтором той
@@ -228,7 +232,7 @@ async def get_comparison(
     return ComparisonRead(
         project_id=project_id,
         own_site_checked=own_checked,
-        rivals_checked=len(rivals),
+        rivals_checked=len(others),
         summary=result.summary,
         rows=[
             FeatureRowRead(
@@ -273,6 +277,135 @@ def _enqueue(competitor: Competitor) -> None:
             "не удалось поставить конкурента в очередь",
             extra={"competitor_id": str(competitor.id), "error": type(exc).__name__},
         )
+
+
+@router.get(
+    "/{project_id}/competitors/suggestions",
+    response_model=RivalSuggestionsRead,
+    summary="Кого добавить в конкуренты",
+)
+async def get_suggestions(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> RivalSuggestionsRead:
+    """Подсказывает конкурентов из своей истории и даёт запросы для поиска.
+
+    Точного списка соперников по аукциону здесь нет и быть не может: его знает
+    только Директ. Всё, что можно честно предложить, — сайты, уже разобранные в
+    других проектах той же ниши и города, и готовые запросы, по которым человек
+    сам увидит, кто сейчас покупает рекламу.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    added = frozenset(
+        rivals.domain(row.url) for row in await _load(session, ctx, project_id)
+    ) | {rivals.domain(project.website_url or "")}
+
+    known = await _known_sites(session, ctx, project_id)
+    suggestions = rivals.suggest(
+        known, niche=project.niche, region=project.primary_region, exclude=added
+    )
+
+    brief = (
+        await session.execute(
+            select(KeywordBrief)
+            .where(KeywordBrief.organization_id == ctx.organization_id)
+            .where(KeywordBrief.project_id == project_id)
+        )
+    ).scalar_one_or_none()
+
+    terms = wordstat.terms(
+        Brief(sells=brief.sells if brief else "", synonyms=brief.synonyms if brief else "")
+    )
+    if not terms and project.niche:
+        # Ниша — запасной источник: её название и есть то, что люди ищут.
+        niche = niches.get(project.niche)
+        terms = (niche.label.lower(),) if niche else ()
+
+    missing: list[str] = []
+    if not project.niche:
+        missing.append("ниша проекта")
+    if not project.primary_region:
+        missing.append("регион проекта")
+    if not terms:
+        missing.append("бриф")
+
+    return RivalSuggestionsRead(
+        known=[
+            SuggestionRead(
+                url=item.url, title=item.title, source=item.source.value, reason=item.reason
+            )
+            for item in suggestions
+        ],
+        queries=[
+            SearchQueryRead(query=item.query, url=item.url)
+            for item in rivals.search_queries(terms, project.primary_region)
+        ],
+        hint=rivals.SEARCH_HINT,
+        why_manual=rivals.WHY_NOT_AUTOMATIC,
+        missing=missing,
+    )
+
+
+async def _known_sites(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> tuple[rivals.KnownSite, ...]:
+    """Сайты, о которых организация уже что-то знает.
+
+    Два источника: разобранные конкуренты чужих проектов и сайты самих
+    проектов. Второе не ошибка: два клиента одной ниши в одном городе делят
+    аукцион между собой, и специалист об этом знает, а система молчала.
+    """
+    projects = {
+        row.id: row
+        for row in (await session.execute(ProjectRepository(session, ctx).scoped()))
+        .scalars()
+        .all()
+    }
+
+    result: list[rivals.KnownSite] = []
+
+    competitors = (
+        (
+            await session.execute(
+                select(Competitor)
+                .where(Competitor.organization_id == ctx.organization_id)
+                .where(Competitor.project_id != project_id)
+                .order_by(Competitor.created_at.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    for row in competitors:
+        owner = projects.get(row.project_id)
+        if owner is None:
+            continue
+        result.append(
+            rivals.KnownSite(
+                url=row.url,
+                title=row.title or row.url,
+                project_name=owner.name,
+                niche=owner.niche,
+                region=owner.primary_region,
+            )
+        )
+
+    for owner in projects.values():
+        if owner.id == project_id or not owner.website_url:
+            continue
+        result.append(
+            rivals.KnownSite(
+                url=owner.website_url,
+                title=owner.name,
+                project_name=owner.name,
+                niche=owner.niche,
+                region=owner.primary_region,
+                is_own_project=True,
+            )
+        )
+
+    return tuple(result)
 
 
 async def _load(

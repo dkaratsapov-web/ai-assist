@@ -682,6 +682,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/competitors/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Кого добавить в конкуренты
+         * @description Подсказывает конкурентов из своей истории и даёт запросы для поиска.
+         *
+         *     Точного списка соперников по аукциону здесь нет и быть не может: его знает
+         *     только Директ. Всё, что можно честно предложить, — сайты, уже разобранные в
+         *     других проектах той же ниши и города, и готовые запросы, по которым человек
+         *     сам увидит, кто сейчас покупает рекламу.
+         */
+        get: operations["get_suggestions_api_v1_projects__project_id__competitors_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/competitors/{competitor_id}": {
         parameters: {
             query?: never;
@@ -2664,6 +2689,22 @@ export interface components {
          */
         Reason: "geo" | "job" | "diy" | "free" | "used" | "study" | "media" | "marketplace" | "fraud" | "offtopic" | "minus_word";
         /**
+         * RivalSuggestionsRead
+         * @description Подсказки по конкурентам: из своей истории и через поиск.
+         */
+        RivalSuggestionsRead: {
+            /** Hint */
+            hint: string;
+            /** Known */
+            known: components["schemas"]["SuggestionRead"][];
+            /** Missing */
+            missing: string[];
+            /** Queries */
+            queries: components["schemas"]["SearchQueryRead"][];
+            /** Why Manual */
+            why_manual: string;
+        };
+        /**
          * RivalValueRead
          * @description Условие у одного конкурента — как написано у него на странице.
          */
@@ -2706,6 +2747,16 @@ export interface components {
             /** Name */
             name: string;
             status: components["schemas"]["ProjectStatus"];
+        };
+        /**
+         * SearchQueryRead
+         * @description Запрос, по которому в выдаче видно рекламодателей.
+         */
+        SearchQueryRead: {
+            /** Query */
+            query: string;
+            /** Url */
+            url: string;
         };
         /** SearchResult */
         SearchResult: {
@@ -2788,6 +2839,20 @@ export interface components {
          * @enum {string}
          */
         StepState: "completed" | "active" | "waiting" | "blocked" | "error";
+        /**
+         * SuggestionRead
+         * @description Кого предлагается добавить в конкуренты.
+         */
+        SuggestionRead: {
+            /** Reason */
+            reason: string;
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
         /**
          * UsageRead
          * @description Потребление за последние 30 дней вместе с лимитом.
@@ -4109,6 +4174,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompetitorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_suggestions_api_v1_projects__project_id__competitors_suggestions_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RivalSuggestionsRead"];
                 };
             };
             /** @description Validation Error */
