@@ -62,12 +62,22 @@ services:
       BOOTSTRAP_OWNER_EMAIL: ${BOOTSTRAP_OWNER_EMAIL}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
-      # Провайдер AI не выбран — работает детерминированная заглушка.
-      AI_PROVIDER: stub
+      # Выбран ChatGPT, но до появления ключа работает детерминированная
+      # заглушка. Значение по умолчанию — stub, а не openai: без ключа
+      # «openai» означал бы ошибку на каждом вызове.
+      AI_PROVIDER: ${AI_PROVIDER:-stub}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Персональные данные наружу не уходят: провайдера для них нет вовсе,
+      # и система откажет в запросе, а не отправит его (v0.4 §2.3).
       AI_SENSITIVE_PROVIDER: none
       # Рекламный кабинет не подключается до прохождения проверок безопасности
-      # (v0.4 §2.1), даже если токен уже получен.
-      AD_PLATFORM_ADAPTER: mock
+      # (v0.4 §2.1), даже если токен уже получен. Предохранитель отдельно от
+      # переключателя: одного переключения адаптера недостаточно.
+      AD_PLATFORM_ADAPTER: ${AD_PLATFORM_ADAPTER:-mock}
+      AD_PLATFORM_LIVE_APPROVED: ${AD_PLATFORM_LIVE_APPROVED:-false}
+      YANDEX_DIRECT_TOKEN: ${YANDEX_DIRECT_TOKEN:-}
+      YANDEX_DIRECT_LOGIN: ${YANDEX_DIRECT_LOGIN:-}
+      YANDEX_DIRECT_SANDBOX: ${YANDEX_DIRECT_SANDBOX:-true}
       AUTOPILOT_ENABLED: "false"
     depends_on:
       postgres:
