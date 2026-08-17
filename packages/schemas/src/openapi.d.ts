@@ -72,7 +72,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Начать вход через Яндекс */
+        /**
+         * Начать вход через Яндекс
+         * @description Отправляет человека в Яндекс.
+         *
+         *     `other=1` — «войти другим аккаунтом». Без него браузер помнит вход, и
+         *     человек, которому отказали в доступе, повторным нажатием приходит к тому же
+         *     отказу тем же аккаунтом: кнопка выглядит сломанной.
+         */
         get: operations["login_api_v1_auth_login_get"];
         put?: never;
         post?: never;
@@ -587,6 +594,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/brief": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Бриф и маски для Вордстата
+         * @description Отдаёт бриф вместе с тем, что из него следует.
+         *
+         *     Маски считаются на лету, а не хранятся. Они выводятся из брифа, ниши и
+         *     региона; сохранённые разошлись бы с ними при первой же правке, и человек
+         *     пошёл бы собирать запросы по списку, которого уже нет.
+         */
+        get: operations["get_brief_api_v1_projects__project_id__brief_get"];
+        /** Сохранить бриф */
+        put: operations["save_brief_api_v1_projects__project_id__brief_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/campaign/export.csv": {
         parameters: {
             query?: never;
@@ -786,6 +818,31 @@ export interface paths {
          *     и доверие к ручным решениям исчезло бы вместе с ней.
          */
         post: operations["import_keywords_api_v1_projects__project_id__keywords_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/import-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Загрузить выгрузку файлом
+         * @description Принимает файл выгрузки: xlsx из Вордстата, csv из Key Collector, txt.
+         *
+         *     Формат не спрашивается. Вордстат отдаёт xlsx, Key Collector — то xlsx, то
+         *     csv, а кто-то просто копирует колонку в блокнот; требовать привести файл к
+         *     одному виду значит переложить на человека работу, которая занимает у
+         *     программы миллисекунды, а у него — каждый раз по десять минут.
+         */
+        post: operations["import_keywords_file_api_v1_projects__project_id__keywords_import_file_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1400,6 +1457,66 @@ export interface components {
          */
         BidStrategy: "manual" | "max_clicks" | "pay_per_conversion" | "max_conversions";
         /**
+         * BriefRead
+         * @description Бриф вместе с тем, что из него следует.
+         */
+        BriefRead: {
+            /**
+             * Cities
+             * @default
+             */
+            cities: string;
+            /**
+             * Excludes
+             * @default
+             */
+            excludes: string;
+            /** Masks */
+            masks: components["schemas"]["MaskRead"][];
+            /** Region */
+            region: string | null;
+            /**
+             * Sells
+             * @default
+             */
+            sells: string;
+            /** Steps */
+            steps: string[];
+            /**
+             * Synonyms
+             * @default
+             */
+            synonyms: string;
+            /** Why Manual */
+            why_manual: string;
+        };
+        /**
+         * BriefUpdate
+         * @description Ответы на короткий бриф.
+         */
+        BriefUpdate: {
+            /**
+             * Cities
+             * @default
+             */
+            cities: string;
+            /**
+             * Excludes
+             * @default
+             */
+            excludes: string;
+            /**
+             * Sells
+             * @default
+             */
+            sells: string;
+            /**
+             * Synonyms
+             * @default
+             */
+            synonyms: string;
+        };
+        /**
          * CategoryRead
          * @description Оценка по одной категории аудита.
          */
@@ -1797,6 +1914,23 @@ export interface components {
          */
         Intent: "commercial" | "informational" | "irrelevant";
         /**
+         * KeywordFileImport
+         * @description Выгрузка файлом.
+         *
+         *     Содержимое приходит в base64, а не многочастной формой. Причина простая:
+         *     так файл проходит тем же путём, что и вставленный текст, и не тянет за собой
+         *     отдельную библиотеку разбора форм ради одной кнопки.
+         */
+        KeywordFileImport: {
+            /** Content Base64 */
+            content_base64: string;
+            /**
+             * Filename
+             * @default
+             */
+            filename: string;
+        };
+        /**
          * KeywordImport
          * @description Вставленный список фраз.
          */
@@ -1878,6 +2012,16 @@ export interface components {
          * @enum {string}
          */
         MainConversion: "lead" | "call" | "message" | "order" | "purchase";
+        /**
+         * MaskRead
+         * @description Строка, которую человек вставит в Вордстат.
+         */
+        MaskRead: {
+            /** Purpose */
+            purpose: string;
+            /** Query */
+            query: string;
+        };
         /**
          * MemberCreate
          * @description Добавление участника.
@@ -2614,7 +2758,9 @@ export interface operations {
     };
     login_api_v1_auth_login_get: {
         parameters: {
-            query?: never;
+            query?: {
+                other?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2628,6 +2774,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3577,6 +3732,80 @@ export interface operations {
             };
         };
     };
+    get_brief_api_v1_projects__project_id__brief_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_brief_api_v1_projects__project_id__brief_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BriefUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BriefRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     export_campaign_api_v1_projects__project_id__campaign_export_csv_get: {
         parameters: {
             query?: never;
@@ -3990,6 +4219,45 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["KeywordImport"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_keywords_file_api_v1_projects__project_id__keywords_import_file_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["KeywordFileImport"];
             };
         };
         responses: {

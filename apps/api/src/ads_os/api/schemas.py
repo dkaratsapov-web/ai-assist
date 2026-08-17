@@ -675,8 +675,50 @@ class KeywordImport(BaseModel):
     text: str = Field(max_length=2_000_000)
 
 
+class KeywordFileImport(BaseModel):
+    """Выгрузка файлом.
+
+    Содержимое приходит в base64, а не многочастной формой. Причина простая:
+    так файл проходит тем же путём, что и вставленный текст, и не тянет за собой
+    отдельную библиотеку разбора форм ради одной кнопки.
+    """
+
+    filename: str = Field(default="", max_length=260)
+    content_base64: str = Field(max_length=14_000_000)
+
+
 class KeywordUpdate(BaseModel):
     intent: Intent
+
+
+class BriefUpdate(BaseModel):
+    """Ответы на короткий бриф."""
+
+    sells: str = Field(default="", max_length=2000)
+    synonyms: str = Field(default="", max_length=2000)
+    excludes: str = Field(default="", max_length=2000)
+    cities: str = Field(default="", max_length=2000)
+
+
+class MaskRead(BaseModel):
+    """Строка, которую человек вставит в Вордстат."""
+
+    query: str
+    #: Зачем она нужна. Без этого список масок выглядит набором похожих строк,
+    #: и половину пропускают как повтор.
+    purpose: str
+
+
+class BriefRead(BriefUpdate):
+    """Бриф вместе с тем, что из него следует."""
+
+    #: Регион проекта: в Вордстате его выбирают отдельно, и это важнее масок.
+    region: str | None
+    masks: list[MaskRead]
+    steps: list[str]
+    #: Почему сбор не делается сам. Человек всё равно спросит — лучше ответить
+    #: сразу, чем оставить впечатление недоделанной кнопки.
+    why_manual: str
 
 
 class ImportSummary(BaseModel):

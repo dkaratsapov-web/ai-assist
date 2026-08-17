@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type {
   ApiError,
+  BriefRead,
   CleanupGroupRead,
   CleanupResult,
   ClusterRead,
@@ -79,6 +80,14 @@ function SemanticsScreen() {
   const [cleaning, setCleaning] = useState(false);
   const [dropping, setDropping] = useState(false);
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
+  const [brief, setBrief] = useState<BriefRead | null>(null);
+  const [briefOpen, setBriefOpen] = useState(false);
+  const [briefDraft, setBriefDraft] = useState({
+    sells: "",
+    synonyms: "",
+    excludes: "",
+    cities: "",
+  });
 
   useEffect(() => {
     let ignore = false;
@@ -107,12 +116,13 @@ function SemanticsScreen() {
 
     void (async () => {
       try {
-        const [list, groups, minusWords, savedSets, crossing] = await Promise.all([
+        const [list, groups, minusWords, savedSets, crossing, briefData] = await Promise.all([
           api.listKeywords(selectedId),
           api.listClusters(selectedId),
           api.listMinusWords(selectedId),
           api.listMinusWordSets(),
           api.getCrossMinus(selectedId),
+          api.getBrief(selectedId),
         ]);
         if (ignore) return;
         setError(null);
@@ -121,6 +131,13 @@ function SemanticsScreen() {
         setMinus(minusWords);
         setSets(savedSets.items);
         setCross(crossing);
+        setBrief(briefData);
+        setBriefDraft({
+          sells: briefData.sells ?? "",
+          synonyms: briefData.synonyms ?? "",
+          excludes: briefData.excludes ?? "",
+          cities: briefData.cities ?? "",
+        });
       } catch (err) {
         if (!ignore) setError(toApiError(err));
       }
@@ -140,6 +157,44 @@ function SemanticsScreen() {
       setSummary(await api.importKeywords(selectedId, draft));
       setImporting(false);
       setDraft("");
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+      setImporting(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveBrief = async () => {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      setBrief(await api.saveBrief(selectedId, briefDraft));
+      setBriefOpen(false);
+    } catch (err) {
+      setError(toApiError(err));
+      setBriefOpen(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /**
+   * Файл читается прямо во вкладке и уходит текстом в base64.
+   *
+   * Так у выгрузки и у вставленного вручную списка остаётся один путь разбора:
+   * два разных рано или поздно разойдутся, и разойдутся на чужом файле.
+   */
+  const importFile = async (file: File) => {
+    if (!selectedId) return;
+    setSaving(true);
+    try {
+      const buffer = new Uint8Array(await file.arrayBuffer());
+      let binary = "";
+      for (const byte of buffer) binary += String.fromCharCode(byte);
+      setSummary(await api.importKeywordsFile(selectedId, file.name, btoa(binary)));
+      setImporting(false);
       reload();
     } catch (err) {
       setError(toApiError(err));
@@ -301,6 +356,11 @@ function SemanticsScreen() {
               </p>
             </Card>
           )}
+
+          {/* Бриф стоит выше списка фраз намеренно: сначала человек отвечает,
+              что продаёт, потом идёт собирать. В обратном порядке он собирает
+              наугад и приносит список, половину которого потом вычищает. */}
+          {brief && <BriefCard brief={brief} onEdit={() => setBriefOpen(true)} />}
 
           {keywords === null ? (
             <Card>
@@ -559,6 +619,54 @@ function SemanticsScreen() {
       )}
 
       <Modal
+        open={briefOpen}
+        onClose={() => setBriefOpen(false)}
+        title="Бриф для сбора запросов"
+        description="Четыре вопроса. Из ответов соберутся строки, которые останется вставить в Вордстат — придумывать их самому не придётся."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBriefOpen(false)}>
+              Отмена
+            </Button>
+            <Button onClick={saveBrief} loading={saving} disabled={briefDraft.sells.trim() === ""}>
+              Сохранить
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Input
+            label="Что продаём"
+            value={briefDraft.sells}
+            onChange={(e) => setBriefDraft({ ...briefDraft, sells: e.target.value })}
+            placeholder="пластиковые окна, остекление балконов"
+            hint="Через запятую. Это главное поле — из него строятся все строки."
+          />
+          <Input
+            label="Как это называют иначе"
+            value={briefDraft.synonyms}
+            onChange={(e) => setBriefDraft({ ...briefDraft, synonyms: e.target.value })}
+            placeholder="окна пвх, стеклопакеты"
+            hint="Чужие слова важнее своих: человек ищет теми, к которым привык, а не теми, что в прайсе."
+          />
+          <Input
+            label="Чего не делаем"
+            value={briefDraft.excludes}
+            onChange={(e) => setBriefDraft({ ...briefDraft, excludes: e.target.value })}
+            placeholder="ремонт окон, москитные сетки"
+            hint="Отсюда берутся минусы. Единственное, что нельзя угадать за клиента."
+          />
+          <Input
+            label="Города, если они шире региона проекта"
+            value={briefDraft.cities}
+            onChange={(e) => setBriefDraft({ ...briefDraft, cities: e.target.value })}
+            placeholder="тверь, конаково"
+            hint="Можно оставить пустым — тогда берётся регион проекта."
+          />
+        </div>
+      </Modal>
+
+      <Modal
         open={dropping}
         onClose={() => setDropping(false)}
         title={`Убрать нецелевые фразы (${counts.irrelevant})`}
@@ -620,16 +728,116 @@ function SemanticsScreen() {
           </>
         }
       >
+        {/* Файл идёт первым: из Вордстата выгрузка приходит файлом, и открывать
+            его, чтобы скопировать содержимое, — лишний шаг ни за чем. */}
+        <label className="border-border-input rounded-control hover:bg-bg-secondary mb-3 flex cursor-pointer flex-col items-center gap-1 border border-dashed p-4 text-center">
+          <span className="text-body-sm text-text-primary">Выбрать файл выгрузки</span>
+          <span className="text-caption text-text-secondary">
+            xlsx из Вордстата, csv из Key Collector или обычный txt
+          </span>
+          <input
+            type="file"
+            accept=".xlsx,.csv,.txt,.tsv"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void importFile(file);
+            }}
+          />
+        </label>
+
+        <p className="text-caption text-text-secondary mb-1.5">или вставьте текст</p>
         <textarea
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          rows={12}
+          rows={10}
           spellCheck={false}
           placeholder={"пластиковые окна тверь\t5400\nкупить окна пвх\t3100"}
           className="border-border-input bg-bg text-body-sm text-text-primary rounded-control focus-visible:outline-focus w-full resize-y border p-3 font-mono focus-visible:outline-2"
         />
       </Modal>
     </AppShell>
+  );
+}
+
+/**
+ * Бриф и то, что из него следует.
+ *
+ * Долгая часть сбора запросов — не нажатия в Вордстате, а придумывание, что
+ * туда вводить. Ответы на четыре вопроса превращаются в готовые строки, а сам
+ * сбор остаётся ручным — и здесь же написано, почему.
+ */
+function BriefCard({ brief, onEdit }: { brief: BriefRead; onEdit: () => void }) {
+  const filled = (brief.sells ?? "").trim() !== "";
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <CardHeader
+          title="С чего начать сбор"
+          description={
+            filled
+              ? "Готовые строки для Вордстата — вставляйте по очереди"
+              : "Ответьте на четыре вопроса, и система соберёт строки для Вордстата"
+          }
+        />
+        <Button size="sm" variant={filled ? "ghost" : "primary"} onClick={onEdit}>
+          {filled ? "Изменить бриф" : "Заполнить бриф"}
+        </Button>
+      </div>
+
+      {!filled ? (
+        <p className="text-body-sm text-text-secondary">{brief.why_manual}</p>
+      ) : (
+        <>
+          <ol className="mb-3 flex flex-col gap-1.5">
+            {brief.steps.map((step, index) => (
+              <li key={index} className="text-body-sm text-text-secondary flex gap-2">
+                <span className="text-text-primary tabular-nums">{index + 1}.</span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+
+          <div className="border-border flex flex-col border-t pt-3">
+            {brief.masks.map((mask) => (
+              <div
+                key={mask.query}
+                className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+              >
+                <div className="flex min-w-0 flex-col">
+                  <code className="text-body-sm text-text-primary break-all">{mask.query}</code>
+                  <span className="text-caption text-text-secondary">{mask.purpose}</span>
+                </div>
+                <CopyButton value={mask.query} />
+              </div>
+            ))}
+          </div>
+
+          <p className="text-caption text-text-secondary mt-3">{brief.why_manual}</p>
+        </>
+      )}
+    </Card>
+  );
+}
+
+/** Кнопка «скопировать» с подтверждением: без него непонятно, сработала ли. */
+function CopyButton({ value }: { value: string }) {
+  const [done, setDone] = useState(false);
+
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={() => {
+        void navigator.clipboard.writeText(value).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 2000);
+        });
+      }}
+    >
+      {done ? "Скопировано" : "Копировать"}
+    </Button>
   );
 }
 

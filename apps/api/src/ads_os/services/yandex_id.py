@@ -70,18 +70,27 @@ def new_state() -> str:
 LOGIN_SCOPES = ("login:email", "login:info")
 
 
-def authorize_url(*, client_id: str, redirect_uri: str, state: str) -> str:
-    """Адрес, куда отправляем человека для входа."""
-    query = urlencode(
-        {
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "state": state,
-            "scope": " ".join(LOGIN_SCOPES),
-        }
-    )
-    return f"{AUTHORIZE_URL}?{query}"
+def authorize_url(
+    *, client_id: str, redirect_uri: str, state: str, force_confirm: bool = False
+) -> str:
+    """Адрес, куда отправляем человека для входа.
+
+    `force_confirm` заставляет Яндекс спросить, каким аккаунтом входить. Нужен
+    после отказа в доступе: браузер помнит вход, и повторное нажатие «войти»
+    молча приводит того же самого человека к тому же самому отказу — выглядит
+    это как сломанная кнопка.
+    """
+    query: dict[str, str] = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "scope": " ".join(LOGIN_SCOPES),
+    }
+    if force_confirm:
+        query["force_confirm"] = "yes"
+
+    return f"{AUTHORIZE_URL}?{urlencode(query)}"
 
 
 async def exchange_code(

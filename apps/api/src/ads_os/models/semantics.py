@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -48,6 +48,32 @@ class Keyword(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: Название группы. Хранится строкой, а не ссылкой: группы пересчитываются
     #: целиком, и связь на удаляемую запись только мешала бы.
     cluster_name: Mapped[str | None] = mapped_column(String(400), nullable=True)
+
+
+class KeywordBrief(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
+    """Ответы клиента, из которых строятся маски для Вордстата.
+
+    Хранится, а не спрашивается каждый раз: бриф заполняют один раз в начале
+    проекта, а возвращаются к маскам по нескольку раз — собрать хвост, добавить
+    новое направление, пересобрать после смены услуг.
+    """
+
+    __tablename__ = "keyword_briefs"
+    __table_args__ = (Index("uq_keyword_brief_project", "project_id", unique=True),)
+
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        PGUUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False
+    )
+
+    #: Что продаём.
+    sells: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    #: Как это называют иначе. Чужие слова важнее своих: человек ищет теми, к
+    #: которым привык, а не теми, что в прайсе клиента.
+    synonyms: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    #: Чего не делаем. Единственная часть брифа, которую нельзя угадать.
+    excludes: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    #: Города, если они не совпадают с регионом проекта.
+    cities: Mapped[str] = mapped_column(Text, default="", nullable=False)
 
 
 class MinusWord(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):

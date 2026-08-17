@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import uuid
 from collections import defaultdict
 from urllib.parse import quote
@@ -10,7 +12,7 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import Select, select
 
 from ...errors import AppError
-from ...models import Keyword, MinusWord, Project, SiteAudit
+from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services import niches
@@ -30,12 +32,16 @@ from ...services.semantics import (
     parse_list,
     suggest_minus_words,
 )
+from ...services.tables import UnreadableFileError, to_lines
+from ...services.wordstat import WHY_MANUAL, Brief, masks, steps
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
     AdDraftList,
     AdDraftRead,
     AdViolationRead,
+    BriefRead,
+    BriefUpdate,
     CleanupGroupRead,
     CleanupResult,
     ClusterList,
@@ -44,10 +50,12 @@ from ..schemas import (
     CrossMinusResultRead,
     DuplicateRead,
     ImportSummary,
+    KeywordFileImport,
     KeywordImport,
     KeywordList,
     KeywordRead,
     KeywordUpdate,
+    MaskRead,
     MinusWordBulkCreate,
     MinusWordCreate,
     MinusWordList,
@@ -104,6 +112,21 @@ class KeywordNotFoundError(AppError):
     message = "Фраза не найдена"
 
 
+class BadFileError(AppError):
+    status_code = 422
+    error_code = "bad_file"
+    message = "Не удалось прочитать файл. Подойдёт xlsx, csv или txt."
+
+
+class BriefRepository(TenantRepository[KeywordBrief]):
+    model = KeywordBrief
+
+    def scoped(self, *, include_deleted: bool = False) -> Select[tuple[KeywordBrief]]:
+        return select(self.model).where(
+            self.model.organization_id == self.ctx.organization_id
+        )
+
+
 @router.post(
     "/{project_id}/keywords/import",
     response_model=ImportSummary,
@@ -120,13 +143,53 @@ async def import_keywords(
     словарь её больше не трогает. Иначе правка терялась бы при каждой загрузке,
     и доверие к ручным решениям исчезло бы вместе с ней.
     """
+    return await _import(project_id, payload.text, session, ctx)
+
+
+@router.post(
+    "/{project_id}/keywords/import-file",
+    response_model=ImportSummary,
+    summary="Загрузить выгрузку файлом",
+)
+async def import_keywords_file(
+    project_id: uuid.UUID, payload: KeywordFileImport, session: SessionDep, ctx: WriteDep
+) -> ImportSummary:
+    """Принимает файл выгрузки: xlsx из Вордстата, csv из Key Collector, txt.
+
+    Формат не спрашивается. Вордстат отдаёт xlsx, Key Collector — то xlsx, то
+    csv, а кто-то просто копирует колонку в блокнот; требовать привести файл к
+    одному виду значит переложить на человека работу, которая занимает у
+    программы миллисекунды, а у него — каждый раз по десять минут.
+    """
+    try:
+        content = base64.b64decode(payload.content_base64, validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise BadFileError() from error
+
+    try:
+        text = to_lines(content, filename=payload.filename)
+    except UnreadableFileError as error:
+        raise BadFileError(str(error)) from error
+
+    return await _import(project_id, text, session, ctx)
+
+
+async def _import(
+    project_id: uuid.UUID, text: str, session: SessionDep, ctx: WriteDep
+) -> ImportSummary:
+    """Общий путь для вставленного текста и для файла.
+
+    Именно общий: у выгрузки и у вставки не должно быть двух разных разборов,
+    иначе они разойдутся, и расхождение обнаружится на чужом файле в неудобный
+    момент.
+    """
     project = await ProjectRepository(session, ctx).get_or_404(project_id)
 
-    parsed = parse_list(payload.text)
+    parsed = parse_list(text)
     if len(parsed) > MAX_KEYWORDS_PER_IMPORT:
         raise TooManyKeywordsError()
 
-    lines = sum(1 for line in payload.text.splitlines() if line.strip())
+    lines = sum(1 for line in text.splitlines() if line.strip())
     skipped = max(0, lines - len(parsed))
 
     existing = {row.phrase: row for row in await _keywords(session, ctx, project_id)}
@@ -279,6 +342,73 @@ async def update_keyword(
     await session.flush()
 
     return _to_read(row)
+
+
+@router.get("/{project_id}/brief", response_model=BriefRead, summary="Бриф и маски для Вордстата")
+async def get_brief(project_id: uuid.UUID, session: SessionDep, ctx: TenantDep) -> BriefRead:
+    """Отдаёт бриф вместе с тем, что из него следует.
+
+    Маски считаются на лету, а не хранятся. Они выводятся из брифа, ниши и
+    региона; сохранённые разошлись бы с ними при первой же правке, и человек
+    пошёл бы собирать запросы по списку, которого уже нет.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+    row = await _brief_row(session, ctx, project_id)
+
+    return _brief_read(project, row)
+
+
+@router.put("/{project_id}/brief", response_model=BriefRead, summary="Сохранить бриф")
+async def save_brief(
+    project_id: uuid.UUID, payload: BriefUpdate, session: SessionDep, ctx: WriteDep
+) -> BriefRead:
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+    row = await _brief_row(session, ctx, project_id)
+
+    if row is None:
+        row = KeywordBrief(project_id=project_id)
+        await BriefRepository(session, ctx).add(row)
+
+    row.sells = payload.sells.strip()
+    row.synonyms = payload.synonyms.strip()
+    row.excludes = payload.excludes.strip()
+    row.cities = payload.cities.strip()
+    await session.flush()
+
+    return _brief_read(project, row)
+
+
+async def _brief_row(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> KeywordBrief | None:
+    stmt = BriefRepository(session, ctx).scoped().where(KeywordBrief.project_id == project_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+def _brief_read(project: Project, row: KeywordBrief | None) -> BriefRead:
+    brief = Brief(
+        sells=row.sells if row else "",
+        synonyms=row.synonyms if row else "",
+        excludes=row.excludes if row else "",
+        cities=row.cities if row else "",
+    )
+    niche_words = niches.minus_words(niches.get(project.niche))
+
+    return BriefRead(
+        sells=brief.sells,
+        synonyms=brief.synonyms,
+        excludes=brief.excludes,
+        cities=brief.cities,
+        region=project.primary_region,
+        masks=[
+            MaskRead(query=mask.query, purpose=mask.purpose)
+            for mask in masks(
+                brief, niche_words=niche_words, region=project.primary_region
+            )
+        ],
+        steps=list(steps(project.primary_region)),
+        why_manual=WHY_MANUAL,
+    )
 
 
 @router.post(

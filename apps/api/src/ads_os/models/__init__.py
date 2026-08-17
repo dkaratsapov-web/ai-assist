@@ -11,7 +11,7 @@ from .minus_set import MinusWordSet
 from .notification import Notification, NotificationKind, NotificationLevel
 from .organization import Organization, OrganizationPlan
 from .project import MainConversion, Project, ProjectEconomics, ProjectStatus
-from .semantics import Keyword, MinusWord
+from .semantics import Keyword, KeywordBrief, MinusWord
 from .session import Session
 from .usage import UsageEvent, UsageService, UsageUnit
 from .user import User
@@ -22,6 +22,7 @@ __all__ = [
     "Competitor",
     "IssueDismissal",
     "Keyword",
+    "KeywordBrief",
     "MainConversion",
     "MinusWord",
     "MinusWordSet",

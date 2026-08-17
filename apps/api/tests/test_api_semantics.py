@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import AsyncIterator
 
 import pytest
@@ -904,3 +905,118 @@ class TestЧисткаЯдра:
         ).json()["items"]
 
         assert len(items) == 3
+
+
+class TestБрифИВыгрузка:
+    """Бриф, маски и приём файла."""
+
+    async def test_пустой_бриф_масок_не_даёт(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+
+        assert body["masks"] == []
+        assert len(body["steps"]) >= 4
+        assert body["why_manual"]
+
+    async def test_бриф_сохраняется_и_даёт_маски(
+        self,
+        session: AsyncSession,
+        client: AsyncClient,
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, row = project
+        row.primary_region = "Тверь"
+        await session.commit()
+
+        body = (
+            await client.put(
+                f"/api/v1/projects/{row.id}/brief",
+                json={
+                    "sells": "пластиковые окна",
+                    "synonyms": "окна пвх",
+                    "excludes": "ремонт окон",
+                    "cities": "",
+                },
+                headers=headers(org, user),
+            )
+        ).json()
+
+        queries = [mask["query"] for mask in body["masks"]]
+
+        assert queries[0].startswith("пластиковые окна -ремонт")
+        # «-окон» в минусах не появляется: Вордстат минусует по всем формам
+        # слова, и он вычеркнул бы «окна» из самой маски.
+        assert "-окон" not in queries[0]
+        assert "пластиковые окна тверь" in queries
+        assert any("Тверь" in step for step in body["steps"])
+
+    async def test_бриф_переживает_перезагрузку(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/brief",
+            json={"sells": "окна", "synonyms": "", "excludes": "", "cities": ""},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+
+        assert body["sells"] == "окна"
+
+    async def test_повторное_сохранение_не_плодит_записи(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        for sells in ("окна", "двери"):
+            await client.put(
+                f"/api/v1/projects/{row.id}/brief",
+                json={"sells": sells, "synonyms": "", "excludes": "", "cities": ""},
+                headers=headers(org, user),
+            )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+
+        assert body["sells"] == "двери"
+
+    async def test_выгрузка_файлом_разбирается(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        content = base64.b64encode("окна тверь;900\nкупить окна;500".encode()).decode()
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/import-file",
+                json={"filename": "wordstat.csv", "content_base64": content},
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert body["added"] == 2
+
+    async def test_нечитаемый_файл_объясняет_себя(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Ответ «не получилось» без причины заставляет гадать, а гадать здесь
+        не о чем: файл либо не та кодировка, либо не таблица."""
+        org, user, row = project
+        content = base64.b64encode(b"PK\x03\x04\x00\x00\x00").decode()
+
+        response = await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import-file",
+            json={"filename": "битый.xlsx", "content_base64": content},
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "bad_file"

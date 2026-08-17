@@ -51,6 +51,26 @@ class AccessDeniedError(AppError):
     message = "Доступ не выдан. Попросите владельца добавить вас в участники"
 
 
+def _back_to_login(settings: Settings, reason: str) -> RedirectResponse:
+    """Возвращает человека на страницу входа с понятной причиной.
+
+    Раньше отказ отвечал ошибкой в формате JSON, и человек видел в адресной
+    строке строку с фигурными скобками. Формально там было написано всё нужное;
+    практически это выглядит как сломавшийся сайт, а не как «вас ещё не
+    добавили в участники».
+
+    Наружу уходит только короткий код причины: он ничего не сообщает чужому, но
+    позволяет странице входа объяснить произошедшее по-человечески.
+    """
+    logger.info("вход не состоялся", extra={"reason": reason})
+
+    response = RedirectResponse(
+        f"{settings.app_base_url.rstrip('/')}/?login_error={reason}", status_code=303
+    )
+    response.delete_cookie(STATE_COOKIE, path="/")
+    return response
+
+
 def _redirect_uri(settings: Settings) -> str:
     """Адрес возврата после входа.
 
@@ -61,7 +81,13 @@ def _redirect_uri(settings: Settings) -> str:
 
 
 @router.get("/login", summary="Начать вход через Яндекс")
-async def login(settings: SettingsDep) -> RedirectResponse:
+async def login(settings: SettingsDep, other: bool = False) -> RedirectResponse:
+    """Отправляет человека в Яндекс.
+
+    `other=1` — «войти другим аккаунтом». Без него браузер помнит вход, и
+    человек, которому отказали в доступе, повторным нажатием приходит к тому же
+    отказу тем же аккаунтом: кнопка выглядит сломанной.
+    """
     if not settings.yandex_oauth_client_id:
         raise LoginNotConfiguredError()
 
@@ -71,6 +97,7 @@ async def login(settings: SettingsDep) -> RedirectResponse:
             client_id=settings.yandex_oauth_client_id,
             redirect_uri=_redirect_uri(settings),
             state=state,
+            force_confirm=other,
         ),
         status_code=307,
     )
@@ -95,17 +122,18 @@ async def callback(
     state: str | None = None,
 ) -> RedirectResponse:
     if not settings.yandex_oauth_client_id:
-        raise LoginNotConfiguredError()
+        return _back_to_login(settings, "not_configured")
 
     expected = request.cookies.get(STATE_COOKIE)
     if not state or not expected or state != expected:
         # Ответ пришёл не на наш запрос. Так выглядит попытка подсунуть чужой
-        # код авторизации, и продолжать нельзя.
+        # код авторизации, и продолжать нельзя. Чаще, впрочем, это просто
+        # устаревшая вкладка, поэтому и формулировка отдельная.
         logger.warning("вход отклонён: не совпало значение state")
-        raise AccessDeniedError()
+        return _back_to_login(settings, "expired")
 
     if not code:
-        raise AccessDeniedError()
+        return _back_to_login(settings, "expired")
 
     try:
         access_token = await yandex_id.exchange_code(
@@ -117,7 +145,7 @@ async def callback(
         profile = await yandex_id.fetch_user(access_token)
     except yandex_id.YandexAuthError as exc:
         logger.warning("вход через Яндекс не состоялся", extra={"reason": exc.reason})
-        raise AccessDeniedError() from exc
+        return _back_to_login(settings, "yandex_failed")
 
     user = await _find_member(db, profile)
 
@@ -126,7 +154,7 @@ async def callback(
 
     if user is None:
         logger.info("вход отклонён: участник не найден", extra={"email": profile.email})
-        raise AccessDeniedError()
+        return _back_to_login(settings, "access_denied")
 
     # Идентификатор Яндекса запоминается при первом входе: дальше сопоставление
     # идёт по нему, и смена почты в аккаунте не отрезает человека от системы.

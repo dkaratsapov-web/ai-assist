@@ -877,6 +877,103 @@
         "title": "BidStrategy",
         "type": "string"
       },
+      "BriefRead": {
+        "description": "Бриф вместе с тем, что из него следует.",
+        "properties": {
+          "cities": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Cities",
+            "type": "string"
+          },
+          "excludes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Excludes",
+            "type": "string"
+          },
+          "masks": {
+            "items": {
+              "$ref": "#/components/schemas/MaskRead"
+            },
+            "title": "Masks",
+            "type": "array"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Region"
+          },
+          "sells": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Sells",
+            "type": "string"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "synonyms": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Synonyms",
+            "type": "string"
+          },
+          "why_manual": {
+            "title": "Why Manual",
+            "type": "string"
+          }
+        },
+        "required": [
+          "region",
+          "masks",
+          "steps",
+          "why_manual"
+        ],
+        "title": "BriefRead",
+        "type": "object"
+      },
+      "BriefUpdate": {
+        "description": "Ответы на короткий бриф.",
+        "properties": {
+          "cities": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Cities",
+            "type": "string"
+          },
+          "excludes": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Excludes",
+            "type": "string"
+          },
+          "sells": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Sells",
+            "type": "string"
+          },
+          "synonyms": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Synonyms",
+            "type": "string"
+          }
+        },
+        "title": "BriefUpdate",
+        "type": "object"
+      },
       "CategoryRead": {
         "description": "Оценка по одной категории аудита.",
         "properties": {
@@ -2056,6 +2153,27 @@
         "title": "Intent",
         "type": "string"
       },
+      "KeywordFileImport": {
+        "description": "Выгрузка файлом.\n\nСодержимое приходит в base64, а не многочастной формой. Причина простая:\nтак файл проходит тем же путём, что и вставленный текст, и не тянет за собой\nотдельную библиотеку разбора форм ради одной кнопки.",
+        "properties": {
+          "content_base64": {
+            "maxLength": 14000000,
+            "title": "Content Base64",
+            "type": "string"
+          },
+          "filename": {
+            "default": "",
+            "maxLength": 260,
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content_base64"
+        ],
+        "title": "KeywordFileImport",
+        "type": "object"
+      },
       "KeywordImport": {
         "description": "Вставленный список фраз.",
         "properties": {
@@ -2325,6 +2443,25 @@
         ],
         "title": "MainConversion",
         "type": "string"
+      },
+      "MaskRead": {
+        "description": "Строка, которую человек вставит в Вордстат.",
+        "properties": {
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "purpose"
+        ],
+        "title": "MaskRead",
+        "type": "object"
       },
       "MemberCreate": {
         "description": "Добавление участника.\n\nПароля здесь нет и быть не может: вход идёт через Яндекс ID. Достаточно\nпочты — по ней человек и будет опознан при входе.",
@@ -4104,7 +4241,20 @@
     },
     "/api/v1/auth/login": {
       "get": {
+        "description": "Отправляет человека в Яндекс.\n\n`other=1` — «войти другим аккаунтом». Без него браузер помнит вход, и\nчеловек, которому отказали в доступе, повторным нажатием приходит к тому же\nотказу тем же аккаунтом: кнопка выглядит сломанной.",
         "operationId": "login_api_v1_auth_login_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "other",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Other",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -4113,6 +4263,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Начать вход через Яндекс",
@@ -6444,6 +6604,201 @@
         ]
       }
     },
+    "/api/v1/projects/{project_id}/brief": {
+      "get": {
+        "description": "Отдаёт бриф вместе с тем, что из него следует.\n\nМаски считаются на лету, а не хранятся. Они выводятся из брифа, ниши и\nрегиона; сохранённые разошлись бы с ними при первой же правке, и человек\nпошёл бы собирать запросы по списку, которого уже нет.",
+        "operationId": "get_brief_api_v1_projects__project_id__brief_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Бриф и маски для Вордстата",
+        "tags": [
+          "semantics"
+        ]
+      },
+      "put": {
+        "operationId": "save_brief_api_v1_projects__project_id__brief_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BriefRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Сохранить бриф",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
     "/api/v1/projects/{project_id}/campaign/export.csv": {
       "get": {
         "description": "Отдаёт готовую кампанию одним файлом.\n\nЭто единственный способ довести работу до реального запуска, пока доступ к\nAPI Директа не получен: специалист забирает структуру, фразы, объявления и\nминус-слова и заводит кампанию через Коммандер или руками.\n\nЗамечания к объявлениям попадают в отдельный столбец, а не отсеивают строки.\nМолча выбросить группу с длинным заголовком значило бы отдать неполную\nкампанию и не сказать об этом — человек узнал бы о пропаже уже в Директе.",
@@ -7638,6 +7993,110 @@
           }
         },
         "summary": "Загрузить список фраз",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/import-file": {
+      "post": {
+        "description": "Принимает файл выгрузки: xlsx из Вордстата, csv из Key Collector, txt.\n\nФормат не спрашивается. Вордстат отдаёт xlsx, Key Collector — то xlsx, то\ncsv, а кто-то просто копирует колонку в блокнот; требовать привести файл к\nодному виду значит переложить на человека работу, которая занимает у\nпрограммы миллисекунды, а у него — каждый раз по десять минут.",
+        "operationId": "import_keywords_file_api_v1_projects__project_id__keywords_import_file_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KeywordFileImport"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Загрузить выгрузку файлом",
         "tags": [
           "semantics"
         ]

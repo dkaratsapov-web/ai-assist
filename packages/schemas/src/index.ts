@@ -54,6 +54,9 @@ export type KeywordRead = Schemas["KeywordRead"];
 export type KeywordList = Schemas["KeywordList"];
 export type ImportSummary = Schemas["ImportSummary"];
 export type CleanupGroupRead = Schemas["CleanupGroupRead"];
+export type BriefRead = Schemas["BriefRead"];
+export type BriefUpdate = Schemas["BriefUpdate"];
+export type MaskRead = Schemas["MaskRead"];
 export type CleanupResult = Schemas["CleanupResult"];
 export type ClusterRead = Schemas["ClusterRead"];
 export type ClusterList = Schemas["ClusterList"];
@@ -337,6 +340,35 @@ export class ApiClient {
     return this.request<ImportSummary>(`/api/v1/projects/${projectId}/keywords/import`, {
       method: "POST",
       body: JSON.stringify({ text }),
+    });
+  }
+
+  /**
+   * Выгрузка файлом: xlsx из Вордстата, csv из Key Collector, txt.
+   *
+   * Содержимое уходит в base64, а не многочастной формой: так файл проходит
+   * тем же путём, что и вставленный текст, и разбор у них общий.
+   */
+  importKeywordsFile(
+    projectId: string,
+    filename: string,
+    contentBase64: string,
+  ): Promise<ImportSummary> {
+    return this.request<ImportSummary>(`/api/v1/projects/${projectId}/keywords/import-file`, {
+      method: "POST",
+      body: JSON.stringify({ filename, content_base64: contentBase64 }),
+    });
+  }
+
+  /** Бриф и выведенные из него маски для Вордстата. */
+  getBrief(projectId: string): Promise<BriefRead> {
+    return this.request<BriefRead>(`/api/v1/projects/${projectId}/brief`);
+  }
+
+  saveBrief(projectId: string, brief: BriefUpdate): Promise<BriefRead> {
+    return this.request<BriefRead>(`/api/v1/projects/${projectId}/brief`, {
+      method: "PUT",
+      body: JSON.stringify(brief),
     });
   }
 

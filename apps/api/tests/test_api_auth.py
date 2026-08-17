@@ -12,7 +12,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +28,19 @@ from ads_os.tenancy.context import Role
 from .conftest import make_user
 
 PROFILE = YandexUser(id="1234567", email="specialist@example.com", display_name="Иван Петров")
+
+
+def assert_rejected(response: Response, reason: str) -> None:
+    """Вход не состоялся — и человек это увидел по-человечески.
+
+    Проверяются обе стороны одного решения. Первая — безопасность: сессия не
+    выдана, внутрь никто не попал. Вторая — то, ради чего отказ переписывали:
+    вместо строки JSON в адресной строке человек возвращается на страницу входа
+    с причиной, по которой она может объяснить произошедшее.
+    """
+    assert response.status_code == 303
+    assert f"login_error={reason}" in response.headers["location"]
+    assert COOKIE_NAME not in response.cookies
 
 
 @pytest.fixture
@@ -153,8 +166,7 @@ class TestВозврат:
         ):
             response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
 
-        assert response.status_code == 403
-        assert response.json()["error_code"] == "access_denied"
+        assert_rejected(response, "access_denied")
 
     async def test_подменённый_state_отклоняется(
         self,
@@ -175,7 +187,7 @@ class TestВозврат:
         ):
             response = await client.get("/api/v1/auth/callback?code=abc&state=чужое")
 
-        assert response.status_code == 403
+        assert_rejected(response, "expired")
 
     async def test_сбой_яндекса_не_пускает_внутрь(
         self,
@@ -196,7 +208,7 @@ class TestВозврат:
         ):
             response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
 
-        assert response.status_code == 403
+        assert_rejected(response, "yandex_failed")
 
     async def test_отключённый_участник_не_входит(
         self,
@@ -218,7 +230,7 @@ class TestВозврат:
         ):
             response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
 
-        assert response.status_code == 403
+        assert_rejected(response, "access_denied")
 
     async def test_идентификатор_яндекса_запоминается(
         self,
@@ -287,7 +299,7 @@ class TestПервыйВладелец:
         ):
             response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
 
-        assert response.status_code == 403
+        assert_rejected(response, "access_denied")
 
     async def test_чужая_почта_владельцем_не_становится(self, client: AsyncClient) -> None:
         stranger = YandexUser(id="7", email="stranger@example.com", display_name="Чужой")
@@ -300,7 +312,7 @@ class TestПервыйВладелец:
         ):
             response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
 
-        assert response.status_code == 403
+        assert_rejected(response, "access_denied")
 
 
 class TestВыход:
@@ -569,3 +581,48 @@ class TestСозданиеПользователей:
             await session.execute(select(User).where(User.email == "newbie@example.com"))
         ).scalar_one()
         assert created.yandex_id is None
+
+
+class TestОтказПоНятенЧеловеку:
+    """Отказ во входе — это экран, а не строка JSON в адресной строке.
+
+    Пока отказ отвечал ошибкой, человек видел в браузере
+    «{"error_code":"access_denied",...}». Там было написано всё нужное, но
+    выглядело это как сломавшийся сайт, а не как «вас ещё не добавили».
+    """
+
+    async def test_возврат_идёт_на_страницу_входа(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        two_organizations: tuple[Organization, Organization],
+    ) -> None:
+        org, _ = two_organizations
+        await make_user(session, org, "specialist@example.com")
+        await session.commit()
+
+        start = await client.get("/api/v1/auth/login")
+        state = start.cookies[STATE_COOKIE]
+        stranger = YandexUser(id="999", email="stranger@example.com", display_name="Чужой")
+
+        with (
+            patch("ads_os.api.v1.auth.yandex_id.exchange_code", return_value="ya-token"),
+            patch("ads_os.api.v1.auth.yandex_id.fetch_user", return_value=stranger),
+        ):
+            response = await client.get(f"/api/v1/auth/callback?code=abc&state={state}")
+
+        assert response.headers["location"].startswith("http://localhost:3000/")
+
+    async def test_вход_другим_аккаунтом_спрашивает_яндекс(self, client: AsyncClient) -> None:
+        """Без этого повтор молча приводит тем же аккаунтом к тому же отказу:
+        браузер помнит вход, и кнопка выглядит сломанной."""
+        response = await client.get("/api/v1/auth/login?other=1")
+        query = parse_qs(urlsplit(response.headers["location"]).query)
+
+        assert query["force_confirm"] == ["yes"]
+
+    async def test_обычный_вход_лишнего_не_спрашивает(self, client: AsyncClient) -> None:
+        response = await client.get("/api/v1/auth/login")
+        query = parse_qs(urlsplit(response.headers["location"]).query)
+
+        assert "force_confirm" not in query
