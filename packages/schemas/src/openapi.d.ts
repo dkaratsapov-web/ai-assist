@@ -28,6 +28,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ad-platform/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Состояние подключения к Директу
+         * @description Проверяет доступ и возвращает остаток баллов API.
+         */
+        get: operations["get_status_api_v1_ad_platform_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/callback": {
         parameters: {
             query?: never;
@@ -1014,6 +1034,66 @@ export interface components {
             title_2: string | null;
             /** Violations */
             violations: components["schemas"]["AdViolationRead"][];
+        };
+        /**
+         * AdPlatformAdvertiserRead
+         * @description Рекламодатель, доступный по нашему токену.
+         */
+        AdPlatformAdvertiserRead: {
+            /** Can Edit */
+            can_edit: boolean;
+            /** Currency */
+            currency: string;
+            /** Login */
+            login: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * AdPlatformStatusRead
+         * @description Состояние подключения к рекламной площадке.
+         *
+         *     Единственный экран, где видно правду о доступе: какой адаптер работает,
+         *     настоящие ли это деньги, отвечает ли площадка и сколько осталось баллов
+         *     API. Выяснять это по косвенным признакам — верный способ однажды принять
+         *     заглушку за боевой аккаунт.
+         */
+        AdPlatformStatusRead: {
+            /** Adapter */
+            adapter: string;
+            /**
+             * Advertisers
+             * @default []
+             */
+            advertisers: components["schemas"]["AdPlatformAdvertiserRead"][];
+            /** Connected */
+            connected: boolean;
+            /** Error */
+            error?: string | null;
+            /** Is Live */
+            is_live: boolean;
+            /** Live Approved */
+            live_approved: boolean;
+            /**
+             * Units Limit
+             * @default 0
+             */
+            units_limit: number;
+            /**
+             * Units Low
+             * @default false
+             */
+            units_low: boolean;
+            /**
+             * Units Rest
+             * @default 0
+             */
+            units_rest: number;
+            /**
+             * Units Spent
+             * @default 0
+             */
+            units_spent: number;
         };
         /**
          * AdViolationRead
@@ -2259,6 +2339,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ActivityList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_v1_ad_platform_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdPlatformStatusRead"];
                 };
             };
             /** @description Validation Error */

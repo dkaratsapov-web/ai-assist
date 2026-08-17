@@ -427,6 +427,42 @@ class OrganizationRead(BaseModel):
     ad_platform_adapter: str
 
 
+class AdPlatformAdvertiserRead(BaseModel):
+    """Рекламодатель, доступный по нашему токену."""
+
+    login: str
+    name: str
+    currency: str
+    can_edit: bool
+
+
+class AdPlatformStatusRead(BaseModel):
+    """Состояние подключения к рекламной площадке.
+
+    Единственный экран, где видно правду о доступе: какой адаптер работает,
+    настоящие ли это деньги, отвечает ли площадка и сколько осталось баллов
+    API. Выяснять это по косвенным признакам — верный способ однажды принять
+    заглушку за боевой аккаунт.
+    """
+
+    adapter: str
+    #: Работает ли адаптер с настоящими деньгами, а не с песочницей.
+    is_live: bool
+    #: Снят ли предохранитель боевого доступа (v0.4 §2.1).
+    live_approved: bool
+    #: Ответила ли площадка на пробный запрос.
+    connected: bool
+    #: Почему не ответила. Пусто при успехе.
+    error: str | None = None
+    advertisers: list[AdPlatformAdvertiserRead] = []
+    #: Расход баллов API за сутки: израсходовано, осталось, предел.
+    units_spent: int = 0
+    units_rest: int = 0
+    units_limit: int = 0
+    #: Осталось меньше десятой части суточного лимита.
+    units_low: bool = False
+
+
 class ActivityRead(BaseModel):
     """Строка журнала.
 

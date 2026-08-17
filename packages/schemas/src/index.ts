@@ -62,6 +62,8 @@ export type AdDraftList = Schemas["AdDraftList"];
 export type AdViolationRead = Schemas["AdViolationRead"];
 export type MinusWordSetRead = Schemas["MinusWordSetRead"];
 export type MinusWordSetList = Schemas["MinusWordSetList"];
+export type AdPlatformStatusRead = Schemas["AdPlatformStatusRead"];
+export type AdPlatformAdvertiserRead = Schemas["AdPlatformAdvertiserRead"];
 export type NicheRead = Schemas["NicheRead"];
 export type NicheList = Schemas["NicheList"];
 export type NicheRequirementRead = Schemas["NicheRequirementRead"];
@@ -347,6 +349,15 @@ export class ApiClient {
 
   listClusters(projectId: string): Promise<ClusterList> {
     return this.request<ClusterList>(`/api/v1/projects/${projectId}/keywords/clusters`);
+  }
+
+  /**
+   * Состояние подключения к Директу. Делает настоящий пробный запрос: токен
+   * бывает истёкшим, отозванным и выпущенным не на то приложение, и все три
+   * случая выглядят одинаково, пока не спросишь площадку.
+   */
+  getAdPlatformStatus(): Promise<AdPlatformStatusRead> {
+    return this.request<AdPlatformStatusRead>(`/api/v1/ad-platform/status`);
   }
 
   /** Справочник ниш. Одинаков для всех и меняется вместе с кодом, а не с данными. */

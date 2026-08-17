@@ -232,6 +232,103 @@
         "title": "AdDraftRead",
         "type": "object"
       },
+      "AdPlatformAdvertiserRead": {
+        "description": "Рекламодатель, доступный по нашему токену.",
+        "properties": {
+          "can_edit": {
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "login": {
+            "title": "Login",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "login",
+          "name",
+          "currency",
+          "can_edit"
+        ],
+        "title": "AdPlatformAdvertiserRead",
+        "type": "object"
+      },
+      "AdPlatformStatusRead": {
+        "description": "Состояние подключения к рекламной площадке.\n\nЕдинственный экран, где видно правду о доступе: какой адаптер работает,\nнастоящие ли это деньги, отвечает ли площадка и сколько осталось баллов\nAPI. Выяснять это по косвенным признакам — верный способ однажды принять\nзаглушку за боевой аккаунт.",
+        "properties": {
+          "adapter": {
+            "title": "Adapter",
+            "type": "string"
+          },
+          "advertisers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AdPlatformAdvertiserRead"
+            },
+            "title": "Advertisers",
+            "type": "array"
+          },
+          "connected": {
+            "title": "Connected",
+            "type": "boolean"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "is_live": {
+            "title": "Is Live",
+            "type": "boolean"
+          },
+          "live_approved": {
+            "title": "Live Approved",
+            "type": "boolean"
+          },
+          "units_limit": {
+            "default": 0,
+            "title": "Units Limit",
+            "type": "integer"
+          },
+          "units_low": {
+            "default": false,
+            "title": "Units Low",
+            "type": "boolean"
+          },
+          "units_rest": {
+            "default": 0,
+            "title": "Units Rest",
+            "type": "integer"
+          },
+          "units_spent": {
+            "default": 0,
+            "title": "Units Spent",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "adapter",
+          "is_live",
+          "live_approved",
+          "connected"
+        ],
+        "title": "AdPlatformStatusRead",
+        "type": "object"
+      },
       "AdViolationRead": {
         "description": "Что помешает объявлению выйти на показы.",
         "properties": {
@@ -3615,6 +3712,90 @@
         "summary": "Журнал действий",
         "tags": [
           "activity"
+        ]
+      }
+    },
+    "/api/v1/ad-platform/status": {
+      "get": {
+        "description": "Проверяет доступ и возвращает остаток баллов API.",
+        "operationId": "get_status_api_v1_ad_platform_status_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdPlatformStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Состояние подключения к Директу",
+        "tags": [
+          "ad-platform"
         ]
       }
     },
