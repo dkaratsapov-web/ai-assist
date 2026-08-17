@@ -60,6 +60,7 @@ async def get_overview(session: SessionDep, ctx: TenantDep) -> OverviewRead:
         progress = evaluate_progress(
             ProgressInput(
                 has_website=bool(project.website_url),
+                has_niche=bool(project.niche),
                 audit_status=audit.status.value if audit else None,
                 audit_has_blocking_issues=_has_blocking_issues(audit),
                 competitors_checked=rivals.get(project.id, 0),

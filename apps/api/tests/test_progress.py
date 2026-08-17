@@ -38,17 +38,45 @@ class TestСоставШагов:
 
 
 class TestНовыйПроект:
-    def test_онбординг_сделан_сразу(self) -> None:
-        """Проект существует — значит первый шаг пройден."""
-        assert state(ProgressInput(), StepKey.ONBOARDING) is StepState.COMPLETED
+    def test_онбординг_не_закрывается_фактом_создания(self) -> None:
+        """Иначе человек ввёл название и уже «один шаг из десяти».
 
-    def test_ничего_кроме_онбординга_не_сделано(self) -> None:
-        progress = evaluate(ProgressInput())
-        assert progress.completed_count == 1
+        Формальность, оформленная как достижение, — та же выдуманная цифра,
+        только в виде галочки.
+        """
+        assert state(ProgressInput(), StepKey.ONBOARDING) is StepState.ACTIVE
 
-    def test_текущий_шаг_исследование(self) -> None:
-        """Первое осмысленное действие в новом проекте — указать сайт."""
-        assert evaluate(ProgressInput()).current is StepKey.RESEARCH
+    def test_ничего_не_сделано(self) -> None:
+        assert evaluate(ProgressInput()).completed_count == 0
+
+    def test_текущий_шаг_онбординг(self) -> None:
+        """Первое осмысленное действие — заполнить сайт и нишу."""
+        assert evaluate(ProgressInput()).current is StepKey.ONBOARDING
+
+    def test_видно_чего_именно_не_хватает(self) -> None:
+        hint = evaluate(ProgressInput()).steps[0].hint or ""
+
+        assert "сайт" in hint and "ниш" in hint
+
+    def test_сайт_и_ниша_закрывают_онбординг(self) -> None:
+        data = ProgressInput(has_website=True, has_niche=True)
+
+        assert state(data, StepKey.ONBOARDING) is StepState.COMPLETED
+
+    def test_только_сайта_мало(self) -> None:
+        data = ProgressInput(has_website=True)
+
+        assert state(data, StepKey.ONBOARDING) is StepState.ACTIVE
+        assert "ниш" in (evaluate(data).steps[0].hint or "")
+
+    def test_проект_без_сайта_не_блокируется(self) -> None:
+        """Реклама без сайта бывает — на квизы, на карточки в справочниках.
+        Запретить такой проект нельзя, промолчать о том, что исследовать
+        нечего, — тоже."""
+        data = ProgressInput(has_niche=True)
+
+        assert state(data, StepKey.ONBOARDING) is not StepState.BLOCKED
+        assert "сайт" in (evaluate(data).steps[0].hint or "")
 
     def test_есть_подсказка_что_делать(self) -> None:
         assert evaluate(ProgressInput()).next_action
@@ -138,6 +166,7 @@ class TestТекущийШаг:
         """Сломанное чинят раньше, чем заполняют следующее."""
         data = ProgressInput(
             has_website=True,
+            has_niche=True,
             audit_status="failed",
             economics_mode=EconomicsMode.INSUFFICIENT,
         )
@@ -146,6 +175,7 @@ class TestТекущийШаг:
     def test_после_исследования_текущей_становится_экономика(self) -> None:
         data = ProgressInput(
             has_website=True,
+            has_niche=True,
             audit_status="completed",
             competitors_checked=1,
             economics_mode=EconomicsMode.INSUFFICIENT,

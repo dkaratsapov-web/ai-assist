@@ -145,7 +145,7 @@ class TestРедактирование:
 
 
 class TestПрогресс:
-    async def test_у_нового_проекта_сделан_только_онбординг(
+    async def test_у_нового_проекта_не_сделано_ничего(
         self, client: AsyncClient, project_ctx: tuple[Organization, User, Project]
     ) -> None:
         org, user, project = project_ctx
@@ -157,8 +157,10 @@ class TestПрогресс:
         body = response.json()
         assert response.status_code == 200
         assert body["total_count"] == 10
-        assert body["completed_count"] == 1
-        assert body["current"] == "research"
+        # Онбординг больше не закрывается фактом создания карточки: сначала
+        # нужны сайт и ниша, от которых зависят проверки и минус-слова.
+        assert body["completed_count"] == 0
+        assert body["current"] == "onboarding"
         assert body["next_action"]
 
     async def test_аудит_и_конкурент_закрывают_исследование(
@@ -170,6 +172,7 @@ class TestПрогресс:
         """Исследование — это аудит сайта и сравнение с конкурентами (v0.4 §3)."""
         org, user, project = project_ctx
         project.website_url = "https://example.com/"
+        project.niche = "plastic_windows"
         session.add(
             SiteAudit(
                 organization_id=org.id,
@@ -210,6 +213,7 @@ class TestПрогресс:
         """Прогресс обязан показывать запрет, а не молчать о нём (v0.3 §15)."""
         org, user, project = project_ctx
         project.website_url = "https://example.com/"
+        project.niche = "plastic_windows"
         session.add(
             SiteAudit(
                 organization_id=org.id,

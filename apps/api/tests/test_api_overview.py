@@ -103,8 +103,8 @@ class TestСодержимое:
         body = response.json()
         assert body["ad_platform_connected"] is False
         row = body["projects"][0]
-        assert row["current_step"] == "research"
-        assert row["current_step_label"] == "Исследование"
+        assert row["current_step"] == "onboarding"
+        assert row["current_step_label"] == "Онбординг"
         assert row["total_count"] == 10
         assert row["next_action"]
         assert "spend" not in row and "leads" not in row
@@ -229,6 +229,7 @@ class TestТребуютВнимания:
         await make_project(session, org, "Требует действия")
 
         done = await make_project(session, org, "Всё сделано", "https://example.com/")
+        done.niche = "plastic_windows"
         session.add(
             SiteAudit(
                 organization_id=org.id,

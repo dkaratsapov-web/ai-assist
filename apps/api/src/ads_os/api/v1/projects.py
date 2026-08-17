@@ -214,6 +214,7 @@ async def get_progress(
     progress = evaluate_progress(
         ProgressInput(
             has_website=bool(project.website_url),
+            has_niche=bool(project.niche),
             audit_status=audit.status.value if audit else None,
             audit_has_blocking_issues=_has_blocking_issues(audit),
             competitors_checked=await _count_checked_competitors(session, ctx, project_id),
