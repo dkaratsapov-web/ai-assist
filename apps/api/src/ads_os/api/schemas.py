@@ -639,6 +639,43 @@ class AuditHistory(BaseModel):
     total: int
 
 
+class ReviewNoteRead(BaseModel):
+    """Одно замечание модели."""
+
+    #: offer | objections | language | match | structure
+    topic: str
+    #: good | weak | missing
+    grade: str
+    what: str
+    fix: str
+    #: Цитата со страницы. Пустая, когда речь об отсутствующем.
+    quote: str
+
+
+class ReviewRead(BaseModel):
+    """Мнение модели о странице.
+
+    Отдельно от находок и от балла намеренно: это суждение, а не факт.
+    Ошибиться модель может, и её ошибка не должна ни повышать балл, ни
+    запрещать запуск.
+    """
+
+    #: Разбор выполнен. False — модель не подключена, недоступна или страница
+    #: слишком пустая; тогда заполнено `reason`.
+    available: bool
+    #: Почему разбора нет. Пустое место человек читает как поломку.
+    reason: str = ""
+    summary: str = ""
+    strongest: str = ""
+    weakest: str = ""
+    #: Насколько модель уверена, от 0 до 1.
+    confidence: float = 0.0
+    #: Какая модель отвечала. Через полгода это единственный способ понять,
+    #: почему разборы разных проверок так не похожи.
+    model: str = ""
+    notes: list[ReviewNoteRead] = Field(default_factory=list)
+
+
 class AuditRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
@@ -655,6 +692,9 @@ class AuditRead(BaseModel):
     can_launch: bool
     #: Что изменилось с прошлой завершённой проверки. None у незавершённых.
     changes: AuditChangesRead | None = None
+    #: Мнение модели. Присутствует всегда — при отключённой модели с
+    #: `available: false` и объяснением.
+    review: ReviewRead
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime

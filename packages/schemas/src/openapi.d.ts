@@ -1537,6 +1537,7 @@ export interface components {
              * Format: uuid
              */
             project_id: string;
+            review: components["schemas"]["ReviewRead"];
             /** Score */
             score: number | null;
             /** Started At */
@@ -2736,6 +2737,66 @@ export interface components {
          * @enum {string}
          */
         Reason: "geo" | "job" | "diy" | "free" | "used" | "study" | "media" | "marketplace" | "fraud" | "offtopic" | "minus_word";
+        /**
+         * ReviewNoteRead
+         * @description Одно замечание модели.
+         */
+        ReviewNoteRead: {
+            /** Fix */
+            fix: string;
+            /** Grade */
+            grade: string;
+            /** Quote */
+            quote: string;
+            /** Topic */
+            topic: string;
+            /** What */
+            what: string;
+        };
+        /**
+         * ReviewRead
+         * @description Мнение модели о странице.
+         *
+         *     Отдельно от находок и от балла намеренно: это суждение, а не факт.
+         *     Ошибиться модель может, и её ошибка не должна ни повышать балл, ни
+         *     запрещать запуск.
+         */
+        ReviewRead: {
+            /** Available */
+            available: boolean;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /** Notes */
+            notes?: components["schemas"]["ReviewNoteRead"][];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Strongest
+             * @default
+             */
+            strongest: string;
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Weakest
+             * @default
+             */
+            weakest: string;
+        };
         /**
          * RivalSuggestionsRead
          * @description Подсказки по конкурентам: из своей истории и через поиск.

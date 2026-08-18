@@ -39,6 +39,7 @@ from ...services.competitors import extract_features
 from ...services.crawler import renderer
 from ...services.crawler.fetcher import CrawlLimits, FetchError, fetch_page
 from ...services.notifications import evaluate_audit, push
+from ...services.site_review import review_page
 from ...services.usage import record as record_usage
 from ..app import celery_app
 from ..runtime import run_task
@@ -171,6 +172,18 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         audit.client_profile = profile.extract(fetched["html"]).as_dict()
         audit.offer = offer.extract(fetched["html"]).as_dict()
 
+        # Мнение модели идёт последним и на всё остальное не влияет: балл,
+        # вердикт и находки уже посчитаны и сохранены выше. Модель ошибается,
+        # и её ошибка не должна превращаться в «запускать нельзя».
+        review = await review_page(
+            fetched["html"],
+            signals,
+            url=fetched["final_url"],
+            organization_id=audit.organization_id,
+            project_id=audit.project_id,
+        )
+        audit.review = review.as_stored()
+
         # Учёт ведётся по факту разбора, а не по факту постановки в очередь:
         # задача может не дойти до воркера, и записанная заранее страница
         # оказалась бы потреблением, которого не было.
@@ -184,6 +197,21 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             project_id=audit.project_id,
             meta={"url": audit.url[:200]},
         )
+
+        # Разбор моделью — единственная часть проверки, которая стоит денег за
+        # каждый запуск. Записывается отдельной строкой: иначе расход виден
+        # только в счёте у провайдера, и разложить его по проектам нечем.
+        if review.tokens:
+            await record_usage(
+                session,
+                organization_id=audit.organization_id,
+                service=UsageService.AI,
+                operation="site_review",
+                quantity=review.tokens,
+                unit=UsageUnit.TOKENS,
+                project_id=audit.project_id,
+                meta={"model": review.model},
+            )
 
         await _notify(session, audit)
 

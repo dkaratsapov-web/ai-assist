@@ -98,6 +98,13 @@ class SiteAudit(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: конкурентами. Собираются тем же разбором, что и у них.
     offer: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
+    #: Мнение модели о странице: качество предложения, работа с возражениями,
+    #: язык, соответствие обещания посадочной. Хранится отдельно от находок
+    #: намеренно — это суждение, а не факт, и в балл готовности оно не входит.
+    #: Когда разбор не выполнен, здесь лежит причина: пустое место человек
+    #: читает как поломку.
+    review: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     metrica_counter: Mapped[str | None] = mapped_column(String(20), nullable=True)
     final_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
 

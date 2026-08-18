@@ -11,6 +11,8 @@ import {
   type AuditRead,
   type CategoryRead,
   type ProjectRead,
+  type ReviewNoteRead,
+  type ReviewRead,
 } from "@ads-os/schemas";
 import {
   AlertCard,
@@ -398,6 +400,8 @@ function SiteAuditScreen() {
                 </div>
               </Card>
 
+              <ReviewCard review={audit.review} />
+
               {dismissed.length > 0 && (
                 <Card>
                   <CardHeader
@@ -720,6 +724,96 @@ function HistoryRow({ item }: { item: AuditHistoryItem }) {
  * именно за этим ответом, а не за баллом. Балл мог вырасти на три пункта, пока
  * критическая проблема осталась на месте.
  */
+/** О чём говорит замечание модели. Ключи приходят с backend. */
+const TOPIC_LABELS: Record<string, string> = {
+  offer: "Предложение",
+  objections: "Возражения",
+  language: "Язык",
+  match: "Совпадение с рекламой",
+  structure: "Порядок изложения",
+};
+
+const GRADE: Record<string, { label: string; tone: Tone }> = {
+  good: { label: "хорошо", tone: "success" },
+  weak: { label: "слабо", tone: "warning" },
+  missing: { label: "нет", tone: "critical" },
+};
+
+/**
+ * Разбор страницы моделью.
+ *
+ * Стоит отдельно от списка замечаний и ниже него — и это не про вёрстку.
+ * Замечания выше проверены кодом: их можно открыть и увидеть. Здесь мнение, и
+ * оно бывает ошибочным. Поэтому карточка подписана как мнение, у каждого
+ * пункта стоит цитата со страницы, а на балл готовности всё это не влияет
+ * вовсе — балл посчитан по фактам ещё до того, как модель что-либо сказала.
+ */
+function ReviewCard({ review }: { review: ReviewRead }) {
+  if (!review.available) {
+    return (
+      <Card>
+        <CardHeader title="Разбор моделью" />
+        <p className="text-body-sm text-text-secondary">{review.reason}</p>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        title="Разбор моделью"
+        description="Мнение, а не проверка: на оценку готовности не влияет"
+      />
+      <div className="flex flex-col gap-4">
+        <p className="text-body-sm text-text-primary">{review.summary}</p>
+
+        <dl className="text-body-sm grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Row label="Сильнее всего" value={review.strongest} />
+          <Row label="Мешает больше всего" value={review.weakest} />
+        </dl>
+
+        <div className="flex flex-col">
+          {(review.notes ?? []).map((note, index) => (
+            <ReviewNoteRow key={`${note.topic}-${index}`} note={note} />
+          ))}
+        </div>
+
+        <p className="text-caption text-text-secondary">
+          Модель: {review.model || "не указана"}. Уверенность:{" "}
+          {Math.round((review.confidence ?? 0) * 100)}%. Спорить с этим разбором можно и нужно —
+          последнее слово за специалистом.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function ReviewNoteRow({ note }: { note: ReviewNoteRead }) {
+  const grade = GRADE[note.grade] ?? { label: note.grade, tone: "warning" as Tone };
+
+  return (
+    <div className="border-border-subtle flex flex-col gap-1 border-b py-3 last:border-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone={grade.tone} size="sm" dot>
+          {grade.label}
+        </StatusBadge>
+        <span className="text-body-sm text-text-primary font-medium">
+          {TOPIC_LABELS[note.topic] ?? note.topic}
+        </span>
+      </div>
+      <p className="text-body-sm text-text-primary">{note.what}</p>
+      <p className="text-body-sm text-text-secondary">{note.fix}</p>
+      {/* Цитата — единственное, чем мнение можно проверить, не открывая
+          страницу заново. Без неё спорить с замечанием приходится вслепую. */}
+      {note.quote && (
+        <p className="text-caption text-text-secondary border-border-subtle border-l-2 pl-3 italic">
+          «{note.quote}»
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ChangesCard({ changes }: { changes: AuditChangesRead }) {
   const nothing = changes.fixed.length === 0 && changes.appeared.length === 0;
 

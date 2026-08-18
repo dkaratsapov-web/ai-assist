@@ -39,6 +39,8 @@ from ..schemas import (
     DismissalCreate,
     DismissalList,
     DismissalRead,
+    ReviewNoteRead,
+    ReviewRead,
 )
 
 logger = logging.getLogger(__name__)
@@ -617,9 +619,40 @@ def _to_read(
         issues=[_stored_issue(i, dismissals or {}) for i in (audit.issues or [])],
         can_launch=not any(i.get("severity") == "critical" for i in (audit.issues or [])),
         changes=changes,
+        review=_review(audit.review),
         started_at=audit.started_at,
         finished_at=audit.finished_at,
         created_at=audit.created_at or utcnow(),
+    )
+
+
+def _review(stored: dict[str, object] | None) -> ReviewRead:
+    """Мнение модели из хранилища.
+
+    Проверки, сделанные до появления разбора, лежат с пустым полем. Для них
+    честный ответ — «разбора нет и вот почему», а не пустой блок, который
+    человек прочитает как «модели нечего сказать».
+    """
+    if not stored:
+        return ReviewRead(
+            available=False,
+            reason="Эта проверка сделана до того, как появился разбор моделью.",
+        )
+
+    if not stored.get("available"):
+        return ReviewRead(
+            available=False, reason=str(stored.get("reason") or "Разбор моделью не выполнен.")
+        )
+
+    notes = stored.get("notes")
+    return ReviewRead(
+        available=True,
+        summary=str(stored.get("summary") or ""),
+        strongest=str(stored.get("strongest") or ""),
+        weakest=str(stored.get("weakest") or ""),
+        confidence=float(stored.get("confidence") or 0.0),
+        model=str(stored.get("model") or ""),
+        notes=[ReviewNoteRead(**note) for note in notes] if isinstance(notes, list) else [],
     )
 
 

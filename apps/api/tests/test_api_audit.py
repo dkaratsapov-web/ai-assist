@@ -691,3 +691,102 @@ class TestНесколькоПосадочных:
         assert items[0]["is_primary"] is True
         assert items[1]["score"] == 30
         assert items[2]["score"] == 80
+
+
+class TestРазборМоделью:
+    """Мнение модели отдаётся вместе с проверкой, но живёт отдельно от неё."""
+
+    async def test_мнение_приходит_с_результатом(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, project = project_with_site
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=80,
+            review={
+                "available": True,
+                "summary": "Предложение понятное, но цена без условий.",
+                "strongest": "Гарантия на первом экране.",
+                "weakest": "Не сказано, что входит в цену.",
+                "confidence": 0.7,
+                "model": "модель-1",
+                "notes": [
+                    {
+                        "topic": "offer",
+                        "grade": "weak",
+                        "what": "Цена без состава работ.",
+                        "fix": "Показать, что входит.",
+                        "quote": "от 350 рублей за метр",
+                    }
+                ],
+            },
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{project.id}/audit", headers=headers(org, user))
+        ).json()
+
+        assert body["review"]["available"] is True
+        assert body["review"]["notes"][0]["quote"] == "от 350 рублей за метр"
+
+    async def test_старые_проверки_объясняют_отсутствие_разбора(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Пустой блок человек читает как поломку, а не как «разбора не было»."""
+        org, user, project = project_with_site
+        await _make_audit(session, project_with_site, ModuleStatus.COMPLETED, score=80)
+
+        body = (
+            await client.get(f"/api/v1/projects/{project.id}/audit", headers=headers(org, user))
+        ).json()
+
+        assert body["review"]["available"] is False
+        assert body["review"]["reason"]
+
+    async def test_мнение_не_влияет_на_возможность_запуска(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        project_with_site: tuple[Organization, User, Project],
+    ) -> None:
+        """Модель ошибается, и её ошибка не должна запрещать запуск."""
+        org, user, project = project_with_site
+        await _make_audit(
+            session,
+            project_with_site,
+            ModuleStatus.COMPLETED,
+            score=95,
+            issues=[],
+            review={
+                "available": True,
+                "summary": "Страница никуда не годится.",
+                "strongest": "",
+                "weakest": "Всё плохо.",
+                "confidence": 0.9,
+                "model": "модель-1",
+                "notes": [
+                    {
+                        "topic": "offer",
+                        "grade": "missing",
+                        "what": "Предложения нет.",
+                        "fix": "Написать предложение.",
+                        "quote": "",
+                    }
+                ],
+            },
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{project.id}/audit", headers=headers(org, user))
+        ).json()
+
+        assert body["can_launch"] is True
+        assert body["score"] == 95
