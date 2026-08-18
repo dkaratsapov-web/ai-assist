@@ -249,14 +249,14 @@ function EconomicsScreen() {
             </Card>
           )}
 
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
             <Card className="xl:col-span-1">
               <CardHeader
                 title="Данные бизнеса"
                 description="Эти величины вводятся вручную: с сайта их получить нельзя"
               />
 
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-3">
                 <p className="text-micro text-text-secondary tracking-wide uppercase">
                   Обязательно
                 </p>
@@ -312,13 +312,13 @@ function EconomicsScreen() {
               </div>
             </Card>
 
-            <div className="flex flex-col gap-4 xl:col-span-2">
+            <div className="flex flex-col gap-3 xl:col-span-2">
               <Card>
                 <CardHeader
                   title="Пороговые значения"
                   description="Выше этих величин привлечение перестаёт окупаться"
                 />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <MetricCard
                     label="Валовая прибыль со сделки"
                     metric={summary?.gross_profit_per_sale}
@@ -334,7 +334,7 @@ function EconomicsScreen() {
                   title="Цели"
                   description="К каким значениям стремимся при текущих вводных"
                 />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <MetricCard label="Целевой CAC" metric={summary?.target_cac} money />
                   <MetricCard label="Целевой CPL" metric={summary?.target_cpl} money />
                   <MetricCard label="Целевой ROAS" metric={summary?.target_roas} />
@@ -346,7 +346,7 @@ function EconomicsScreen() {
                   title="Ожидаемый поток"
                   description="Сколько заявок будет при вашей цене клика и конверсии страницы"
                 />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <MetricCard label="Кликов в месяц" metric={summary?.expected_monthly_clicks} />
                   <MetricCard label="Заявок в месяц" metric={summary?.expected_monthly_leads} />
                 </div>
@@ -362,7 +362,7 @@ function EconomicsScreen() {
                      или нет. */
                   description="Верхняя граница: столько получится, если цена окажется целевой"
                 />
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                   <MetricCard
                     label="Заявок при целевой цене"
                     metric={summary?.monthly_leads_capacity}
@@ -397,7 +397,7 @@ function MetricCard({
   money?: boolean;
 }) {
   if (!metric) {
-    return <KpiCard label={label} value="" loading />;
+    return <KpiCard label={label} value="" loading variant="flat" />;
   }
 
   const numeric = metric.value === null ? null : Number(metric.value);
@@ -414,6 +414,7 @@ function MetricCard({
       }
       availability={metric.availability}
       availabilityHint={metric.reason ?? undefined}
+      variant="flat"
     />
   );
 }

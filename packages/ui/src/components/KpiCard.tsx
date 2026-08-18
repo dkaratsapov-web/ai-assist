@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { MetricAvailabilityKey } from "@ads-os/tokens";
 import { cn } from "../lib/cn";
 import { Card } from "./Card";
@@ -29,6 +30,15 @@ export interface KpiCardProps {
   /** Что сделать, чтобы метрика стала достоверной. */
   availabilityHint?: string;
   loading?: boolean;
+  /**
+   * Как показывать карточку.
+   *
+   * `flat` — внутри другой карточки. Рамка в рамке и тень на тени — это то,
+   * что делает экран раздутым: каждое число получает собственный контейнер с
+   * границей, тенью и отступом, и четыре цифры занимают экран целиком.
+   * Вложенность показывается фоном и отступом, а не второй рамкой.
+   */
+  variant?: "card" | "flat";
   className?: string;
 }
 
@@ -51,22 +61,30 @@ export function KpiCard({
   availability = "available",
   availabilityHint,
   loading = false,
+  variant = "card",
   className,
 }: KpiCardProps) {
+  const Shell = variant === "flat" ? FlatShell : Card;
   if (loading) {
     return (
-      <Card className={cn("flex flex-col gap-3", className)}>
+      <Shell className={cn("flex flex-col gap-3", className)}>
         <Skeleton className="h-3.5 w-20" />
         <Skeleton className="h-7 w-28" />
         <Skeleton className="h-3 w-24" />
-      </Card>
+      </Shell>
     );
   }
 
   const isUnavailable = availability === "unavailable";
 
   return (
-    <Card className={cn("flex flex-col justify-between gap-3", className)}>
+    <Shell
+      className={cn(
+        "flex flex-col justify-between",
+        variant === "flat" ? "gap-1.5" : "gap-3",
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <span className="text-caption text-text-secondary">{label}</span>
         {availability === "proxy" && (
@@ -93,7 +111,14 @@ export function KpiCard({
       ) : (
         <div className="flex items-end justify-between gap-4">
           <div className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-metric text-text-primary whitespace-nowrap tabular-nums">
+            <span
+              className={cn(
+                "text-text-primary whitespace-nowrap tabular-nums",
+                // Внутри карточки число вспомогательное, и размер геройского
+                // показателя делает экран стеной цифр одинаковой важности.
+                variant === "flat" ? "text-h2" : "text-metric",
+              )}
+            >
               {value}
             </span>
             {delta !== undefined && (
@@ -107,6 +132,15 @@ export function KpiCard({
           )}
         </div>
       )}
-    </Card>
+    </Shell>
+  );
+}
+
+/** Ячейка без собственной рамки: фон и отступ вместо второй границы. */
+function FlatShell({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <div className={cn("bg-bg-secondary rounded-small-card px-3 py-2.5", className)}>
+      {children}
+    </div>
   );
 }
