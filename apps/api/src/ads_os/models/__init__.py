@@ -4,6 +4,7 @@
 автогенерации миграций.
 """
 
+from .access import ProjectAccess
 from .activity import ActivityAction, ActivityLog
 from .audit import IssueDismissal, ModuleStatus, SiteAudit
 from .competitor import Competitor
@@ -33,6 +34,7 @@ __all__ = [
     "Organization",
     "OrganizationPlan",
     "Project",
+    "ProjectAccess",
     "ProjectEconomics",
     "ProjectStatus",
     "Session",

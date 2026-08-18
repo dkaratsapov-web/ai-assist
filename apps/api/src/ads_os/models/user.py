@@ -44,6 +44,15 @@ class User(UUIDPrimaryKey, Timestamps, SoftDelete, OrganizationScoped, Base):
     #: поэтому значение приходит оттуда и нами не устанавливается (v0.3 §91).
     mfa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
+    #: Видит ли участник все проекты организации.
+    #:
+    #: По умолчанию да — это прежнее поведение, и появление списка доступов
+    #: никого ничего не лишает. Снимается, когда владелец открывает человеку
+    #: конкретные проекты: с этого момента список решает всё, и проект, которого
+    #: в нём нет, для человека не существует. Владельца это не касается — он
+    #: отвечает за организацию целиком.
+    all_projects: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     #: Отключённый участник не может войти, а его сессии отзываются. Удаление
     #: не используется: история действий должна оставаться связанной с автором.
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

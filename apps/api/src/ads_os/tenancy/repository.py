@@ -53,9 +53,38 @@ class TenantRepository(Generic[ModelT]):
         stmt = select(self.model).where(
             self.model.organization_id == self.ctx.organization_id  # type: ignore[attr-defined]
         )
+
+        # Второй рубеж изоляции — внутри организации. Участнику, которому
+        # открыли отдельные проекты, чужие проекты не просто закрыты: их для
+        # него не существует, как не существует чужой организации. Фильтр
+        # стоит здесь по той же причине, что и первый: полагаться на то, что
+        # каждый запрос где-то в коде не забудет его добавить, нельзя.
+        if (column := self._project_column()) is not None:
+            stmt = stmt.where(column.in_(self.ctx.allowed_projects or ()))
+
         if not include_deleted:
             stmt = stmt.where(self.model.deleted_at.is_(None))  # type: ignore[attr-defined]
         return stmt
+
+    def _project_column(self) -> Any | None:
+        """По какому столбцу сужать выборку до открытых проектов.
+
+        Возвращает None, когда сужать не нужно вовсе: участник видит все
+        проекты, либо у сущности нет привязки к проекту. Второе — не дыра:
+        участники, справочники и настройки организации к проектам не относятся,
+        и прятать их по признаку проекта не от чего.
+        """
+        if self.ctx.allowed_projects is None:
+            return None
+
+        if (column := getattr(self.model, "project_id", None)) is not None:
+            return column
+
+        # Сам проект своего project_id не имеет — у него это первичный ключ.
+        if getattr(self.model, "__tablename__", "") == "projects":
+            return self.model.id  # type: ignore[attr-defined]
+
+        return None
 
     # ── Чтение ─────────────────────────────────────────────────────────────
 

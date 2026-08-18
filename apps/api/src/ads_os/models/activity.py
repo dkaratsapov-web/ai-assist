@@ -56,6 +56,7 @@ class ActivityAction(StrEnum):
 
     MEMBER_ADDED = "member_added"
     MEMBER_UPDATED = "member_updated"
+    MEMBER_REMOVED = "member_removed"
 
 
 class ActivityLog(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):

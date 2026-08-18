@@ -17,6 +17,9 @@ export type ProjectRead = Schemas["ProjectRead"];
 export type ProjectList = Schemas["ProjectList"];
 export type ProjectCreate = Schemas["ProjectCreate"];
 export type ProjectUpdate = Schemas["ProjectUpdate"];
+export type ProjectAccessRead = Schemas["ProjectAccessRead"];
+export type ProjectAccessList = Schemas["ProjectAccessList"];
+export type ProjectAccessCreate = Schemas["ProjectAccessCreate"];
 export type ProgressRead = Schemas["ProgressRead"];
 export type OverviewRead = Schemas["OverviewRead"];
 export type ProjectSummaryRead = Schemas["ProjectSummaryRead"];
@@ -601,6 +604,26 @@ export class ApiClient {
   }
 
   /** Проверенные страницы проекта. Список выводится из проверок. */
+  /** Кому открыт проект. Пустой список — значит, только участники агентства. */
+  listProjectAccess(projectId: string): Promise<ProjectAccessList> {
+    return this.request<ProjectAccessList>(`/api/v1/projects/${projectId}/access`);
+  }
+
+  /** Открыть доступ по почте. Учётная запись заводится сама. */
+  grantProjectAccess(projectId: string, payload: ProjectAccessCreate): Promise<ProjectAccessRead> {
+    return this.request<ProjectAccessRead>(`/api/v1/projects/${projectId}/access`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Закрыть доступ. Действует сразу, а не с концом срока сессии. */
+  revokeProjectAccess(projectId: string, userId: string): Promise<void> {
+    return this.request<void>(`/api/v1/projects/${projectId}/access/${userId}`, {
+      method: "DELETE",
+    });
+  }
+
   listAuditPages(projectId: string): Promise<AuditPageList> {
     return this.request<AuditPageList>(`/api/v1/projects/${projectId}/audit/pages`);
   }

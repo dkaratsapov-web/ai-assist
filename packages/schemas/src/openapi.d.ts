@@ -440,6 +440,41 @@ export interface paths {
         patch: operations["update_project_api_v1_projects__project_id__patch"];
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Кому открыт проект */
+        get: operations["list_access_api_v1_projects__project_id__access_get"];
+        put?: never;
+        /** Открыть доступ к проекту по почте */
+        post: operations["grant_access_api_v1_projects__project_id__access_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/access/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Закрыть доступ к проекту */
+        delete: operations["revoke_access_api_v1_projects__project_id__access__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/ads": {
         parameters: {
             query?: never;
@@ -1211,7 +1246,7 @@ export interface components {
          *     похожих формулировок, по которому нельзя ни отфильтровать, ни посчитать.
          * @enum {string}
          */
-        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "keywords_cleaned" | "minus_word_added" | "minus_set_saved" | "minus_set_applied" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated";
+        ActivityAction: "project_created" | "project_updated" | "project_deleted" | "economics_updated" | "audit_started" | "issue_dismissed" | "issue_restored" | "keywords_imported" | "keywords_cleaned" | "minus_word_added" | "minus_set_saved" | "minus_set_applied" | "competitor_added" | "competitor_removed" | "member_added" | "member_updated" | "member_removed";
         /** ActivityList */
         ActivityList: {
             /** Items */
@@ -2601,6 +2636,56 @@ export interface components {
             /** Total Count */
             total_count: number;
         };
+        /**
+         * ProjectAccessCreate
+         * @description Открыть доступ к проекту по почте.
+         *
+         *     Достаточно адреса: учётная запись заводится сама, а личность подтвердит
+         *     Яндекс при первом входе. Имя необязательно — до входа его всё равно неоткуда
+         *     взять, а после человек назовётся сам.
+         */
+        ProjectAccessCreate: {
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name?: string | null;
+            /**
+             * Role
+             * @default viewer
+             * @enum {string}
+             */
+            role: "specialist" | "viewer";
+        };
+        /** ProjectAccessList */
+        ProjectAccessList: {
+            /** Items */
+            items: components["schemas"]["ProjectAccessRead"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * ProjectAccessRead
+         * @description Человек, которому открыт проект.
+         */
+        ProjectAccessRead: {
+            /** Email */
+            email: string;
+            /** Full Name */
+            full_name: string;
+            /** Granted At */
+            granted_at?: string | null;
+            /** Is Active */
+            is_active: boolean;
+            /** Last Login At */
+            last_login_at?: string | null;
+            /** Role */
+            role: string;
+            /**
+             * User Id
+             * Format: uuid
+             */
+            user_id: string;
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -3831,6 +3916,114 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ProjectRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_access_api_v1_projects__project_id__access_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectAccessList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    grant_access_api_v1_projects__project_id__access_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectAccessCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectAccessRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_access_api_v1_projects__project_id__access__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

@@ -450,6 +450,40 @@ class MemberCreate(BaseModel):
     role: Literal["owner", "specialist", "viewer"] = "specialist"
 
 
+class ProjectAccessCreate(BaseModel):
+    """Открыть доступ к проекту по почте.
+
+    Достаточно адреса: учётная запись заводится сама, а личность подтвердит
+    Яндекс при первом входе. Имя необязательно — до входа его всё равно неоткуда
+    взять, а после человек назовётся сам.
+    """
+
+    email: str = Field(min_length=3, max_length=320)
+    full_name: str | None = Field(default=None, max_length=200)
+    #: Роль внутри открытых проектов. По умолчанию только просмотр: доступ
+    #: «посмотреть» выдают чаще, и он безопаснее при опечатке.
+    role: Literal["specialist", "viewer"] = "viewer"
+
+
+class ProjectAccessRead(BaseModel):
+    """Человек, которому открыт проект."""
+
+    user_id: uuid.UUID
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    #: Пусто, пока человек ни разу не входил. По этому и видно, дошло ли
+    #: приглашение.
+    last_login_at: datetime | None = None
+    granted_at: datetime | None = None
+
+
+class ProjectAccessList(BaseModel):
+    items: list[ProjectAccessRead]
+    total: int
+
+
 class MemberUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=200)
     role: Literal["owner", "specialist", "viewer"] | None = None

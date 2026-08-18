@@ -7,6 +7,7 @@ import {
   type ApiError,
   type NicheRead,
   type ProgressRead,
+  type ProjectAccessRead,
   type ProjectRead,
   type StepRead,
 } from "@ads-os/schemas";
@@ -241,6 +242,8 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
             />
           </section>
 
+          <AccessCard projectId={project.id} />
+
           <p className="text-caption text-text-secondary">
             Пока открыты исследование, экономика и план запуска. Остальные шаги видны в цепочке,
             чтобы был понятен весь путь, и станут доступны по мере готовности.
@@ -311,6 +314,154 @@ export default function ProjectPage({ params }: { params: Promise<{ id: string }
         destructive
       />
     </AppShell>
+  );
+}
+
+/**
+ * Кому открыт этот проект.
+ *
+ * Одно поле — почта. Учётную запись заводить не надо: она создаётся сама, а
+ * личность подтвердит Яндекс при первом входе. Отдельного экрана «участники»
+ * для этого не заводится намеренно: доступ выдают, глядя на проект, а не на
+ * список людей, и решение «пусть Иван посмотрит вот это» принимается здесь.
+ *
+ * Карточка молчит, когда доступов нет и добавить их некому: специалисту она
+ * покажет пустой список, который он не может изменить, — а это и есть тот
+ * самый интерфейс с кнопками, которые ничего не делают.
+ */
+function AccessCard({ projectId }: { projectId: string }) {
+  const api = useMemo(() => createApiClient(), []);
+  const [people, setPeople] = useState<ProjectAccessRead[] | null>(null);
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState<"viewer" | "specialist">("viewer");
+  const [busy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
+
+  const [reloadToken, setReloadToken] = useState(0);
+  const reload = () => setReloadToken((token) => token + 1);
+
+  useEffect(() => {
+    let ignore = false;
+
+    void (async () => {
+      try {
+        const list = await api.listProjectAccess(projectId);
+        if (!ignore) setPeople(list.items);
+      } catch {
+        // Список доступов — не главное на этой странице. Не загрузился —
+        // карточки просто нет, и проект остаётся рабочим.
+        if (!ignore) setPeople([]);
+      }
+    })();
+
+    return () => {
+      ignore = true;
+    };
+  }, [api, projectId, reloadToken]);
+
+  const grant = async () => {
+    const value = email.trim();
+    if (!value) return;
+    setBusy(true);
+    setFailure(null);
+    try {
+      await api.grantProjectAccess(projectId, { email: value, role });
+      setEmail("");
+      reload();
+    } catch (err) {
+      const failed = toApiError(err);
+      // Отказ по роли — это не ошибка ввода: специалисту просто нечего здесь
+      // делать, и правильнее убрать форму, чем оставить её с красной надписью.
+      if (failed.status === 403) setForbidden(true);
+      else setFailure(failed.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const revoke = async (userId: string) => {
+    try {
+      await api.revokeProjectAccess(projectId, userId);
+      reload();
+    } catch (err) {
+      setFailure(toApiError(err).message);
+    }
+  };
+
+  if (people === null) return null;
+  if (forbidden && people.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Доступ к проекту"
+        description="Впишите почту — человек увидит этот проект и ни один другой"
+      />
+
+      <div className="flex flex-col gap-4">
+        {people.length > 0 && (
+          <div className="flex flex-col">
+            {people.map((person) => (
+              <div
+                key={person.user_id}
+                className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+              >
+                <div className="flex min-w-0 flex-col">
+                  <span className="text-body-sm text-text-primary">{person.email}</span>
+                  <span className="text-caption text-text-secondary">
+                    {person.role === "viewer" ? "Только просмотр" : "Может менять"}
+                    {" · "}
+                    {/* Отметка входа отвечает на вопрос «дошло ли приглашение».
+                        Без неё владелец не знает, ждать ему или писать человеку. */}
+                    {person.last_login_at
+                      ? `заходил ${new Date(person.last_login_at).toLocaleDateString("ru-RU")}`
+                      : "ещё не заходил"}
+                  </span>
+                </div>
+                {!forbidden && (
+                  <Button size="sm" variant="ghost" onClick={() => void revoke(person.user_id)}>
+                    Закрыть доступ
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {!forbidden && (
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-56 flex-1">
+              <Input
+                label="Почта"
+                placeholder="ivan@yandex.ru"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void grant();
+                }}
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => setRole(role === "viewer" ? "specialist" : "viewer")}
+            >
+              {role === "viewer" ? "Только просмотр" : "Может менять"}
+            </Button>
+            <Button onClick={() => void grant()} loading={busy} disabled={email.trim() === ""}>
+              Открыть доступ
+            </Button>
+          </div>
+        )}
+
+        {failure && <p className="text-body-sm text-critical">{failure}</p>}
+
+        <p className="text-caption text-text-secondary">
+          Пароль не нужен: человек войдёт своим аккаунтом Яндекса. Подойдёт любое написание адреса —
+          ya.ru и yandex.ru, с точкой или дефисом в логине: это один и тот же ящик.
+        </p>
+      </div>
+    </Card>
   );
 }
 

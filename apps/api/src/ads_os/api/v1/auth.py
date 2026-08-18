@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from ...config import Settings
 from ...errors import AppError
 from ...models import Organization, User
-from ...services import yandex_id
+from ...services import yandex_email, yandex_id
 from ...services.auth import (
     COOKIE_NAME,
     issue_session,
@@ -227,18 +227,25 @@ async def _find_member(db: SessionDep, profile: yandex_id.YandexUser) -> User | 
     if by_id is not None:
         return by_id if by_id.is_active else None
 
-    by_email = (
-        await db.execute(
-            select(User)
-            .where(func.lower(User.email) == profile.email)
-            .where(User.deleted_at.is_(None))
-        )
-    ).scalar_one_or_none()
+    # Почта сравнивается в приведённом виде, а не строкой. Владелец записал
+    # `ivan.petrov@ya.ru`, Яндекс при входе вернул `ivan-petrov@yandex.ru` —
+    # это один и тот же ящик, и отказать здесь значило бы отказать человеку,
+    # которому доступ уже выдали.
+    # Приведённый вид не хранится столбцом, поэтому сравнение идёт перебором.
+    # Это осознанно: участников в агентстве десятки, перебор случается один раз
+    # за вход, а отдельный столбец пришлось бы держать в согласии с исходным при
+    # каждой правке почты.
+    wanted = yandex_email.normalize(profile.email)
 
-    if by_email is None or not by_email.is_active:
-        return None
+    candidates = (
+        (await db.execute(select(User).where(User.deleted_at.is_(None)))).scalars().all()
+    )
 
-    return by_email
+    for user in candidates:
+        if yandex_email.normalize(user.email) == wanted:
+            return user if user.is_active else None
+
+    return None
 
 
 async def _bootstrap_owner(

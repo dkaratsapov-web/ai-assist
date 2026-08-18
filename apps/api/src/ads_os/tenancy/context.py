@@ -34,6 +34,18 @@ class TenantContext:
     #: локальной разработке, где контекст приходит заголовками.
     user_name: str = ""
 
+    #: Проекты, открытые этому участнику. `None` означает «все проекты
+    #: организации» — так у владельца и у тех, кому доступ не сужали.
+    #:
+    #: Пустое множество и None — разные вещи, и путать их нельзя: первое значит
+    #: «не открыт ни один проект», второе — «открыты все». Ошибка здесь стоила
+    #: бы либо пустого экрана у специалиста, либо чужих бюджетов на виду.
+    allowed_projects: frozenset[uuid.UUID] | None = None
+
+    @property
+    def sees_all_projects(self) -> bool:
+        return self.allowed_projects is None
+
     @property
     def is_owner(self) -> bool:
         return self.role is Role.OWNER

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -20,7 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession as DbSession
 
 from ..db.base import utcnow
-from ..models import Session, User
+from ..models import ProjectAccess, Session, User
 from ..tenancy.context import Role, TenantContext
 
 #: Длина случайной части токена в байтах. 32 байта — 256 бит энтропии: перебор
@@ -90,6 +91,8 @@ class AuthenticatedUser:
 
     user: User
     session: Session
+    #: Проекты, открытые этому участнику. None — все.
+    allowed_projects: frozenset[uuid.UUID] | None = None
 
     @property
     def context(self) -> TenantContext:
@@ -98,6 +101,7 @@ class AuthenticatedUser:
             user_id=self.user.id,
             role=self.user.role,
             user_name=self.user.full_name,
+            allowed_projects=self.allowed_projects,
         )
 
 
@@ -128,7 +132,25 @@ async def resolve_session(db: DbSession, token: str) -> AuthenticatedUser | None
         # срока сессии. Ради этого сессии и хранятся на сервере.
         return None
 
-    return AuthenticatedUser(user=user, session=session)
+    return AuthenticatedUser(
+        user=user, session=session, allowed_projects=await allowed_projects(db, user)
+    )
+
+
+async def allowed_projects(db: DbSession, user: User) -> frozenset[uuid.UUID] | None:
+    """Какие проекты открыты участнику. None означает «все».
+
+    Список читается на каждом запросе, а не запоминается в сессии: доступ
+    отзывают именно тогда, когда человека нужно убрать немедленно, и отзыв,
+    вступающий в силу через две недели, отзывом не является.
+    """
+    if user.role is Role.OWNER or user.all_projects:
+        return None
+
+    rows = (
+        await db.execute(select(ProjectAccess.project_id).where(ProjectAccess.user_id == user.id))
+    ).scalars()
+    return frozenset(rows)
 
 
 #: Насколько часто обновляется отметка последней активности. Писать её на
