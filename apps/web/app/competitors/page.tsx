@@ -548,8 +548,23 @@ function CompetitorRow({
         {competitor.error_reason && (
           <span className="text-caption text-critical">{competitor.error_reason}</span>
         )}
+        {/* Пометка «это площадка, а не компания» стоит рядом с адресом, а не в
+            углу строки: без неё сравнение с Авито читается как разгромный
+            проигрыш клиента — у площадки всегда есть и форма, и цены, и
+            отзывы. */}
+        {competitor.kind?.kind && competitor.kind.kind !== "other" && (
+          <span className="text-caption text-text-secondary mt-1">
+            {competitor.kind.label}
+            {!competitor.kind.comparable && ` — ${competitor.kind.hint}`}
+          </span>
+        )}
       </div>
       <div className="flex shrink-0 items-center gap-2">
+        {competitor.kind?.comparable === false && competitor.kind.kind !== "other" && (
+          <StatusBadge tone="warning" size="sm">
+            не для сравнения
+          </StatusBadge>
+        )}
         <ModuleStatusBadge status={competitor.status} />
         <Button size="sm" variant="ghost" onClick={onRecheck}>
           Перепроверить

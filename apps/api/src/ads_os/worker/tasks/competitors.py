@@ -22,9 +22,10 @@ from ...db.session import session_scope
 from ...models.audit import ModuleStatus
 from ...models.competitor import Competitor
 from ...models.usage import UsageService, UsageUnit
-from ...services import offer
+from ...services import offer, rival_kind
 from ...services.audit import collect_signals
 from ...services.competitors import extract_features
+from ...services.site_review import page_text
 from ...services.usage import record as record_usage
 from ..app import celery_app
 from ..runtime import run_task
@@ -71,6 +72,18 @@ async def _process(competitor_id: uuid.UUID, fetched: dict[str, Any]) -> str:
         # Условия предложения дословно: ради них сравнение и существует.
         competitor.offer = offer.extract(fetched["html"]).as_dict()
 
+        # Что это вообще за сайт. Без этой пометки сравнение с Авито выглядит
+        # как разгромный проигрыш клиента: у площадки всегда есть и форма, и
+        # цены, и отзывы — просто потому, что она площадка.
+        kind = await rival_kind.classify(
+            fetched["final_url"],
+            page_text(fetched["html"]),
+            title=signals.title,
+            organization_id=competitor.organization_id,
+            project_id=competitor.project_id,
+        )
+        competitor.kind = kind.as_stored()
+
         # Страница конкурента — такой же расход, как своя: тот же трафик и то же
         # время воркера. Считать только свои значило бы занижать потребление там,
         # где его больше всего.
@@ -84,6 +97,20 @@ async def _process(competitor_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             project_id=competitor.project_id,
             meta={"url": competitor.url[:200]},
         )
+
+        # Известная площадка опознаётся по адресу и ничего не стоит — записи
+        # тогда не будет. Строка появляется только там, где деньги потрачены.
+        if kind.tokens:
+            await record_usage(
+                session,
+                organization_id=competitor.organization_id,
+                service=UsageService.AI,
+                operation="competitor_kind",
+                quantity=kind.tokens,
+                unit=UsageUnit.TOKENS,
+                project_id=competitor.project_id,
+                meta={"kind": kind.kind.value},
+            )
 
         # Название, введённое пользователем, важнее заголовка страницы: он его
         # писал для себя и по нему узнаёт конкурента в таблице.

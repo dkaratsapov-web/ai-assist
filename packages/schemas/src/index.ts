@@ -47,6 +47,7 @@ export type ReviewNoteRead = Schemas["ReviewNoteRead"];
 export type CompetitorRead = Schemas["CompetitorRead"];
 export type CompetitorList = Schemas["CompetitorList"];
 export type CompetitorCreate = Schemas["CompetitorCreate"];
+export type RivalKindRead = Schemas["RivalKindRead"];
 export type ComparisonRead = Schemas["ComparisonRead"];
 export type FeatureRowRead = Schemas["FeatureRowRead"];
 export type OfferRowRead = Schemas["OfferRowRead"];

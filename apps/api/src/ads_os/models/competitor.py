@@ -53,5 +53,11 @@ class Competitor(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: том, чем отличаться от конкурента, принять нельзя.
     offer: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
+    #: Что это за сайт: конкурент, площадка объявлений, справочник, статья.
+    #: Хранится рядом с признаками, потому что читается вместе с ними: у Авито
+    #: всегда есть и форма, и цены, и отзывы, и без этой пометки сравнение с
+    #: ним выглядит как разгромный проигрыш клиента.
+    kind: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
+
     error_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

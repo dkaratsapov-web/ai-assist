@@ -271,6 +271,29 @@ class CompetitorCreate(BaseModel):
     title: str | None = Field(default=None, max_length=300)
 
 
+class RivalKindRead(BaseModel):
+    """Что за сайт добавлен в конкуренты.
+
+    Нужно ровно затем, чтобы сравнение не врало. У Авито всегда есть форма,
+    цены и отзывы — просто потому, что это площадка, а не компания. Без
+    пометки такое сравнение выглядит как разгромный проигрыш клиента.
+    """
+
+    #: competitor | aggregator | directory | marketplace | article |
+    #: manufacturer | other
+    kind: str = "other"
+    label: str = "Не опознан"
+    #: Почему именно так.
+    reason: str = ""
+    #: Что с этим делать.
+    hint: str = ""
+    #: Имеет ли смысл сравнивать посадочную с этим сайтом.
+    comparable: bool = False
+    #: known — узнан по адресу, model — разобрала модель, unknown — не вышло.
+    source: str = "unknown"
+    confidence: float = 0.0
+
+
 class CompetitorRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
@@ -279,6 +302,8 @@ class CompetitorRead(BaseModel):
     status: ModuleStatus
     #: Признак → есть или нет. Пустой словарь означает «ещё не проверяли».
     features: dict[str, bool]
+    #: Вид сайта. Присутствует всегда — при неопознанном с `kind: other`.
+    kind: RivalKindRead
     error_reason: str | None
     checked_at: datetime | None
 

@@ -26,6 +26,7 @@ from ..schemas import (
     CompetitorRead,
     FeatureRowRead,
     OfferRowRead,
+    RivalKindRead,
     RivalSuggestionsRead,
     RivalValueRead,
     SearchQueryRead,
@@ -453,6 +454,9 @@ def _to_read(competitor: Competitor) -> CompetitorRead:
         title=competitor.title,
         status=competitor.status,
         features={key: value for key, value in (competitor.features or {}).items()},
+        # Конкуренты, добавленные до появления этой пометки, лежат с пустым
+        # полем — тогда отдаётся значение по умолчанию «не опознан».
+        kind=RivalKindRead(**(competitor.kind or {})),
         error_reason=competitor.error_reason,
         checked_at=competitor.checked_at,
     )

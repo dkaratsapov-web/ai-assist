@@ -1779,6 +1779,7 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            kind: components["schemas"]["RivalKindRead"];
             /**
              * Project Id
              * Format: uuid
@@ -2796,6 +2797,51 @@ export interface components {
              * @default
              */
             weakest: string;
+        };
+        /**
+         * RivalKindRead
+         * @description Что за сайт добавлен в конкуренты.
+         *
+         *     Нужно ровно затем, чтобы сравнение не врало. У Авито всегда есть форма,
+         *     цены и отзывы — просто потому, что это площадка, а не компания. Без
+         *     пометки такое сравнение выглядит как разгромный проигрыш клиента.
+         */
+        RivalKindRead: {
+            /**
+             * Comparable
+             * @default false
+             */
+            comparable: boolean;
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Hint
+             * @default
+             */
+            hint: string;
+            /**
+             * Kind
+             * @default other
+             */
+            kind: string;
+            /**
+             * Label
+             * @default Не опознан
+             */
+            label: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Source
+             * @default unknown
+             */
+            source: string;
         };
         /**
          * RivalSuggestionsRead

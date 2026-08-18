@@ -1425,6 +1425,9 @@
             "title": "Id",
             "type": "string"
           },
+          "kind": {
+            "$ref": "#/components/schemas/RivalKindRead"
+          },
           "project_id": {
             "format": "uuid",
             "title": "Project Id",
@@ -1456,6 +1459,7 @@
           "title",
           "status",
           "features",
+          "kind",
           "error_reason",
           "checked_at"
         ],
@@ -4052,6 +4056,48 @@
           "available"
         ],
         "title": "ReviewRead",
+        "type": "object"
+      },
+      "RivalKindRead": {
+        "description": "Что за сайт добавлен в конкуренты.\n\nНужно ровно затем, чтобы сравнение не врало. У Авито всегда есть форма,\nцены и отзывы — просто потому, что это площадка, а не компания. Без\nпометки такое сравнение выглядит как разгромный проигрыш клиента.",
+        "properties": {
+          "comparable": {
+            "default": false,
+            "title": "Comparable",
+            "type": "boolean"
+          },
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "hint": {
+            "default": "",
+            "title": "Hint",
+            "type": "string"
+          },
+          "kind": {
+            "default": "other",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "default": "Не опознан",
+            "title": "Label",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "default": "unknown",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "title": "RivalKindRead",
         "type": "object"
       },
       "RivalSuggestionsRead": {
