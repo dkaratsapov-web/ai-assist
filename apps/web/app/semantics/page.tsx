@@ -1612,9 +1612,14 @@ function PhraseTable({
         </div>
       )}
 
-      <div className="overflow-x-auto">
+      {/* Прокрутка живёт здесь, а не на странице, и это единственный способ
+          удержать шапку. Раньше шапка липла к странице, а обёртка с
+          горизонтальной прокруткой сама была контейнером прокрутки: отступ в
+          64 пикселя отсчитывался от её верха, и шапка съезжала вниз — на
+          первые строки, оставляя над собой пустую полосу. */}
+      <div className="max-h-[70vh] overflow-auto">
         <table className="w-full border-collapse">
-          <thead className="bg-surface sticky top-(--layout-topbar-height) z-10">
+          <thead className="bg-surface sticky top-0 z-10">
             <tr className="border-border-subtle text-micro text-text-secondary border-b text-left">
               <th className="w-8 py-2 pl-3">
                 <input
@@ -1856,6 +1861,31 @@ function GroupsCard({
   );
 }
 
+/**
+ * Числа группы: сколько фраз и какой суммарный спрос.
+ *
+ * Раньше здесь стояло «19 · 1024» — два числа через точку, без подписей.
+ * Понять, что это, можно было только заглянув в код: с тем же успехом это
+ * могли быть дата, диапазон или номер версии. Подписи стоят места, но экран
+ * читают глазами, а не по памяти.
+ *
+ * Частотность показывается только тогда, когда она собрана. Ноль здесь
+ * означает «не измеряли», и печатать его значило бы сообщать, что спроса нет.
+ */
+function GroupNumbers({ phrases, frequency }: { phrases: number; frequency: number }) {
+  return (
+    <span className="text-caption text-text-secondary whitespace-nowrap">
+      <span className="tabular-nums">{phrases}</span> {plural(phrases, "фраза", "фразы", "фраз")}
+      {frequency > 0 && (
+        <>
+          {" · "}
+          <span className="tabular-nums">{frequency}</span> в месяц
+        </>
+      )}
+    </span>
+  );
+}
+
 function GroupRow({
   group,
   others,
@@ -1925,9 +1955,7 @@ function GroupRow({
         )}
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className="text-caption text-text-secondary tabular-nums">
-            {group.phrases.length} · {group.total_frequency}
-          </span>
+          <GroupNumbers phrases={group.phrases.length} frequency={group.total_frequency} />
           {!editing && (
             <>
               <button
@@ -2095,9 +2123,7 @@ function SuggestedGroupRow({
         </button>
 
         <div className="flex shrink-0 items-center gap-3">
-          <span className="text-caption text-text-secondary tabular-nums">
-            {phrases.length} · {group.total_frequency}
-          </span>
+          <GroupNumbers phrases={phrases.length} frequency={group.total_frequency} />
           <Button size="sm" variant="secondary" onClick={() => onAccept([group.name])}>
             Принять
           </Button>
