@@ -75,10 +75,34 @@ class TestРазборСписка:
 
     def test_понимает_разные_разделители(self) -> None:
         """Формат у пользователя не спрашиваем: он не должен в этом разбираться."""
-        for line in ("окна пвх\t900", "окна пвх;900", "окна пвх 900", "окна пвх,900"):
+        for line in ("окна пвх\t900", "окна пвх;900", "окна пвх  900", "окна пвх,900"):
             parsed = parse_list(line)
             assert parsed[0].phrase == "окна пвх", line
             assert parsed[0].frequency == 900, line
+
+    def test_столбец_через_один_пробел_понимается_по_всему_списку(self) -> None:
+        """В выгрузке число стоит у каждой строки — по этому её и узнают."""
+        parsed = parse_list("окна пвх 900\nпластиковые окна 5400\nокна цена 2800")
+
+        assert {k.phrase for k in parsed} == {"окна пвх", "пластиковые окна", "окна цена"}
+        assert all(k.frequency for k in parsed)
+
+    def test_число_в_конце_фразы_не_отбирается(self) -> None:
+        """Прямая поломка: год уезжал в частотность, а фраза оставалась с
+        висящим предлогом — «какой айфон лучше купить в». Из неё получалась
+        группа, из группы — объявление."""
+        parsed = parse_list(
+            "какой айфон лучше купить в 2026\nкупить айфон 15\nчехол на айфон\nайфон про"
+        )
+
+        assert "какой айфон лучше купить в 2026" in {k.phrase for k in parsed}
+        assert "купить айфон 15" in {k.phrase for k in parsed}
+
+    def test_висящий_предлог_срезается(self) -> None:
+        """Обрезанные строки приходят и из чужих файлов, и руками."""
+        parsed = parse_list("купить пластиковые окна в")
+
+        assert parsed[0].phrase == "купить пластиковые окна"
 
     def test_фраза_без_частотности_принимается(self) -> None:
         parsed = parse_list("остекление балкона")
@@ -210,9 +234,7 @@ class TestГруппировка:
         assert groups[0].name == "ремонта окон срочно"
 
     def test_группировка_объясняется_ядром(self) -> None:
-        groups = cluster(
-            [ParsedKeyword("ремонт окон", 100), ParsedKeyword("ремонта окон", 200)]
-        )
+        groups = cluster([ParsedKeyword("ремонт окон", 100), ParsedKeyword("ремонта окон", 200)])
 
         assert "ремонт" in groups[0].core
 
@@ -431,3 +453,32 @@ class TestМусорВБрифе:
         brief = wordstat.Brief(sells="проекты, натяжные потолки, контакты")
 
         assert wordstat.terms(brief) == ("натяжные потолки",)
+
+
+class TestИзучениеВопроса:
+    """Запрос о выборе — не запрос на покупку.
+
+    «Какой айфон лучше купить» попадал в целевые из-за одного слова «купить»,
+    уезжал в группу, и по нему собиралось объявление. До заявки здесь ещё
+    несколько дней и десяток сравнений: место такой фразы — в информационных,
+    и в кампанию продаж она не идёт.
+    """
+
+    def test_вопрос_о_выборе_не_покупка(self) -> None:
+        assert classify("какой айфон лучше купить в 2026").intent is Intent.INFORMATIONAL
+
+    def test_как_выбрать_не_покупка(self) -> None:
+        assert classify("как выбрать пластиковые окна цена").intent is Intent.INFORMATIONAL
+
+    def test_отзывы_не_покупка(self) -> None:
+        assert classify("купить окна пвх отзывы").intent is Intent.INFORMATIONAL
+
+    def test_цена_остаётся_покупкой(self) -> None:
+        """«Какая цена» — всё-таки покупка: тут человек уже выбрал."""
+        assert classify("какая цена пластиковых окон").intent is Intent.COMMERCIAL
+
+    def test_сколько_стоит_остаётся_покупкой(self) -> None:
+        assert classify("сколько стоит остекление балкона").intent is Intent.COMMERCIAL
+
+    def test_обычная_коммерческая_не_задета(self) -> None:
+        assert classify("купить пластиковые окна тверь").intent is Intent.COMMERCIAL
