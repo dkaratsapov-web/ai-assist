@@ -18,6 +18,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+crawler = [
+  # Ставится только в образ краулера: браузер в образах API, воркера и
+  # миграций — это сотни лишних мегабайт в каждом.
+  "playwright>=1.49",
+]
 dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
@@ -61,6 +66,14 @@ plugins = ["pydantic.mypy"]
 # Celery не поставляет типы. Ослабление точечное — на сам пакет, а не на наш код.
 [[tool.mypy.overrides]]
 module = ["celery.*"]
+ignore_missing_imports = true
+
+# Playwright ставится только в образ краулера, поэтому в среде проверки его
+# нет. Отсутствие пакета не должно валить проверку типов всего проекта:
+# модуль, который его импортирует, устроен так, что без него просто
+# отказывается отрисовывать.
+[[tool.mypy.overrides]]
+module = ["playwright.*"]
 ignore_missing_imports = true
 
 # Декораторы Celery не типизированы, поэтому строгий режим считает нетипизированной

@@ -33,8 +33,10 @@ from ...services.audit import (
     collect_signals,
     compare_issues,
     issues_from_stored,
+    looks_js_rendered,
 )
 from ...services.competitors import extract_features
+from ...services.crawler import renderer
 from ...services.crawler.fetcher import CrawlLimits, FetchError, fetch_page
 from ...services.notifications import evaluate_audit, push
 from ...services.usage import record as record_usage
@@ -51,17 +53,41 @@ def fetch_site_page(url: str) -> dict[str, Any]:
     Задача получает адрес аргументом, а не читает его из базы: у этого воркера
     базы нет и быть не должно.
     """
+    return asyncio.run(_fetch(url))
+
+
+async def _fetch(url: str) -> dict[str, Any]:
     try:
-        page = asyncio.run(fetch_page(url, limits=CrawlLimits()))
+        page = await fetch_page(url, limits=CrawlLimits())
     except FetchError as exc:
         return {"ok": False, "reason": exc.reason}
+
+    html = page.html
+    rendered = False
+
+    # Пустой каркас вместо страницы означает, что содержимое собирают скрипты.
+    # Разбирать его бессмысленно: получится «ни города, ни услуг, ни
+    # контактов» — верно по разметке и неверно по существу, потому что
+    # посетитель всё это видит.
+    #
+    # Браузер запускается только здесь, а не на каждой странице: он стоит
+    # секунд и сотен мегабайт, и платить их за обычные сайты незачем.
+    if looks_js_rendered(collect_signals(html)):
+        logger.info("страница собирается скриптами, открываем браузером")
+        drawn = await renderer.render(page.final_url)
+        if drawn:
+            html = drawn
+            rendered = True
 
     return {
         "ok": True,
         "final_url": page.final_url,
         "status_code": page.status_code,
-        "html": page.html,
+        "html": html,
         "elapsed_ms": page.elapsed_ms,
+        # Отмечается для разбора: он иначе предупредит, что проверка неполная,
+        # хотя страницу как раз дорисовали и видно всё.
+        "rendered": rendered,
     }
 
 
@@ -120,6 +146,7 @@ async def _process(audit_id: uuid.UUID, fetched: dict[str, Any]) -> str:
             # тогда времени просто нет, и проверка скорости не проводится.
             elapsed_ms=fetched.get("elapsed_ms"),
             extra_issues=niches.requirement_issues(niche, fetched["html"]),
+            rendered=bool(fetched.get("rendered")),
         )
 
         audit.status = ModuleStatus.COMPLETED

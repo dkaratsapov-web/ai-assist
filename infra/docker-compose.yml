@@ -195,8 +195,15 @@ services:
     build:
       context: ../apps/api
       dockerfile: Dockerfile
+      # Отдельная ступень: этому воркеру нужен браузер, чтобы читать сайты,
+      # которые собираются скриптами. Остальным образам он не нужен и стоил бы
+      # сотен мегабайт при каждой выкладке.
+      target: crawler
+    # Одна страница за раз. Браузер занимает сотни мегабайт, и два
+    # одновременных на сервере с четырьмя гигабайтами означают отказ всего
+    # остального, включая базу.
     command:
-      ["celery", "-A", "ads_os.worker.app", "worker", "-Q", "crawler", "--concurrency", "2"]
+      ["celery", "-A", "ads_os.worker.app", "worker", "-Q", "crawler", "--concurrency", "1"]
     restart: unless-stopped
     environment:
       APP_ENV: staging
