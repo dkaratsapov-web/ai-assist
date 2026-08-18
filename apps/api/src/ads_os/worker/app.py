@@ -62,6 +62,7 @@ celery_app.conf.update(
 #: же тихий отказ.
 TASK_MODULES = (
     "ads_os.worker.tasks.audit",
+    "ads_os.worker.tasks.collect",
     "ads_os.worker.tasks.competitors",
     "ads_os.worker.tasks.schedule",
 )

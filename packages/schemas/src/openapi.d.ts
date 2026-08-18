@@ -858,6 +858,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/keywords/collect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ход сбора частотностей */
+        get: operations["get_collection_api_v1_projects__project_id__keywords_collect_get"];
+        put?: never;
+        /**
+         * Собрать частотности по маскам
+         * @description Ставит сбор в очередь.
+         *
+         *     Ответ приходит сразу и со статусом «в очереди»: сбор идёт минутами, а при
+         *     кончившейся квоте — часами. Держать соединение открытым всё это время
+         *     незачем, а показывать «загрузка» на час — тем более.
+         */
+        post: operations["start_collection_api_v1_projects__project_id__keywords_collect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/keywords/import": {
         parameters: {
             query?: never;
@@ -1764,6 +1789,102 @@ export interface components {
             phrases: number;
             /** Total Frequency */
             total_frequency: number;
+        };
+        /**
+         * CollectionMaskRead
+         * @description Одна маска внутри сбора.
+         */
+        CollectionMaskRead: {
+            /**
+             * Found
+             * @default 0
+             */
+            found: number;
+            /**
+             * Purpose
+             * @default
+             */
+            purpose: string;
+            /** Query */
+            query: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * State
+             * @default pending
+             */
+            state: string;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /**
+         * CollectionRead
+         * @description Ход сбора частотностей.
+         *
+         *     Сбор растягивается во времени: сто запросов в час — это предел площадки на
+         *     весь сервис, и десять масок могут упереться в него на середине. Поэтому
+         *     здесь виден не только итог, но и то, где сбор сейчас и когда продолжится.
+         */
+        CollectionRead: {
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Blocked Reason
+             * @default
+             */
+            blocked_reason: string;
+            /**
+             * Done Count
+             * @default 0
+             */
+            done_count: number;
+            /** Error Reason */
+            error_reason?: string | null;
+            /**
+             * Exists
+             * @default false
+             */
+            exists: boolean;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id?: string | null;
+            /** Masks */
+            masks?: components["schemas"]["CollectionMaskRead"][];
+            /**
+             * Quota Left
+             * @default 0
+             */
+            quota_left: number;
+            /**
+             * Requests
+             * @default 0
+             */
+            requests: number;
+            /** Resumes At */
+            resumes_at?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            status?: components["schemas"]["ModuleStatus"] | null;
+            /**
+             * Total Count
+             * @default 0
+             */
+            total_count: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
         };
         /** ComparisonRead */
         ComparisonRead: {
@@ -4820,6 +4941,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClusterList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_collection_api_v1_projects__project_id__keywords_collect_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_collection_api_v1_projects__project_id__keywords_collect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionRead"];
                 };
             };
             /** @description Validation Error */

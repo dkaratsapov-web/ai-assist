@@ -11,11 +11,13 @@ from urllib.parse import quote
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import Select, select
 
+from ...config import get_settings
 from ...errors import AppError
 from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
-from ...services import niches, profile, utm
+from ...models.collection import KeywordCollection
+from ...services import niches, profile, utm, wordstat_quota
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -35,6 +37,7 @@ from ...services.semantics import (
 from ...services.tables import UnreadableFileError, to_lines
 from ...services.wordstat import WHY_MANUAL, Brief, masks, steps
 from ...tenancy.repository import TenantRepository
+from ...worker.tasks.collect import build_masks, enqueue_collection
 from ..deps import SessionDep, TenantDep, WriteDep
 from ..schemas import (
     AdDraftList,
@@ -48,6 +51,8 @@ from ..schemas import (
     ClientProfileRead,
     ClusterList,
     ClusterRead,
+    CollectionMaskRead,
+    CollectionRead,
     CrossMinusRead,
     CrossMinusResultRead,
     DuplicateRead,
@@ -1386,4 +1391,151 @@ async def search(
             )
             for row in keywords
         ],
+    )
+
+
+# ─── Сбор частотностей ────────────────────────────────────────────────────────
+
+
+class CollectionRepository(TenantRepository[KeywordCollection]):
+    model = KeywordCollection
+
+
+class CollectionRunningError(AppError):
+    """Сбор уже идёт.
+
+    Второй запуск поверх первого не ускорил бы работу, а поделил бы на двоих ту
+    же сотню запросов в час — и оба сбора встали бы на середине.
+    """
+
+    status_code = 409
+    error_code = "collection_running"
+    message = "Сбор уже идёт. Дождитесь его окончания или остановите"
+
+
+class NothingToCollectError(AppError):
+    status_code = 422
+    error_code = "nothing_to_collect"
+    message = "Сначала заполните бриф: из него строятся маски для сбора"
+
+
+@router.post(
+    "/{project_id}/keywords/collect",
+    response_model=CollectionRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Собрать частотности по маскам",
+)
+async def start_collection(
+    project_id: uuid.UUID, session: SessionDep, ctx: WriteDep
+) -> CollectionRead:
+    """Ставит сбор в очередь.
+
+    Ответ приходит сразу и со статусом «в очереди»: сбор идёт минутами, а при
+    кончившейся квоте — часами. Держать соединение открытым всё это время
+    незачем, а показывать «загрузка» на час — тем более.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    running = await _running_collection(session, ctx, project_id)
+    if running is not None:
+        raise CollectionRunningError()
+
+    brief = await _brief_row(session, ctx, project_id)
+    masks = build_masks(project, brief)
+    if not masks:
+        raise NothingToCollectError()
+
+    collection = KeywordCollection(project_id=project_id, masks=masks)
+    await CollectionRepository(session, ctx).add(collection)
+    await session.flush()
+
+    # Задача ставится после фиксации записи: воркер начинает мгновенно и не
+    # найдёт того, чего ещё нет в базе.
+    await session.commit()
+    enqueue_collection(collection.id)
+
+    return await _collection_read(collection)
+
+
+@router.get(
+    "/{project_id}/keywords/collect",
+    response_model=CollectionRead,
+    summary="Ход сбора частотностей",
+)
+async def get_collection(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> CollectionRead:
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    # include_deleted: у записи о сборе нет мягкого удаления — она живёт
+    # ровно столько же, сколько проект, и прятать её отдельно не от чего.
+    stmt = (
+        CollectionRepository(session, ctx)
+        .scoped(include_deleted=True)
+        .where(KeywordCollection.project_id == project_id)
+        .order_by(KeywordCollection.created_at.desc())
+        .limit(1)
+    )
+    collection = (await session.execute(stmt)).scalar_one_or_none()
+
+    return await _collection_read(collection)
+
+
+async def _running_collection(
+    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
+) -> KeywordCollection | None:
+    stmt = (
+        CollectionRepository(session, ctx)
+        .scoped(include_deleted=True)
+        .where(KeywordCollection.project_id == project_id)
+        .where(KeywordCollection.status.in_([ModuleStatus.QUEUED, ModuleStatus.RUNNING]))
+        .limit(1)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def _collection_read(collection: KeywordCollection | None) -> CollectionRead:
+    """Ход сбора вместе с остатком квоты.
+
+    Остаток спрашивается здесь, а не хранится в записи: он общий на весь
+    сервис и меняется от чужих сборов тоже. Сохранённое число разошлось бы с
+    действительностью через минуту после записи.
+    """
+    settings = get_settings()
+
+    blocked = ""
+    if settings.wordstat_provider != "yandex":
+        blocked = (
+            "Сбор частотностей не подключён. Пока источника нет, частотности "
+            "берутся из выгрузки, сделанной вручную."
+        )
+
+    left = 0
+    if not blocked:
+        try:
+            left = await wordstat_quota.get_quota().remaining()
+        except Exception:
+            left = 0
+
+    if collection is None:
+        return CollectionRead(exists=False, quota_left=left, blocked_reason=blocked)
+
+    masks = [CollectionMaskRead(**item) for item in (collection.masks or [])]
+
+    return CollectionRead(
+        exists=True,
+        id=collection.id,
+        status=collection.status,
+        masks=masks,
+        done_count=sum(1 for m in masks if m.state != "pending"),
+        total_count=len(masks),
+        added=collection.added,
+        updated=collection.updated,
+        requests=collection.requests,
+        quota_left=left,
+        resumes_at=collection.resumes_at,
+        error_reason=collection.error_reason,
+        started_at=collection.started_at,
+        finished_at=collection.finished_at,
+        blocked_reason=blocked,
     )

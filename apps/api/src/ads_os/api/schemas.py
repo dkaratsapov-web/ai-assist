@@ -450,6 +450,52 @@ class MemberCreate(BaseModel):
     role: Literal["owner", "specialist", "viewer"] = "specialist"
 
 
+class CollectionMaskRead(BaseModel):
+    """Одна маска внутри сбора."""
+
+    query: str
+    purpose: str = ""
+    #: pending | done | failed
+    state: str = "pending"
+    #: Сколько фраз принесла эта маска.
+    found: int = 0
+    #: Базовая частотность самой маски — объём темы целиком.
+    total: int = 0
+    #: Почему не собралась. Пусто у успешных.
+    reason: str = ""
+
+
+class CollectionRead(BaseModel):
+    """Ход сбора частотностей.
+
+    Сбор растягивается во времени: сто запросов в час — это предел площадки на
+    весь сервис, и десять масок могут упереться в него на середине. Поэтому
+    здесь виден не только итог, но и то, где сбор сейчас и когда продолжится.
+    """
+
+    #: Сбор когда-либо запускался. False — остальные поля пустые.
+    exists: bool = False
+    id: uuid.UUID | None = None
+    status: ModuleStatus | None = None
+    masks: list[CollectionMaskRead] = Field(default_factory=list)
+    #: Сколько масок пройдено из скольких.
+    done_count: int = 0
+    total_count: int = 0
+    added: int = 0
+    updated: int = 0
+    #: Сколько запросов к площадке потрачено этим сбором.
+    requests: int = 0
+    #: Сколько запросов остаётся в текущем часе. Общее число на весь сервис.
+    quota_left: int = 0
+    #: Когда сбор продолжится, если он ждёт обновления лимита.
+    resumes_at: datetime | None = None
+    error_reason: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    #: Почему сбор недоступен. Пусто, когда запускать можно.
+    blocked_reason: str = ""
+
+
 class ProjectAccessCreate(BaseModel):
     """Открыть доступ к проекту по почте.
 

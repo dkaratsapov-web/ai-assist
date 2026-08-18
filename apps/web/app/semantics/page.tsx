@@ -6,6 +6,8 @@ import type {
   ApiError,
   BriefRead,
   CleanupGroupRead,
+  CollectionMaskRead,
+  CollectionRead,
   CleanupResult,
   ClusterRead,
   CrossMinusResultRead,
@@ -23,8 +25,9 @@ import {
   Card,
   CardHeader,
   Details,
-  Hint,
   EmptyState,
+  Hint,
+  ProgressBar,
   ErrorState,
   FilterBar,
   Input,
@@ -85,6 +88,8 @@ function SemanticsScreen() {
   const [dropping, setDropping] = useState(false);
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
   const [brief, setBrief] = useState<BriefRead | null>(null);
+  const [collection, setCollection] = useState<CollectionRead | null>(null);
+  const [collecting, setCollecting] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingRead | null>(null);
   const [applying, setApplying] = useState(false);
   const [questionsOpen, setQuestionsOpen] = useState(false);
@@ -123,16 +128,25 @@ function SemanticsScreen() {
 
     void (async () => {
       try {
-        const [list, groups, minusWords, savedSets, crossing, briefData, onboardingData] =
-          await Promise.all([
-            api.listKeywords(selectedId),
-            api.listClusters(selectedId),
-            api.listMinusWords(selectedId),
-            api.listMinusWordSets(),
-            api.getCrossMinus(selectedId),
-            api.getBrief(selectedId),
-            api.getOnboarding(selectedId),
-          ]);
+        const [
+          list,
+          groups,
+          minusWords,
+          savedSets,
+          crossing,
+          briefData,
+          onboardingData,
+          collectionData,
+        ] = await Promise.all([
+          api.listKeywords(selectedId),
+          api.listClusters(selectedId),
+          api.listMinusWords(selectedId),
+          api.listMinusWordSets(),
+          api.getCrossMinus(selectedId),
+          api.getBrief(selectedId),
+          api.getOnboarding(selectedId),
+          api.getCollection(selectedId),
+        ]);
         if (ignore) return;
         setError(null);
         setKeywords(list.items);
@@ -142,6 +156,7 @@ function SemanticsScreen() {
         setCross(crossing);
         setBrief(briefData);
         setOnboarding(onboardingData);
+        setCollection(collectionData);
         setBriefDraft({
           sells: briefData.sells ?? "",
           synonyms: briefData.synonyms ?? "",
@@ -159,6 +174,18 @@ function SemanticsScreen() {
   }, [api, selectedId, reloadToken]);
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  const startCollection = async () => {
+    if (!selectedId) return;
+    setCollecting(true);
+    try {
+      setCollection(await api.startCollection(selectedId));
+    } catch (err) {
+      setError(toApiError(err));
+    } finally {
+      setCollecting(false);
+    }
+  };
 
   const runImport = async () => {
     if (!selectedId) return;
@@ -410,6 +437,15 @@ function SemanticsScreen() {
           )}
 
           {brief && <BriefCard brief={brief} onEdit={() => setBriefOpen(true)} />}
+
+          {collection && (
+            <CollectionCard
+              collection={collection}
+              busy={collecting}
+              canStart={Boolean(brief?.sells?.trim())}
+              onStart={startCollection}
+            />
+          )}
 
           {keywords === null ? (
             <Card>
@@ -1201,6 +1237,142 @@ function KeywordRow({
             Вернуть
           </Button>
         )}
+      </div>
+    </div>
+  );
+}
+
+/** Названия состояний маски. Ключи приходят с backend. */
+const MASK_STATE: Record<string, { label: string; tone: Tone }> = {
+  pending: { label: "ждёт", tone: "neutral" },
+  done: { label: "собрана", tone: "success" },
+  failed: { label: "не вышло", tone: "warning" },
+};
+
+/**
+ * Сбор частотностей.
+ *
+ * Всё, что здесь показано, продиктовано одним числом: сто запросов в час на
+ * весь сервис. Из него следует, что сбор — не кнопка с ожиданием, а задание,
+ * которое идёт фоном и может встать на середине.
+ *
+ * Поэтому на экране три вещи, которых обычно у кнопки не бывает: сколько масок
+ * пройдено из скольких, сколько запросов осталось в этом часе и когда сбор
+ * продолжится сам. Без последнего человек видит замерший прогресс и нажимает
+ * «повторить», тратя запросы, которых и так нет.
+ */
+function CollectionCard({
+  collection,
+  busy,
+  canStart,
+  onStart,
+}: {
+  collection: CollectionRead;
+  busy: boolean;
+  canStart: boolean;
+  onStart: () => void;
+}) {
+  if (collection.blocked_reason) {
+    return (
+      <Card tone="quiet">
+        <div className="flex flex-col gap-1">
+          <span className="text-body-sm text-text-primary font-medium">
+            Сбор частотностей автоматически
+          </span>
+          <Hint>{collection.blocked_reason}</Hint>
+        </div>
+      </Card>
+    );
+  }
+
+  const running = collection.status === "queued" || collection.status === "running";
+  const done = collection.done_count ?? 0;
+  const total = collection.total_count ?? 0;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Сбор частотностей"
+        description="Система пройдёт по маскам сама и сложит найденное в ядро"
+        action={
+          <Button size="sm" onClick={onStart} loading={busy} disabled={running || !canStart}>
+            {collection.exists ? "Собрать заново" : "Собрать"}
+          </Button>
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        {!canStart && <Hint>Сначала заполните бриф — из него строятся маски.</Hint>}
+
+        {collection.exists && total > 0 && (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-body-sm text-text-primary">
+                Пройдено масок: {done} из {total}
+              </span>
+              <span className="text-caption text-text-secondary tabular-nums">
+                добавлено {collection.added ?? 0} · обновлено {collection.updated ?? 0}
+              </span>
+            </div>
+            <ProgressBar value={done} total={total} label={`Пройдено масок: ${done} из ${total}`} />
+          </div>
+        )}
+
+        {/* Отдельной строкой, потому что это единственное объяснение замершего
+            прогресса. Без него человек считает, что сбор сломался. */}
+        {collection.resumes_at && running && (
+          <p className="text-body-sm text-text-primary">
+            Лимит запросов на этот час исчерпан. Сбор продолжится сам в{" "}
+            {new Date(collection.resumes_at).toLocaleTimeString("ru-RU", {
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+            .
+          </p>
+        )}
+
+        {collection.error_reason && (
+          <p className="text-body-sm text-critical">{collection.error_reason}</p>
+        )}
+
+        {collection.exists && (collection.masks ?? []).length > 0 && (
+          <Details summary="Что собрано по каждой маске">
+            <div className="flex flex-col">
+              {(collection.masks ?? []).map((mask) => (
+                <MaskProgressRow key={mask.query} mask={mask} />
+              ))}
+            </div>
+          </Details>
+        )}
+
+        <Hint>
+          Площадка отдаёт сто запросов в час на весь сервис — это её ограничение, не наше. Поэтому
+          сбор идёт фоном: можно закрыть страницу и вернуться позже. В этом часе осталось{" "}
+          {collection.quota_left ?? 0}.
+        </Hint>
+      </div>
+    </Card>
+  );
+}
+
+function MaskProgressRow({ mask }: { mask: CollectionMaskRead }) {
+  const state = MASK_STATE[mask.state ?? "pending"] ?? MASK_STATE.pending;
+
+  return (
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0">
+      <div className="flex min-w-0 flex-col">
+        <code className="text-body-sm text-text-primary break-all">{mask.query}</code>
+        {mask.reason && <span className="text-caption text-text-secondary">{mask.reason}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        {mask.state === "done" && (
+          <span className="text-caption text-text-secondary tabular-nums">
+            фраз: {mask.found ?? 0} · объём темы: {mask.total ?? 0}
+          </span>
+        )}
+        <StatusBadge tone={state?.tone ?? "neutral"} size="sm">
+          {state?.label ?? mask.state}
+        </StatusBadge>
       </div>
     </div>
   );

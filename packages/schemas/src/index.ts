@@ -71,6 +71,8 @@ export type ClientProfileRead = Schemas["ClientProfileRead"];
 export type QuestionRead = Schemas["QuestionRead"];
 export type BriefUpdate = Schemas["BriefUpdate"];
 export type MaskRead = Schemas["MaskRead"];
+export type CollectionRead = Schemas["CollectionRead"];
+export type CollectionMaskRead = Schemas["CollectionMaskRead"];
 export type CleanupResult = Schemas["CleanupResult"];
 export type ClusterRead = Schemas["ClusterRead"];
 export type ClusterList = Schemas["ClusterList"];
@@ -621,6 +623,18 @@ export class ApiClient {
   revokeProjectAccess(projectId: string, userId: string): Promise<void> {
     return this.request<void>(`/api/v1/projects/${projectId}/access/${userId}`, {
       method: "DELETE",
+    });
+  }
+
+  /** Ход сбора частотностей: где сбор сейчас и сколько осталось квоты. */
+  getCollection(projectId: string): Promise<CollectionRead> {
+    return this.request<CollectionRead>(`/api/v1/projects/${projectId}/keywords/collect`);
+  }
+
+  /** Поставить сбор в очередь. Ответ приходит сразу, сбор идёт фоном. */
+  startCollection(projectId: string): Promise<CollectionRead> {
+    return this.request<CollectionRead>(`/api/v1/projects/${projectId}/keywords/collect`, {
+      method: "POST",
     });
   }
 

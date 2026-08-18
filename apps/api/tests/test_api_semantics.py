@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import AsyncIterator
+from unittest.mock import patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -1397,3 +1398,105 @@ class TestОтветыНаВопросы:
         )
 
         assert response.status_code == 404
+
+
+class TestСборЧастотностей:
+    """Запуск сбора и его ход.
+
+    Сбор растягивается во времени: сто запросов в час — предел площадки на весь
+    сервис. Поэтому ответ приходит сразу, а состояние спрашивают отдельно.
+    """
+
+    async def test_без_источника_сбор_объясняет_себя(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Пустой экран человек читает как поломку, а не как «не подключено»."""
+        org, user, row = project
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["exists"] is False
+        assert "не подключён" in body["blocked_reason"]
+
+    async def test_без_брифа_собирать_нечего(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Маска из пустоты — это запрос ни о чём, потраченный из сотни в час."""
+        org, user, row = project
+
+        response = await client.post(
+            f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+        )
+
+        assert response.status_code == 422
+        assert response.json()["error_code"] == "nothing_to_collect"
+
+    async def test_сбор_ставится_в_очередь(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/brief",
+            headers=headers(org, user),
+            json={"sells": "пластиковые окна", "synonyms": "", "excludes": "", "cities": ""},
+        )
+
+        with patch("ads_os.api.v1.semantics.enqueue_collection") as queued:
+            response = await client.post(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+
+        assert response.status_code == 202
+        assert response.json()["total_count"] > 0
+        assert queued.called
+
+    async def test_второй_запуск_поверх_первого_отклоняется(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Два сбора поделили бы одну сотню запросов, и оба встали бы на
+        середине."""
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/brief",
+            headers=headers(org, user),
+            json={"sells": "пластиковые окна", "synonyms": "", "excludes": "", "cities": ""},
+        )
+
+        with patch("ads_os.api.v1.semantics.enqueue_collection"):
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+            second = await client.post(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+
+        assert second.status_code == 409
+        assert second.json()["error_code"] == "collection_running"
+
+    async def test_ход_сбора_виден_после_запуска(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/brief",
+            headers=headers(org, user),
+            json={"sells": "пластиковые окна", "synonyms": "", "excludes": "", "cities": ""},
+        )
+        with patch("ads_os.api.v1.semantics.enqueue_collection"):
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/collect", headers=headers(org, user)
+            )
+        ).json()
+
+        assert body["exists"] is True
+        assert body["done_count"] == 0
+        assert body["masks"][0]["state"] == "pending"
