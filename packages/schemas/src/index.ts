@@ -83,6 +83,9 @@ export type GroupPhraseRead = Schemas["GroupPhraseRead"];
 export type GroupMove = Schemas["GroupMove"];
 export type GroupRename = Schemas["GroupRename"];
 export type GroupChangeRead = Schemas["GroupChangeRead"];
+export type CampaignPreviewRead = Schemas["CampaignPreviewRead"];
+export type CampaignGroupRead = Schemas["CampaignGroupRead"];
+export type CampaignCheckRead = Schemas["CampaignCheckRead"];
 export type MinusWordRead = Schemas["MinusWordRead"];
 export type MinusWordList = Schemas["MinusWordList"];
 export type AdDraftRead = Schemas["AdDraftRead"];
@@ -643,6 +646,11 @@ export class ApiClient {
     return this.request<void>(`/api/v1/projects/${projectId}/access/${userId}`, {
       method: "DELETE",
     });
+  }
+
+  /** Что уедет в Коммандер. Считается тем же кодом, что и сам файл. */
+  previewCampaign(projectId: string): Promise<CampaignPreviewRead> {
+    return this.request<CampaignPreviewRead>(`/api/v1/projects/${projectId}/campaign/preview`);
   }
 
   /** Группы вместе с фразами — так, как они сейчас лежат в ядре. */

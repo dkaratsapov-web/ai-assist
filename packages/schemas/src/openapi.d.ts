@@ -689,6 +689,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/campaign/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Что уедет в Коммандер
+         * @description Показывает готовую кампанию до выгрузки.
+         *
+         *     Считается тем же кодом, что и сам файл. Иначе человек проверил бы одно, а
+         *     завёл другое — и обнаружил это в Директе, где правки стоят дороже всего.
+         */
+        get: operations["preview_campaign_api_v1_projects__project_id__campaign_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/comparison": {
         parameters: {
             query?: never;
@@ -1789,6 +1812,88 @@ export interface components {
              * @default
              */
             synonyms: string;
+        };
+        /**
+         * CampaignCheckRead
+         * @description Замечание перед выгрузкой.
+         */
+        CampaignCheckRead: {
+            /** Action */
+            action: string;
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Examples */
+            examples?: string[];
+            /** Key */
+            key: string;
+            /** Severity */
+            severity: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * CampaignGroupRead
+         * @description Группа так, как она уедет в Коммандер.
+         */
+        CampaignGroupRead: {
+            /**
+             * Landing
+             * @default
+             */
+            landing: string;
+            /**
+             * Manual
+             * @default false
+             */
+            manual: boolean;
+            /** Name */
+            name: string;
+            /** Phrases */
+            phrases: string[];
+            /** Titles */
+            titles?: string[];
+            /** Total Frequency */
+            total_frequency: number;
+        };
+        /**
+         * CampaignPreviewRead
+         * @description Что уедет в Коммандер — до того, как файл скачали.
+         *
+         *     Экран существует затем, чтобы вопросы задавались здесь, а не после
+         *     запуска: правка в Директе стоит дороже всего.
+         */
+        CampaignPreviewRead: {
+            /**
+             * Can Export
+             * @default true
+             */
+            can_export: boolean;
+            /** Checks */
+            checks?: components["schemas"]["CampaignCheckRead"][];
+            /** Groups */
+            groups: components["schemas"]["CampaignGroupRead"][];
+            /**
+             * Minus Words
+             * @default 0
+             */
+            minus_words: number;
+            /** Project Name */
+            project_name: string;
+            /**
+             * Total Frequency
+             * @default 0
+             */
+            total_frequency: number;
+            /**
+             * Total Phrases
+             * @default 0
+             */
+            total_phrases: number;
+            /** Ungrouped */
+            ungrouped?: string[];
         };
         /**
          * CategoryRead
@@ -4768,6 +4873,41 @@ export interface operations {
                 };
                 content: {
                     "text/csv": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_campaign_api_v1_projects__project_id__campaign_preview_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CampaignPreviewRead"];
                 };
             };
             /** @description Validation Error */

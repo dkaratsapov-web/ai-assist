@@ -17,7 +17,7 @@ from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...models.collection import KeywordCollection
-from ...services import keyword_store, niches, profile, utm, wordstat_quota
+from ...services import campaign, keyword_store, niches, profile, utm, wordstat_quota
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -46,6 +46,9 @@ from ..schemas import (
     AnswersUpdate,
     BriefRead,
     BriefUpdate,
+    CampaignCheckRead,
+    CampaignGroupRead,
+    CampaignPreviewRead,
     CleanupGroupRead,
     CleanupResult,
     ClientProfileRead,
@@ -1187,7 +1190,11 @@ async def export_campaign(
 
     keywords = await _keywords(session, ctx, project_id)
     targeted = _targeted(keywords)
-    groups = cluster(targeted)
+    # Группы берутся из ядра, а не пересобираются расчётом. Раньше было
+    # наоборот, и это молча выбрасывало из файла всю ручную работу: человек
+    # переносил фразы и переименовывал группы, а в Коммандер уезжала прежняя
+    # раскладка. Обнаруживалось это уже в Директе.
+    groups, _orphans = campaign.structure(_structure_rows(keywords))
     points, links = await _page_content(session, ctx, project_id)
     minus = ", ".join(f"-{row.word}" for row in await _minus_word_rows(session, ctx, project_id))
 
@@ -1207,19 +1214,15 @@ async def export_campaign(
     rows: list[ExportRow] = []
 
     for group in groups:
-        if not group.core:
-            # Остаток — не группа под объявление. В выгрузку он не идёт, иначе
-            # в Директе появилась бы группа без осмысленного объявления.
-            continue
-
+        phrases = [item.phrase for item in group.phrases]
         landing = utm.tag(
-            match_landing(group.core, pages, fallback=fallback),
+            match_landing(_core_words(group.name), pages, fallback=fallback),
             template,
             campaign_name=utm.slug(project.name),
         )
         variants = build_variants(
             cluster_name=group.name,
-            keywords=group.phrases,
+            keywords=phrases,
             selling_points=points,
             region=project.primary_region,
             internal_links=links,
@@ -1229,7 +1232,7 @@ async def export_campaign(
         # таблицу, а объявления группы должны стоять рядом с её фразами.
         for index, draft in enumerate(variants, start=1):
             warnings = "; ".join(v.message for v in draft.violations)
-            for phrase in group.phrases:
+            for phrase in phrases:
                 rows.append(
                     ExportRow(
                         campaign=project.name,
@@ -1708,3 +1711,122 @@ def _group_phrase(row: Keyword) -> GroupPhraseRead:
 def _by_frequency(rows: list[Keyword]) -> list[Keyword]:
     """Частые фразы сверху: по ним и судят о группе."""
     return sorted(rows, key=lambda row: (-(row.frequency or 0), row.phrase))
+
+
+# ─── Что уедет в Коммандер ────────────────────────────────────────────────────
+
+
+def _structure_rows(
+    keywords: list[Keyword],
+) -> list[tuple[str, str | None, int | None, bool, bool]]:
+    """Ядро в том виде, в каком его читает сборка структуры.
+
+    Плоские кортежи вместо моделей: модуль сборки не знает про базу, и
+    проверить его можно на выдуманных данных, не поднимая ничего.
+    """
+    return [
+        (
+            row.phrase,
+            row.cluster_name,
+            row.frequency,
+            row.cluster_manual,
+            row.intent is Intent.IRRELEVANT,
+        )
+        for row in keywords
+    ]
+
+
+def _core_words(name: str) -> list[str]:
+    """Слова названия группы. По ним подбирается посадочная страница."""
+    return [word for word in name.lower().split() if len(word) > 2]
+
+
+@router.get(
+    "/{project_id}/campaign/preview",
+    response_model=CampaignPreviewRead,
+    summary="Что уедет в Коммандер",
+)
+async def preview_campaign(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> CampaignPreviewRead:
+    """Показывает готовую кампанию до выгрузки.
+
+    Считается тем же кодом, что и сам файл. Иначе человек проверил бы одно, а
+    завёл другое — и обнаружил это в Директе, где правки стоят дороже всего.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    keywords = await _keywords(session, ctx, project_id)
+    groups, orphans = campaign.structure(_structure_rows(keywords))
+
+    minus_rows = await _minus_word_rows(session, ctx, project_id)
+    points, links = await _page_content(session, ctx, project_id)
+    pages = await _landing_pages(session, ctx, project_id)
+    fallback = project.website_url or ""
+    template = utm.UtmTemplate()
+
+    warnings: list[str] = []
+    shown: list[CampaignGroupRead] = []
+
+    for group in groups:
+        phrases = [item.phrase for item in group.phrases]
+        variants = build_variants(
+            cluster_name=group.name,
+            keywords=phrases,
+            selling_points=points,
+            region=project.primary_region,
+            internal_links=links,
+        )
+        warnings += [
+            f"{group.name}: {v.message}" for draft in variants for v in draft.violations
+        ]
+
+        shown.append(
+            CampaignGroupRead(
+                name=group.name,
+                phrases=phrases,
+                total_frequency=group.total_frequency,
+                manual=group.manual,
+                landing=utm.tag(
+                    match_landing(_core_words(group.name), pages, fallback=fallback),
+                    template,
+                    campaign_name=utm.slug(project.name),
+                ),
+                titles=[draft.title for draft in variants],
+            )
+        )
+
+    duplicates = tuple(
+        tuple(group.phrases)
+        for group in cross_minus([row.phrase for row in _targeted(keywords)]).duplicates
+    )
+
+    found = campaign.checks(
+        groups,
+        orphans,
+        minus_words=len(minus_rows),
+        duplicates=duplicates,
+        ad_warnings=tuple(warnings),
+        has_landing=bool(fallback),
+    )
+
+    return CampaignPreviewRead(
+        project_name=project.name,
+        groups=shown,
+        ungrouped=[item.phrase for item in orphans],
+        total_phrases=sum(len(group.phrases) for group in groups),
+        total_frequency=sum(group.total_frequency for group in groups),
+        minus_words=len(minus_rows),
+        checks=[
+            CampaignCheckRead(
+                key=check.key,
+                severity=check.severity.value,
+                title=check.title,
+                action=check.action,
+                examples=list(check.examples),
+                count=check.count,
+            )
+            for check in found
+        ],
+        can_export=campaign.can_export(found),
+    )

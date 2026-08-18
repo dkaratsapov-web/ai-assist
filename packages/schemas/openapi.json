@@ -997,6 +997,147 @@
         "title": "BriefUpdate",
         "type": "object"
       },
+      "CampaignCheckRead": {
+        "description": "Замечание перед выгрузкой.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Examples",
+            "type": "array"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "severity": {
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "severity",
+          "title",
+          "action"
+        ],
+        "title": "CampaignCheckRead",
+        "type": "object"
+      },
+      "CampaignGroupRead": {
+        "description": "Группа так, как она уедет в Коммандер.",
+        "properties": {
+          "landing": {
+            "default": "",
+            "title": "Landing",
+            "type": "string"
+          },
+          "manual": {
+            "default": false,
+            "title": "Manual",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phrases": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Phrases",
+            "type": "array"
+          },
+          "titles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Titles",
+            "type": "array"
+          },
+          "total_frequency": {
+            "title": "Total Frequency",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "phrases",
+          "total_frequency"
+        ],
+        "title": "CampaignGroupRead",
+        "type": "object"
+      },
+      "CampaignPreviewRead": {
+        "description": "Что уедет в Коммандер — до того, как файл скачали.\n\nЭкран существует затем, чтобы вопросы задавались здесь, а не после\nзапуска: правка в Директе стоит дороже всего.",
+        "properties": {
+          "can_export": {
+            "default": true,
+            "title": "Can Export",
+            "type": "boolean"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/CampaignCheckRead"
+            },
+            "title": "Checks",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/CampaignGroupRead"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "minus_words": {
+            "default": 0,
+            "title": "Minus Words",
+            "type": "integer"
+          },
+          "project_name": {
+            "title": "Project Name",
+            "type": "string"
+          },
+          "total_frequency": {
+            "default": 0,
+            "title": "Total Frequency",
+            "type": "integer"
+          },
+          "total_phrases": {
+            "default": 0,
+            "title": "Total Phrases",
+            "type": "integer"
+          },
+          "ungrouped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ungrouped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "project_name",
+          "groups"
+        ],
+        "title": "CampaignPreviewRead",
+        "type": "object"
+      },
       "CategoryRead": {
         "description": "Оценка по одной категории аудита.",
         "properties": {
@@ -8338,6 +8479,100 @@
           }
         },
         "summary": "Выгрузка кампании файлом",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/campaign/preview": {
+      "get": {
+        "description": "Показывает готовую кампанию до выгрузки.\n\nСчитается тем же кодом, что и сам файл. Иначе человек проверил бы одно, а\nзавёл другое — и обнаружил это в Директе, где правки стоят дороже всего.",
+        "operationId": "preview_campaign_api_v1_projects__project_id__campaign_preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Что уедет в Коммандер",
         "tags": [
           "semantics"
         ]

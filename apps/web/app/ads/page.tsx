@@ -2,17 +2,28 @@
 
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import type { AdDraftRead, ApiError, ProjectRead, UtmNotesRead } from "@ads-os/schemas";
+import type {
+  AdDraftRead,
+  ApiError,
+  CampaignCheckRead,
+  CampaignGroupRead,
+  CampaignPreviewRead,
+  ProjectRead,
+  UtmNotesRead,
+} from "@ads-os/schemas";
 import {
   Card,
   CardHeader,
+  Details,
   EmptyState,
   ErrorState,
+  Hint,
   ProjectSwitcher,
   Skeleton,
   StatusBadge,
   plural,
 } from "@ads-os/ui";
+import type { Tone } from "@ads-os/tokens";
 import { IconMegaphone } from "@ads-os/ui/icons";
 import { AppShell } from "@/components/AppShell";
 import { createApiClient } from "@/lib/api";
@@ -46,6 +57,7 @@ function AdsScreen() {
   const [utm, setUtm] = useState<UtmNotesRead | null>(null);
   const [ready, setReady] = useState(0);
   const [error, setError] = useState<ApiError | null>(null);
+  const [preview, setPreview] = useState<CampaignPreviewRead | null>(null);
 
   useEffect(() => {
     let ignore = false;
@@ -71,8 +83,12 @@ function AdsScreen() {
     let ignore = false;
     void (async () => {
       try {
-        const list = await api.listAdDrafts(selectedId);
+        const [list, campaign] = await Promise.all([
+          api.listAdDrafts(selectedId),
+          api.previewCampaign(selectedId),
+        ]);
         if (ignore) return;
+        setPreview(campaign);
         setError(null);
         setDrafts(list.items);
         setNote(list.source_note ?? null);
@@ -166,6 +182,8 @@ function AdsScreen() {
                   Коммандера.
                 </p>
               </Card>
+
+              {preview && <BeforeCommanderCard preview={preview} />}
 
               {utm && <UtmCard utm={utm} />}
 
@@ -313,5 +331,140 @@ function Counter({ label, length, limit }: { label: string; length: number; limi
         {length}/{limit}
       </dd>
     </span>
+  );
+}
+
+const CHECK_TONE: Record<string, Tone> = {
+  blocking: "critical",
+  warning: "warning",
+  note: "neutral",
+};
+
+const CHECK_LABEL: Record<string, string> = {
+  blocking: "мешает",
+  warning: "стоит поправить",
+  note: "к сведению",
+};
+
+/**
+ * Что уедет в Коммандер.
+ *
+ * Последний экран перед тем, как работа покидает систему. До него человек
+ * видел объявления, фразы и группы по отдельности, а собранную кампанию —
+ * только в самом файле, то есть уже после выгрузки. Ошибку в структуре
+ * замечали в Директе, где правка стоит дороже всего.
+ *
+ * Замечания стоят выше содержимого намеренно: они и есть причина, по которой
+ * этот экран существует. Ни одно из них выгрузку не запрещает — специалист
+ * может знать про свой случай больше, чем проверка, а запрет, который нельзя
+ * обойти, приводит к тому, что работу доделывают мимо системы.
+ */
+function BeforeCommanderCard({ preview }: { preview: CampaignPreviewRead }) {
+  const checks = preview.checks ?? [];
+  const blocking = checks.filter((check) => check.severity === "blocking");
+
+  return (
+    <Card>
+      <CardHeader
+        title="Что уедет в Коммандер"
+        description="Посмотрите здесь: в Директе правка обойдётся дороже"
+        action={
+          <span className="text-caption text-text-secondary tabular-nums">
+            {preview.groups.length} групп · {preview.total_phrases} фраз · {preview.total_frequency}{" "}
+            показов
+          </span>
+        }
+      />
+
+      <div className="flex flex-col gap-4">
+        {checks.length > 0 ? (
+          <div className="flex flex-col">
+            {checks.map((check) => (
+              <CheckRow key={check.key} check={check} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-body-sm text-text-primary">
+            Замечаний нет: структура собрана, фразы разложены, минус-слова на месте.
+          </p>
+        )}
+
+        {blocking.length > 0 && (
+          <Hint>
+            Выгрузить можно и сейчас — кнопка сверху работает. Но то, что помечено как «мешает»,
+            почти наверняка придётся править уже в Директе.
+          </Hint>
+        )}
+
+        <Details summary={`Показать структуру целиком (${preview.groups.length})`}>
+          <div className="flex flex-col">
+            {preview.groups.map((group) => (
+              <CampaignGroupRow key={group.name} group={group} />
+            ))}
+          </div>
+        </Details>
+
+        {(preview.ungrouped ?? []).length > 0 && (
+          <Details summary={`Не уедет — фраз без группы: ${(preview.ungrouped ?? []).length}`}>
+            <div className="flex flex-wrap gap-1.5">
+              {(preview.ungrouped ?? []).slice(0, 50).map((phrase) => (
+                <span
+                  key={phrase}
+                  className="border-border bg-bg-secondary text-caption text-text-secondary rounded-pill border px-2 py-0.5"
+                >
+                  {phrase}
+                </span>
+              ))}
+            </div>
+          </Details>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function CheckRow({ check }: { check: CampaignCheckRead }) {
+  return (
+    <div className="border-border-subtle flex flex-col gap-1 border-b py-2.5 last:border-b-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone={CHECK_TONE[check.severity] ?? "neutral"} size="sm" dot>
+          {CHECK_LABEL[check.severity] ?? check.severity}
+        </StatusBadge>
+        <span className="text-body-sm text-text-primary font-medium">{check.title}</span>
+      </div>
+      <p className="text-caption text-text-secondary max-w-(--layout-measure)">{check.action}</p>
+      {/* Примеры обязательны: без них человек не понимает, где искать, и
+          замечание остаётся непрочитанным. */}
+      {(check.examples ?? []).length > 0 && (
+        <p className="text-caption text-text-secondary">
+          Например: {(check.examples ?? []).join(" · ")}
+          {check.count > (check.examples ?? []).length &&
+            ` и ещё ${check.count - (check.examples ?? []).length}`}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CampaignGroupRow({ group }: { group: CampaignGroupRead }) {
+  return (
+    <div className="border-border-subtle flex flex-col gap-1 border-b py-2 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-body-sm text-text-primary font-medium">{group.name}</span>
+        <span className="text-caption text-text-secondary tabular-nums">
+          {group.phrases.length} фраз · {group.total_frequency}
+        </span>
+      </div>
+      {/* Заголовок объявления рядом с фразами — единственный способ увидеть,
+          совпадают ли они. Ради этого совпадения группы и собирают. */}
+      {(group.titles ?? []).length > 0 && (
+        <span className="text-caption text-text-secondary">
+          Объявление: {(group.titles ?? [])[0]}
+        </span>
+      )}
+      <span className="text-caption text-text-secondary clamp-2 break-all">
+        {group.phrases.join(" · ")}
+      </span>
+    </div>
   );
 }

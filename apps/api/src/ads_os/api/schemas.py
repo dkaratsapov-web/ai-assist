@@ -1090,6 +1090,53 @@ class GroupList(BaseModel):
     ungrouped: list[GroupPhraseRead] = Field(default_factory=list)
 
 
+class CampaignCheckRead(BaseModel):
+    """Замечание перед выгрузкой."""
+
+    key: str
+    #: blocking | warning | note
+    severity: str
+    title: str
+    #: Что сделать. Замечание без действия — упрёк, а не помощь.
+    action: str
+    #: Чего именно касается. Без примеров непонятно, где искать.
+    examples: list[str] = Field(default_factory=list)
+    count: int = 0
+
+
+class CampaignGroupRead(BaseModel):
+    """Группа так, как она уедет в Коммандер."""
+
+    name: str
+    phrases: list[str]
+    total_frequency: int
+    manual: bool = False
+    #: Куда ведут объявления группы, вместе с разметкой.
+    landing: str = ""
+    #: Заголовки вариантов объявления. По ним и видно, что получится.
+    titles: list[str] = Field(default_factory=list)
+
+
+class CampaignPreviewRead(BaseModel):
+    """Что уедет в Коммандер — до того, как файл скачали.
+
+    Экран существует затем, чтобы вопросы задавались здесь, а не после
+    запуска: правка в Директе стоит дороже всего.
+    """
+
+    project_name: str
+    groups: list[CampaignGroupRead]
+    #: Фразы без группы. В кампанию не уедут — и это надо видеть заранее.
+    ungrouped: list[str] = Field(default_factory=list)
+    total_phrases: int = 0
+    total_frequency: int = 0
+    minus_words: int = 0
+    checks: list[CampaignCheckRead] = Field(default_factory=list)
+    #: Есть ли смысл выгружать прямо сейчас. Кнопка остаётся в любом случае:
+    #: это подсказка, а не запрет.
+    can_export: bool = True
+
+
 class GroupMove(BaseModel):
     """Перенос фраз в группу."""
 

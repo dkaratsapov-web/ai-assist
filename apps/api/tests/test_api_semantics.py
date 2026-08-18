@@ -1673,3 +1673,138 @@ class TestРедактированиеГрупп:
         ).json()
         own = next(g for g in after["items"] if g["name"] == "Своя группа")
         assert own["manual"] is True
+
+
+class TestПередКоммандером:
+    """Предпросмотр кампании.
+
+    Считается тем же кодом, что и сам файл: иначе человек проверил бы одно, а
+    завёл другое — и обнаружил это в Директе.
+    """
+
+    async def loaded(
+        self, client: AsyncClient, org: Organization, user: User, row: Project
+    ) -> dict:
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        return (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/preview", headers=headers(org, user)
+            )
+        ).json()
+
+    async def test_предпросмотр_показывает_группы_с_фразами(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        body = await self.loaded(client, org, user, row)
+
+        assert body["groups"]
+        assert body["groups"][0]["phrases"]
+        assert body["total_phrases"] > 0
+
+    async def test_замечания_приходят_с_действием(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        body = await self.loaded(client, org, user, row)
+
+        assert body["checks"]
+        assert all(check["action"] for check in body["checks"])
+
+    async def test_ручной_перенос_виден_в_предпросмотре(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Раньше выгрузка пересобирала группы заново и всю ручную работу
+        выбрасывала молча."""
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        groups = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        moved = groups["items"][0]["phrases"][0]
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [moved["id"]], "group": "Своя группа"},
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/preview", headers=headers(org, user)
+            )
+        ).json()
+
+        own = next(g for g in body["groups"] if g["name"] == "Своя группа")
+        assert own["phrases"] == [moved["phrase"]]
+
+    async def test_ручной_перенос_попадает_в_файл(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        groups = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        moved = groups["items"][0]["phrases"][0]
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [moved["id"]], "group": "Своя группа"},
+        )
+
+        text = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/export.csv", headers=headers(org, user)
+            )
+        ).text
+
+        assert "Своя группа" in text
+
+    async def test_фразы_без_группы_названы_поимённо(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        groups = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        orphan = groups["items"][0]["phrases"][0]
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [orphan["id"]], "group": None},
+        )
+
+        body = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/campaign/preview", headers=headers(org, user)
+            )
+        ).json()
+
+        assert orphan["phrase"] in body["ungrouped"]
+        assert body["can_export"] is False
