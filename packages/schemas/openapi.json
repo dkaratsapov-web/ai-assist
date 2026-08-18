@@ -357,6 +357,20 @@
         "title": "AdViolationRead",
         "type": "object"
       },
+      "AnswersUpdate": {
+        "description": "Ответы на вопросы клиенту.\n\nПриходят те, что изменились, а не все сразу: поля сохраняются по мере\nзаполнения, и присылать каждый раз всю анкету значило бы затирать ответ,\nкоторый в этот момент правят во второй вкладке.",
+        "properties": {
+          "answers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Answers",
+            "type": "object"
+          }
+        },
+        "title": "AnswersUpdate",
+        "type": "object"
+      },
       "ApplySetResult": {
         "description": "Итог применения набора к проекту.",
         "properties": {
@@ -3907,6 +3921,11 @@
       "QuestionRead": {
         "description": "Вопрос клиенту: сайт на него не отвечает.",
         "properties": {
+          "answer": {
+            "default": "",
+            "title": "Answer",
+            "type": "string"
+          },
           "key": {
             "title": "Key",
             "type": "string"
@@ -9520,6 +9539,110 @@
           }
         },
         "summary": "Что прочитано с сайта и что осталось спросить",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/onboarding/answers": {
+      "put": {
+        "description": "Сохраняет ответы на вопросы, на которые сайт не отвечает.\n\nПриходят только изменённые: поля сохраняются по мере заполнения, и\nприсылать каждый раз всю анкету значило бы затирать ответ, который в этот\nмомент правят в соседней вкладке.\n\nПустой ответ стирает прежний. Это не оплошность: человек, стерший строку,\nименно этого и хотел, а «пустое не сохраняем» превратило бы удаление в\nневозможное действие.",
+        "operationId": "save_answers_api_v1_projects__project_id__onboarding_answers_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswersUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnboardingRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Записать ответы клиента",
         "tags": [
           "semantics"
         ]

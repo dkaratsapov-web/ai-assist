@@ -174,6 +174,17 @@ function SemanticsScreen() {
     }
   };
 
+  const saveAnswer = async (key: string, value: string) => {
+    if (!selectedId) return;
+    try {
+      setOnboarding(await api.saveAnswers(selectedId, { [key]: value }));
+      // Ответ «чего клиент не делает» попадает в бриф — его надо перечитать.
+      if (key === "not_selling") reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
   const applyOnboarding = async (fields: {
     region?: boolean;
     niche?: boolean;
@@ -392,6 +403,7 @@ function SemanticsScreen() {
               busy={applying}
               questionsOpen={questionsOpen}
               onToggleQuestions={() => setQuestionsOpen((open) => !open)}
+              onAnswer={saveAnswer}
             />
           )}
 
@@ -816,15 +828,18 @@ function OnboardingCard({
   busy,
   questionsOpen,
   onToggleQuestions,
+  onAnswer,
 }: {
   data: OnboardingRead;
   onApply: (fields: { region?: boolean; niche?: boolean; brief?: boolean }) => void;
   busy: boolean;
   questionsOpen: boolean;
   onToggleQuestions: () => void;
+  onAnswer: (key: string, value: string) => void;
 }) {
   const p = data.profile;
   const questions = [...data.questions, ...data.niche_questions];
+  const answered = questions.filter((question) => question.answer).length;
 
   const facts: [string, string][] = [
     ["Компания", p.company ?? ""],
@@ -923,8 +938,7 @@ function OnboardingCard({
           onClick={onToggleQuestions}
           className="text-body-sm text-text-primary focus-visible:outline-focus text-left font-medium focus-visible:outline-2"
         >
-          Спросить у клиента — {questions.length}{" "}
-          {plural(questions.length, "вопрос", "вопроса", "вопросов")} {questionsOpen ? "▲" : "▼"}
+          Спросить у клиента — отвечено {answered} из {questions.length} {questionsOpen ? "▲" : "▼"}
         </button>
         <p className="text-caption text-text-secondary mt-1">
           Этого нет ни на одном сайте, а без ответов расчёт окупаемости строить не на чем.
@@ -933,10 +947,7 @@ function OnboardingCard({
         {questionsOpen && (
           <ol className="mt-2 flex flex-col">
             {questions.map((question: QuestionRead) => (
-              <li key={question.key} className="border-border border-b py-2 last:border-b-0">
-                <p className="text-body-sm text-text-primary">{question.text}</p>
-                <p className="text-caption text-text-secondary">{question.why}</p>
-              </li>
+              <QuestionRow key={question.key} question={question} onAnswer={onAnswer} />
             ))}
           </ol>
         )}
@@ -1003,6 +1014,55 @@ function BriefCard({ brief, onEdit }: { brief: BriefRead; onEdit: () => void }) 
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * Вопрос вместе с полем для ответа.
+ *
+ * Раньше вопросы только читались, и человек уходил записывать ответы в
+ * блокнот — то есть в систему они не попадали вовсе, а спрашивать их
+ * приходилось каждый раз заново.
+ *
+ * Сохранение по уходу из поля, а не по кнопке. Кнопка «сохранить» на десять
+ * полей означает, что одно забытое нажатие стирает всю работу — а работа здесь
+ * это разговор с клиентом, который второй раз не состоится.
+ */
+function QuestionRow({
+  question,
+  onAnswer,
+}: {
+  question: QuestionRead;
+  onAnswer: (key: string, value: string) => void;
+}) {
+  const [value, setValue] = useState(question.answer ?? "");
+  const [saved, setSaved] = useState(false);
+
+  return (
+    <li className="border-border border-b py-2.5 last:border-b-0">
+      <p className="text-body-sm text-text-primary">{question.text}</p>
+      <p className="text-caption text-text-secondary">{question.why}</p>
+      <div className="mt-1.5 flex items-start gap-2">
+        <textarea
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          onBlur={() => {
+            // Ничего не менялось — не дёргаем сервер и не мигаем «сохранено»:
+            // подтверждение того, чего не было, обесценивает подтверждения.
+            if ((question.answer ?? "") === value.trim()) return;
+            onAnswer(question.key, value.trim());
+            setSaved(true);
+          }}
+          rows={1}
+          placeholder="Ответ клиента"
+          className="border-border-input bg-bg text-body-sm text-text-primary rounded-control focus-visible:outline-focus w-full resize-y border px-2.5 py-1.5 focus-visible:outline-2"
+        />
+        {saved && <span className="text-caption text-success shrink-0 pt-2">сохранено</span>}
+      </div>
+    </li>
   );
 }
 

@@ -380,6 +380,20 @@ export class ApiClient {
     return this.request<OnboardingRead>(`/api/v1/projects/${projectId}/onboarding`);
   }
 
+  /**
+   * Записывает ответы на вопросы клиенту.
+   *
+   * Присылаются только изменённые: поля сохраняются по мере заполнения, и
+   * отправлять каждый раз всю анкету значило бы затирать ответ, который правят
+   * в соседней вкладке.
+   */
+  saveAnswers(projectId: string, answers: Record<string, string>): Promise<OnboardingRead> {
+    return this.request<OnboardingRead>(`/api/v1/projects/${projectId}/onboarding/answers`, {
+      method: "PUT",
+      body: JSON.stringify({ answers }),
+    });
+  }
+
   /** Переносит выбранные поля анкеты в проект. Только пустые поля. */
   applyOnboarding(
     projectId: string,

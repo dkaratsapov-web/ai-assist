@@ -1067,6 +1067,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/onboarding/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Записать ответы клиента
+         * @description Сохраняет ответы на вопросы, на которые сайт не отвечает.
+         *
+         *     Приходят только изменённые: поля сохраняются по мере заполнения, и
+         *     присылать каждый раз всю анкету значило бы затирать ответ, который в этот
+         *     момент правят в соседней вкладке.
+         *
+         *     Пустой ответ стирает прежний. Это не оплошность: человек, стерший строку,
+         *     именно этого и хотел, а «пустое не сохраняем» превратило бы удаление в
+         *     невозможное действие.
+         */
+        put: operations["save_answers_api_v1_projects__project_id__onboarding_answers_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/onboarding/apply": {
         parameters: {
             query?: never;
@@ -1338,6 +1366,20 @@ export interface components {
             /** Message */
             message: string;
             problem: components["schemas"]["Problem"];
+        };
+        /**
+         * AnswersUpdate
+         * @description Ответы на вопросы клиенту.
+         *
+         *     Приходят те, что изменились, а не все сразу: поля сохраняются по мере
+         *     заполнения, и присылать каждый раз всю анкету значило бы затирать ответ,
+         *     который в этот момент правят во второй вкладке.
+         */
+        AnswersUpdate: {
+            /** Answers */
+            answers?: {
+                [key: string]: string;
+            };
         };
         /**
          * ApplySetResult
@@ -2676,6 +2718,11 @@ export interface components {
          * @description Вопрос клиенту: сайт на него не отвечает.
          */
         QuestionRead: {
+            /**
+             * Answer
+             * @default
+             */
+            answer: string;
             /** Key */
             key: string;
             /** Text */
@@ -4871,6 +4918,45 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_answers_api_v1_projects__project_id__onboarding_answers_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnswersUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -40,6 +40,7 @@ from ..schemas import (
     AdDraftList,
     AdDraftRead,
     AdViolationRead,
+    AnswersUpdate,
     BriefRead,
     BriefUpdate,
     CleanupGroupRead,
@@ -366,23 +367,74 @@ async def get_onboarding(
     """
     project = await ProjectRepository(session, ctx).get_or_404(project_id)
     audit = await _last_audit(session, ctx, project_id)
+    brief = await _brief_row(session, ctx, project_id)
 
     data = profile.from_stored(audit.client_profile if audit else None)
+    answers = {key: str(value) for key, value in (brief.answers if brief else {}).items()}
 
     return OnboardingRead(
         has_audit=audit is not None,
         source_url=(audit.final_url or audit.url) if audit else None,
         profile=ClientProfileRead(**data.as_dict()),
         filled=data.filled,
-        can_apply=_appliable(project, data, await _brief_row(session, ctx, project_id)),
+        can_apply=_appliable(project, data, brief),
         questions=[
-            QuestionRead(key=q.key, text=q.text, why=q.why) for q in profile.open_questions(data)
+            QuestionRead(key=q.key, text=q.text, why=q.why, answer=answers.get(q.key, ""))
+            for q in profile.open_questions(data)
         ],
         niche_questions=[
-            QuestionRead(key=q.key, text=q.text, why=q.why)
+            QuestionRead(key=q.key, text=q.text, why=q.why, answer=answers.get(q.key, ""))
             for q in profile.niche_questions(project.niche or data.niche_key)
         ],
     )
+
+
+@router.put(
+    "/{project_id}/onboarding/answers",
+    response_model=OnboardingRead,
+    summary="Записать ответы клиента",
+)
+async def save_answers(
+    project_id: uuid.UUID, payload: AnswersUpdate, session: SessionDep, ctx: WriteDep
+) -> OnboardingRead:
+    """Сохраняет ответы на вопросы, на которые сайт не отвечает.
+
+    Приходят только изменённые: поля сохраняются по мере заполнения, и
+    присылать каждый раз всю анкету значило бы затирать ответ, который в этот
+    момент правят в соседней вкладке.
+
+    Пустой ответ стирает прежний. Это не оплошность: человек, стерший строку,
+    именно этого и хотел, а «пустое не сохраняем» превратило бы удаление в
+    невозможное действие.
+    """
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    row = await _brief_row(session, ctx, project_id)
+    if row is None:
+        row = KeywordBrief(project_id=project_id)
+        await BriefRepository(session, ctx).add(row)
+        await session.flush()
+
+    answers = dict(row.answers or {})
+    for key, value in payload.answers.items():
+        text = value.strip()[:2000]
+        if text:
+            answers[key] = text
+        else:
+            answers.pop(key, None)
+
+    row.answers = answers
+
+    # Ответ «чего клиент не делает» — это ровно то же, что поле «чего не
+    # делаем» в брифе. Спрашивать дважды об одном значит выглядеть системой,
+    # которая не слушает: заполняем, пока поле пустое.
+    not_selling = answers.get("not_selling", "").strip()
+    if not_selling and not row.excludes:
+        row.excludes = not_selling
+
+    await session.flush()
+
+    return await get_onboarding(project_id, session, ctx)
 
 
 @router.post(

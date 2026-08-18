@@ -1251,3 +1251,149 @@ class TestРазметкаВВыгрузке:
         body = await self._export(client, session, project)
 
         assert "utm_campaign=okna_tver" in body
+
+
+class TestОтветыНаВопросы:
+    """Вопросы задаются — на них должно быть где ответить.
+
+    Без этого экран показывает десять вопросов и не даёт записать ни одного
+    ответа: человек уходит записывать их в блокнот, и в системе их больше нет.
+    """
+
+    async def test_ответ_сохраняется_и_возвращается(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        body = (
+            await client.put(
+                f"/api/v1/projects/{row.id}/onboarding/answers",
+                json={"answers": {"average_check": "35 000 ₽, маржа около 40%"}},
+                headers=headers(org, user),
+            )
+        ).json()
+        answered = next(q for q in body["questions"] if q["key"] == "average_check")
+
+        assert answered["answer"] == "35 000 ₽, маржа около 40%"
+
+    async def test_ответ_переживает_перезагрузку(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/onboarding/answers",
+            json={"answers": {"capacity": "20 заявок в неделю"}},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/onboarding", headers=headers(org, user))
+        ).json()
+        answered = next(q for q in body["questions"] if q["key"] == "capacity")
+
+        assert answered["answer"] == "20 заявок в неделю"
+
+    async def test_соседние_ответы_не_затираются(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Поля сохраняются по мере заполнения: присылать всю анкету каждый раз
+        значило бы затирать ответ, который правят в соседней вкладке."""
+        org, user, row = project
+        for key, value in (("capacity", "20 в неделю"), ("where_leads_go", "amoCRM")):
+            await client.put(
+                f"/api/v1/projects/{row.id}/onboarding/answers",
+                json={"answers": {key: value}},
+                headers=headers(org, user),
+            )
+
+        body = (
+            await client.get(f"/api/v1/projects/{row.id}/onboarding", headers=headers(org, user))
+        ).json()
+        saved = {q["key"]: q["answer"] for q in body["questions"]}
+
+        assert saved["capacity"] == "20 в неделю"
+        assert saved["where_leads_go"] == "amoCRM"
+
+    async def test_пустой_ответ_стирает_прежний(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Человек, стерший строку, именно этого и хотел."""
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/onboarding/answers",
+            json={"answers": {"capacity": "20"}},
+            headers=headers(org, user),
+        )
+
+        body = (
+            await client.put(
+                f"/api/v1/projects/{row.id}/onboarding/answers",
+                json={"answers": {"capacity": "   "}},
+                headers=headers(org, user),
+            )
+        ).json()
+        answered = next(q for q in body["questions"] if q["key"] == "capacity")
+
+        assert answered["answer"] == ""
+
+    async def test_чего_клиент_не_делает_попадает_в_бриф(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Спрашивать дважды об одном — значит выглядеть системой, которая не
+        слушает: это ровно поле «чего не делаем» в брифе."""
+        org, user, row = project
+
+        await client.put(
+            f"/api/v1/projects/{row.id}/onboarding/answers",
+            json={"answers": {"not_selling": "ремонт окон, москитные сетки"}},
+            headers=headers(org, user),
+        )
+
+        brief = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+
+        assert brief["excludes"] == "ремонт окон, москитные сетки"
+
+    async def test_заполненный_бриф_ответом_не_переписывается(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        await client.put(
+            f"/api/v1/projects/{row.id}/brief",
+            json={"sells": "окна", "synonyms": "", "excludes": "своё", "cities": ""},
+            headers=headers(org, user),
+        )
+
+        await client.put(
+            f"/api/v1/projects/{row.id}/onboarding/answers",
+            json={"answers": {"not_selling": "другое"}},
+            headers=headers(org, user),
+        )
+
+        brief = (
+            await client.get(f"/api/v1/projects/{row.id}/brief", headers=headers(org, user))
+        ).json()
+
+        assert brief["excludes"] == "своё"
+
+    async def test_чужой_проект_недоступен(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        two_organizations: tuple[Organization, Organization],
+        project: tuple[Organization, User, Project],
+    ) -> None:
+        org, user, _ = project
+        _, stranger = two_organizations
+        alien = Project(organization_id=stranger.id, name="Чужой")
+        session.add(alien)
+        await session.commit()
+
+        response = await client.put(
+            f"/api/v1/projects/{alien.id}/onboarding/answers",
+            json={"answers": {"capacity": "10"}},
+            headers=headers(org, user),
+        )
+
+        assert response.status_code == 404

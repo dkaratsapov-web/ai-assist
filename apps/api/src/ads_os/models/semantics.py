@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import uuid
+from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, Text
 from sqlalchemy import Enum as SAEnum
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -74,6 +76,17 @@ class KeywordBrief(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     excludes: Mapped[str] = mapped_column(Text, default="", nullable=False)
     #: Города, если они не совпадают с регионом проекта.
     cities: Mapped[str] = mapped_column(Text, default="", nullable=False)
+
+    #: Ответы на вопросы, на которые сайт не отвечает: средний чек, маржа,
+    #: что клиент не делает, куда попадают заявки. Лежат здесь же, потому что
+    #: это та же анкета проекта — просто вторая её половина.
+    #:
+    #: Свободным словарём, а не столбцами: набор вопросов зависит от ниши и
+    #: от того, что не удалось прочитать с сайта, то есть меняется вместе с
+    #: кодом. Столбец на каждый вопрос означал бы миграцию на каждый вопрос,
+    #: а старые ответы на удалённые вопросы всё равно надо сохранять: они
+    #: писались про этого клиента и остаются правдой о нём.
+    answers: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, nullable=False)
 
 
 class MinusWord(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
