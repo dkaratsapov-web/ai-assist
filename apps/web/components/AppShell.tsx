@@ -38,7 +38,10 @@ export function AppShell({ title, subtitle, notifications, actions, children }: 
           onMenuClick={() => setMobileNavOpen(true)}
         />
 
-        <main className="mx-auto flex w-full max-w-(--layout-content-max-width) flex-1 flex-col gap-6 p-4 lg:p-6">
+        {/* Зазор между блоками — 16 пикселей, а не 24. На экранах здесь по
+            шесть-восемь карточек подряд, и лишние восемь пикселей между
+            каждой уводят половину работы за нижний край. */}
+        <main className="mx-auto flex w-full max-w-(--layout-content-max-width) flex-1 flex-col gap-4 p-4 lg:px-6 lg:py-5">
           {children}
         </main>
       </div>

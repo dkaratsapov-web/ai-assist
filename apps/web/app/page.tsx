@@ -9,7 +9,9 @@ import {
   CardHeader,
   EmptyState,
   ErrorState,
-  KpiCard,
+  Hint,
+  ProgressBar,
+  StatStrip,
   ProjectStatusBadge,
   Skeleton,
   StatusBadge,
@@ -106,19 +108,24 @@ export default function DashboardPage() {
             <h2 id="counters" className="sr-only">
               Состояние проектов
             </h2>
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-              <KpiCard label="Проектов" value={String(overview.total)} />
-              <KpiCard label="Требуют действия" value={String(overview.needs_attention)} />
-              <KpiCard label="Сайт проверен" value={`${checked} из ${withSite || 0}`} />
-              <KpiCard
-                label="Экономика заполнена"
-                value={`${readyEconomics} из ${overview.total}`}
-              />
-            </div>
+            {/* Одной строкой, а не четырьмя карточками: четыре однозначные
+                цифры, разнесённые на всю ширину экрана, читаются дольше и
+                занимают места как полноценный блок с содержанием. */}
+            <StatStrip
+              items={[
+                { label: "Проектов", value: String(overview.total) },
+                { label: "Требуют действия", value: String(overview.needs_attention) },
+                { label: "Сайт проверен", value: `${checked} из ${withSite || 0}` },
+                {
+                  label: "Экономика заполнена",
+                  value: `${readyEconomics} из ${overview.total}`,
+                },
+              ]}
+            />
           </section>
 
           {!overview.ad_platform_connected && (
-            <Card>
+            <Card tone="quiet">
               <div className="flex items-start gap-3">
                 <span className="text-text-secondary mt-0.5">
                   <IconInfo size={18} />
@@ -127,11 +134,11 @@ export default function DashboardPage() {
                   <p className="text-body-sm text-text-primary font-medium">
                     Рекламный кабинет не подключён
                   </p>
-                  <p className="text-body-sm text-text-secondary">
+                  <Hint>
                     Поэтому здесь нет расходов, лидов и продаж. Появятся они только вместе с
                     настоящими данными из Яндекс Директа и Метрики — до тех пор любые цифры на этом
                     месте были бы выдуманными.
-                  </p>
+                  </Hint>
                 </div>
               </div>
             </Card>
@@ -164,15 +171,25 @@ function ProjectRow({ project }: { project: ProjectSummaryRead }) {
   return (
     <Link
       href={`/projects/${project.id}`}
-      className="border-border focus-visible:outline-focus hover:bg-surface-hover -mx-2 flex flex-col gap-2 border-b px-2 py-3 last:border-b-0 focus-visible:outline-2 focus-visible:outline-offset-2"
+      className="border-border-subtle focus-visible:outline-focus hover:bg-surface-hover -mx-2 flex flex-col gap-2 border-b px-2 py-3 last:border-b-0 focus-visible:outline-2 focus-visible:outline-offset-2"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-body text-text-primary font-medium">{project.name}</span>
         <div className="flex items-center gap-2">
           <ProjectStatusBadge status={project.status} />
-          <StatusBadge tone="neutral">
-            {project.completed_count} из {project.total_count}
-          </StatusBadge>
+          {/* Полоса стоит рядом с числом, а не отдельной строкой: строкой
+              она читается как подчёркивание названия. */}
+          <span className="flex items-center gap-2">
+            <ProgressBar
+              value={project.completed_count}
+              total={project.total_count}
+              label={`Пройдено шагов: ${project.completed_count} из ${project.total_count}`}
+              className="w-16"
+            />
+            <span className="text-caption text-text-secondary tabular-nums">
+              {project.completed_count} из {project.total_count}
+            </span>
+          </span>
         </div>
       </div>
 

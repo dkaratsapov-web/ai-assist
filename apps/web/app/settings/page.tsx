@@ -455,7 +455,7 @@ function ModeRow({
   tone: "success" | "warning" | "critical";
 }) {
   return (
-    <div className="border-border flex flex-col gap-1 border-b pb-3 last:border-b-0 last:pb-0">
+    <div className="border-border-subtle flex flex-col gap-1 border-b pb-3 last:border-b-0 last:pb-0">
       <div className="flex items-center justify-between gap-3">
         <span className="text-body-sm text-text-primary">{label}</span>
         <StatusBadge tone={tone}>{value}</StatusBadge>
@@ -477,7 +477,7 @@ function MemberRow({
   onToggle: (isActive: boolean) => void;
 }) {
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
       <div className="flex flex-col">
         <span className="text-body-sm text-text-primary">
           {member.full_name}
@@ -526,7 +526,7 @@ function SessionRow({ session, onEnd }: { session: SessionRead; onEnd: () => voi
     : null;
 
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-3 last:border-b-0">
       <div className="flex flex-col">
         <span className="text-body-sm text-text-primary">{session.device}</span>
         <span className="text-caption text-text-secondary">

@@ -22,7 +22,6 @@ import {
   EmptyState,
   ErrorState,
   Input,
-  KpiCard,
   Modal,
   ModuleStatusBadge,
   ProjectSwitcher,
@@ -334,11 +333,21 @@ function SiteAuditScreen() {
 
           {audit?.status === "completed" && (
             <>
-              <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <Card>
-                  <CardHeader title="Готовность к рекламе" />
-                  <div className="flex flex-col gap-3">
-                    <KpiCard label="Общая оценка" value={`${audit.score ?? 0} из 100`} />
+              {/* Балл и разбор по разделам — одна карточка, а не две колонки.
+                  В двух колонках левая всегда короче правой, и под баллом
+                  оставалось полэкрана пустоты; а по смыслу это одно и то же:
+                  общая оценка и из чего она сложилась. */}
+              <Card>
+                <div className="border-border-subtle mb-4 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b pb-4">
+                  <div className="flex flex-col gap-1">
+                    <span className="text-caption text-text-secondary">Готовность к рекламе</span>
+                    <span className="text-display text-text-primary tabular-nums">
+                      {audit.score ?? 0}
+                      <span className="text-h3 text-text-secondary"> / 100</span>
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col items-start gap-1.5 pb-1">
                     {verdict && (
                       <StatusBadge tone={verdict.tone} size="md" dot>
                         {verdict.label}
@@ -347,33 +356,25 @@ function SiteAuditScreen() {
                     {!audit.can_launch && (
                       // Автозапуск заблокирован критическими находками (v0.3 §15).
                       // Формулировка прямая: иначе блокировку принимают за совет.
-                      <p className="text-body-sm text-text-secondary">
+                      <p className="text-caption text-text-secondary">
                         Пока критические замечания не устранены, запуск кампаний недоступен.
                       </p>
                     )}
                   </div>
-                </Card>
+                </div>
 
-                <Card className="lg:col-span-2">
-                  <CardHeader
-                    title="По разделам"
-                    description="Каждый раздел оценивается отдельно — видно, что именно тянет вниз"
-                  />
-                  <div className="flex flex-col gap-3">
-                    {audit.categories.map((category) => (
-                      <CategoryRow key={category.category} category={category} />
-                    ))}
-                  </div>
-                </Card>
-              </section>
+                <div className="flex flex-col gap-3">
+                  {audit.categories.map((category) => (
+                    <CategoryRow key={category.category} category={category} />
+                  ))}
+                </div>
+              </Card>
 
-              <Card>
+              <Card tone={active.length === 0 ? "quiet" : "default"}>
                 <CardHeader
                   title="Что делать"
                   description={
-                    active.length === 0
-                      ? "Замечаний нет"
-                      : "Сначала критические — они мешают запуску"
+                    active.length === 0 ? undefined : "Сначала критические — они мешают запуску"
                   }
                 />
                 <div className="flex flex-col">
@@ -433,7 +434,7 @@ function SiteAuditScreen() {
                 </Card>
               )}
 
-              <Card>
+              <Card tone="quiet">
                 <CardHeader title="Проверенная страница" />
                 <dl className="text-body-sm grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <Row label="Адрес" value={audit.final_url ?? audit.url} />
@@ -588,7 +589,7 @@ function IssueRow({
   const [reason, setReason] = useState("");
 
   return (
-    <div className="border-border flex flex-col gap-1 border-b py-3 last:border-b-0">
+    <div className="border-border-subtle flex flex-col gap-1 border-b py-3 last:border-b-0">
       <AlertCard
         level={issue.severity as "critical" | "warning" | "recommendation" | "info"}
         message={issue.title}
@@ -636,7 +637,7 @@ function IssueRow({
 
 function DismissedRow({ issue, onRestore }: { issue: AuditIssueRead; onRestore: () => void }) {
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0">
       <div className="flex min-w-0 flex-col">
         <span className="text-body-sm text-text-secondary">{issue.title}</span>
         <span className="text-caption text-text-secondary">
@@ -675,7 +676,7 @@ function HistoryRow({ item }: { item: AuditHistoryItem }) {
   });
 
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
       <span className="text-body-sm text-text-secondary">
         {when}
         {/* Счётчики рядом с датой, а не только изменение балла: «+3» не
@@ -751,9 +752,11 @@ const GRADE: Record<string, { label: string; tone: Tone }> = {
 function ReviewCard({ review }: { review: ReviewRead }) {
   if (!review.available) {
     return (
-      <Card>
-        <CardHeader title="Разбор моделью" />
-        <p className="text-body-sm text-text-secondary">{review.reason}</p>
+      <Card tone="quiet">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span className="text-body-sm text-text-primary font-medium">Разбор моделью</span>
+          <span className="text-caption text-text-secondary">{review.reason}</span>
+        </div>
       </Card>
     );
   }
@@ -819,8 +822,8 @@ function ChangesCard({ changes }: { changes: AuditChangesRead }) {
 
   if (nothing) {
     return (
-      <Card>
-        <p className="text-body-sm text-text-secondary">
+      <Card tone="quiet">
+        <p className="text-caption text-text-secondary">
           С прошлой проверки список замечаний не изменился.
         </p>
       </Card>
@@ -868,11 +871,11 @@ function ChangeGroup({
       <StatusBadge tone={tone} className="w-fit">
         {title}: {issues.length}
       </StatusBadge>
-      <ul className="flex flex-col gap-0.5">
+      {/* Маркеры обязательны: три строки подряд без них читаются как абзац,
+          и человек не видит, что это перечень. */}
+      <ul className="text-body-sm text-text-primary ml-4 flex list-disc flex-col gap-0.5">
         {issues.map((issue) => (
-          <li key={issue.key ?? issue.title} className="text-body-sm text-text-primary">
-            {issue.title}
-          </li>
+          <li key={issue.key ?? issue.title}>{issue.title}</li>
         ))}
       </ul>
     </div>

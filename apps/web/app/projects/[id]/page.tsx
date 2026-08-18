@@ -17,6 +17,7 @@ import {
   CardHeader,
   ConfirmationDialog,
   ErrorState,
+  Hint,
   Input,
   Modal,
   ProjectStatusBadge,
@@ -405,7 +406,7 @@ function AccessCard({ projectId }: { projectId: string }) {
             {people.map((person) => (
               <div
                 key={person.user_id}
-                className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+                className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
               >
                 <div className="flex min-w-0 flex-col">
                   <span className="text-body-sm text-text-primary">{person.email}</span>
@@ -431,7 +432,10 @@ function AccessCard({ projectId }: { projectId: string }) {
 
         {!forbidden && (
           <div className="flex flex-wrap items-end gap-2">
-            <div className="min-w-56 flex-1">
+            {/* Поле по размеру содержимого: адрес почты не занимает
+                семисот пикселей, а поле такой ширины выглядит как незаполненная
+                форма, а не как одно короткое действие. */}
+            <div className="w-full max-w-xs min-w-56">
               <Input
                 label="Почта"
                 placeholder="ivan@yandex.ru"
@@ -456,10 +460,10 @@ function AccessCard({ projectId }: { projectId: string }) {
 
         {failure && <p className="text-body-sm text-critical">{failure}</p>}
 
-        <p className="text-caption text-text-secondary">
+        <Hint>
           Пароль не нужен: человек войдёт своим аккаунтом Яндекса. Подойдёт любое написание адреса —
           ya.ru и yandex.ru, с точкой или дефисом в логине: это один и тот же ящик.
-        </p>
+        </Hint>
       </div>
     </Card>
   );

@@ -22,6 +22,8 @@ import {
   Button,
   Card,
   CardHeader,
+  Details,
+  Hint,
   EmptyState,
   ErrorState,
   FilterBar,
@@ -435,7 +437,7 @@ function SemanticsScreen() {
                     {clusters.map((group) => (
                       <div
                         key={group.name}
-                        className="border-border flex flex-wrap items-baseline justify-between gap-2 border-b py-2.5 last:border-b-0"
+                        className="border-border-subtle flex flex-wrap items-baseline justify-between gap-2 border-b py-2.5 last:border-b-0"
                       >
                         <div className="flex min-w-0 flex-col">
                           <span className="text-body-sm text-text-primary">{group.name}</span>
@@ -481,7 +483,7 @@ function SemanticsScreen() {
                       {cross.items.slice(0, 20).map((item) => (
                         <div
                           key={item.phrase}
-                          className="border-border flex flex-col gap-1 border-b py-2.5 last:border-b-0"
+                          className="border-border-subtle flex flex-col gap-1 border-b py-2.5 last:border-b-0"
                         >
                           <span className="text-body-sm text-text-primary font-medium">
                             {item.phrase}
@@ -582,7 +584,7 @@ function SemanticsScreen() {
                           {minus.suggestions.map((item) => (
                             <div
                               key={item.word}
-                              className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+                              className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
                             >
                               <div className="flex min-w-0 flex-col">
                                 <span className="text-body-sm text-text-primary">
@@ -630,11 +632,12 @@ function SemanticsScreen() {
                     </Button>
                   )}
                 </div>
-                <p className="text-caption text-text-secondary mt-2">
-                  Перепроверка нужна после того, как поменялся регион проекта или минус-слова:
-                  фразы, загруженные раньше, разбирались по старым условиям. Ваши решения она не
-                  трогает.
-                </p>
+                <Details summary="Когда нужна перепроверка" className="mt-3">
+                  <p>
+                    После того как поменялся регион проекта или минус-слова: фразы, загруженные
+                    раньше, разбирались по старым условиям. Ваши решения перепроверка не трогает.
+                  </p>
+                </Details>
               </Card>
 
               <FilterBar
@@ -867,10 +870,10 @@ function OnboardingCard({
       />
 
       {!data.has_audit ? (
-        <p className="text-body-sm text-text-secondary mt-2">
+        <Hint className="mt-2">
           Запустите проверку сайта на экране «Аудит». Тем же заходом система прочитает название,
           город, услуги, цены и контакты — вписывать их руками не придётся.
-        </p>
+        </Hint>
       ) : (
         <>
           {data.source_url && (
@@ -887,7 +890,7 @@ function OnboardingCard({
               .map(([label, value]) => (
                 <div
                   key={label}
-                  className="border-border flex flex-wrap gap-x-3 border-b py-2 last:border-b-0"
+                  className="border-border-subtle flex flex-wrap gap-x-3 border-b py-2 last:border-b-0"
                 >
                   <dt className="text-caption text-text-secondary w-36 shrink-0">{label}</dt>
                   <dd className="text-body-sm text-text-primary min-w-0 flex-1">{value}</dd>
@@ -896,10 +899,10 @@ function OnboardingCard({
           </dl>
 
           {data.filled === 0 && (
-            <p className="text-body-sm text-text-secondary mt-2">
+            <Hint className="mt-2">
               На странице не нашлось ни города, ни услуг, ни контактов. Так бывает, если сайт
               собирается скриптами: наш разбор видит пустой каркас. Заполните бриф руками.
-            </p>
+            </Hint>
           )}
 
           {data.can_apply.length > 0 && (
@@ -983,7 +986,9 @@ function BriefCard({ brief, onEdit }: { brief: BriefRead; onEdit: () => void }) 
       </div>
 
       {!filled ? (
-        <p className="text-body-sm text-text-secondary">{brief.why_manual}</p>
+        <Details summary="Почему часть работы остаётся ручной">
+          <p>{brief.why_manual}</p>
+        </Details>
       ) : (
         <>
           <ol className="mb-3 flex flex-col gap-1.5">
@@ -999,7 +1004,7 @@ function BriefCard({ brief, onEdit }: { brief: BriefRead; onEdit: () => void }) 
             {brief.masks.map((mask) => (
               <div
                 key={mask.query}
-                className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
+                className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2 last:border-b-0"
               >
                 <div className="flex min-w-0 flex-col">
                   <code className="text-body-sm text-text-primary break-all">{mask.query}</code>
@@ -1010,7 +1015,9 @@ function BriefCard({ brief, onEdit }: { brief: BriefRead; onEdit: () => void }) 
             ))}
           </div>
 
-          <p className="text-caption text-text-secondary mt-3">{brief.why_manual}</p>
+          <Details summary="Почему часть работы остаётся ручной" className="mt-3">
+            <p>{brief.why_manual}</p>
+          </Details>
         </>
       )}
     </Card>
@@ -1039,7 +1046,7 @@ function QuestionRow({
   const [saved, setSaved] = useState(false);
 
   return (
-    <li className="border-border border-b py-2.5 last:border-b-0">
+    <li className="border-border-subtle border-b py-2.5 last:border-b-0">
       <p className="text-body-sm text-text-primary">{question.text}</p>
       <p className="text-caption text-text-secondary">{question.why}</p>
       <div className="mt-1.5 flex items-start gap-2">
@@ -1114,11 +1121,19 @@ function SuggestedWords({
           </Button>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+      {/* Метки, а не кнопки-ссылки. Раньше два десятка слов шли подряд
+          обычным текстом со знаком плюс — ряд читался как абзац, и было
+          неочевидно, что по каждому слову можно нажать. */}
+      <div className="flex flex-wrap gap-1.5">
         {words.map((word) => (
-          <Button key={word} size="sm" variant="ghost" onClick={() => onAdd(word)}>
+          <button
+            key={word}
+            type="button"
+            onClick={() => onAdd(word)}
+            className="border-border bg-bg-secondary text-caption text-text-primary rounded-pill hover:bg-surface-hover focus-visible:outline-focus border px-2.5 py-1 transition-colors duration-(--duration-fast) focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
             + {word}
-          </Button>
+          </button>
         ))}
       </div>
     </div>
@@ -1138,7 +1153,7 @@ function CleanupBreakdown({ groups }: { groups: CleanupGroupRead[] }) {
     <div className="border-border mt-3 flex flex-col border-t pt-3">
       <p className="text-caption text-text-secondary mb-1.5">Что ушло в нецелевые и почему</p>
       {groups.map((group) => (
-        <div key={group.reason} className="border-border border-b py-2 last:border-b-0">
+        <div key={group.reason} className="border-border-subtle border-b py-2 last:border-b-0">
           <p className="text-body-sm text-text-primary">
             {group.label} — {group.phrases} {plural(group.phrases, "фраза", "фразы", "фраз")}
           </p>
@@ -1160,7 +1175,7 @@ function KeywordRow({
   onMove: (id: string, intent: Intent) => void;
 }) {
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-b py-2.5 last:border-b-0">
       <div className="flex min-w-0 flex-col">
         <span className="text-body-sm text-text-primary">{keyword.phrase}</span>
         <span className="text-caption text-text-secondary">

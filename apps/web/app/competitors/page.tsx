@@ -403,7 +403,7 @@ function SuggestionsCard({
           {data.known.map((item) => (
             <div
               key={item.url}
-              className="border-border flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0"
+              className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-2.5 last:border-b-0"
             >
               <div className="flex min-w-0 flex-col">
                 <span className="text-body-sm text-text-primary">{item.title}</span>
@@ -455,7 +455,7 @@ function SuggestionsCard({
  */
 function OfferRow({ row }: { row: OfferRowRead }) {
   return (
-    <div className="border-border border-b py-3 last:border-b-0">
+    <div className="border-border-subtle border-b py-3 last:border-b-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-body-sm text-text-primary font-medium">{row.label}</span>
         {row.is_gap && <StatusBadge tone="warning">Смотреть в первую очередь</StatusBadge>}
@@ -494,7 +494,7 @@ function OfferRow({ row }: { row: OfferRowRead }) {
 
 function ComparisonRow({ row }: { row: FeatureRowRead }) {
   return (
-    <tr className="border-border border-b last:border-b-0">
+    <tr className="border-border-subtle border-b last:border-b-0">
       <td className="py-2.5 pr-3">
         <span className="text-body-sm text-text-primary block">{row.label}</span>
         <span className="text-caption text-text-secondary block">{row.why}</span>
@@ -541,7 +541,7 @@ function CompetitorRow({
   onRecheck: () => void;
 }) {
   return (
-    <div className="border-border flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0">
       <div className="flex min-w-0 flex-col">
         <span className="text-body-sm text-text-primary">{competitor.title ?? competitor.url}</span>
         <span className="text-caption text-text-secondary break-all">{competitor.url}</span>

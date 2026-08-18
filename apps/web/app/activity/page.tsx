@@ -130,7 +130,7 @@ function ActivityRow({ item }: { item: ActivityRead }) {
   const changes = Object.entries(item.details ?? {});
 
   return (
-    <div className="border-border flex flex-wrap items-start justify-between gap-3 border-b py-3 last:border-b-0">
+    <div className="border-border-subtle flex flex-wrap items-start justify-between gap-3 border-b py-3 last:border-b-0">
       <div className="flex min-w-0 flex-col gap-1">
         <span className="text-body-sm text-text-primary">
           {/* Имя автора выделено: журнал читают ради ответа на вопрос «кто». */}

@@ -31,10 +31,27 @@ export {
 } from "./components/StatusBadge";
 export { MetricTrend, type MetricPolarity, type MetricTrendProps } from "./components/MetricTrend";
 
-export { Card, CardHeader, type CardProps, type CardHeaderProps } from "./components/Card";
+export {
+  Card,
+  CardHeader,
+  Section,
+  type CardProps,
+  type CardHeaderProps,
+  type CardTone,
+  type SectionProps,
+} from "./components/Card";
+export { Hint, Details, type HintProps, type DetailsProps } from "./components/Hint";
+export { ListRow, type ListRowProps } from "./components/ListRow";
 export { Sparkline, type SparklineProps } from "./components/Sparkline";
 export { LineChart, type ChartSeries, type LineChartProps } from "./components/LineChart";
 export { KpiCard, type KpiCardProps } from "./components/KpiCard";
+export {
+  StatStrip,
+  ProgressBar,
+  type Stat,
+  type StatStripProps,
+  type ProgressBarProps,
+} from "./components/StatStrip";
 
 export { RecommendationCard, type RecommendationCardProps } from "./components/RecommendationCard";
 export { AlertCard, type AlertCardProps } from "./components/AlertCard";
