@@ -10,6 +10,45 @@
 
 name: ads-os
 
+# Настройки внешних сервисов — одним куском на все процессы, которые к ним
+# обращаются.
+#
+# Так сделано после прямой ошибки: у воркера значения были вписаны отдельно и
+# намертво — `AI_PROVIDER: stub`. Ключ модели при этом лежал в .env и исправно
+# читался API, а воркер, в котором и работает разбор сайта, продолжал молча
+# отвечать выдумками заглушки. Найти такое по поведению почти невозможно:
+# ответы приходят, они правдоподобны, и ничто не говорит, что модель к ним
+# отношения не имеет.
+#
+# Значения по умолчанию выбраны так, чтобы пустой .env означал безопасное
+# состояние: заглушка вместо модели, никакого доступа к рекламному кабинету,
+# никаких обращений к Вордстату.
+x-model-env: &model-env
+  # Провайдер модели. По умолчанию заглушка, а не openai: без ключа «openai»
+  # означал бы ошибку на каждом вызове.
+  AI_PROVIDER: ${AI_PROVIDER:-stub}
+  AI_PROVIDER_BY_TASK: ${AI_PROVIDER_BY_TASK:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+  OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-terra}
+  OPENAI_MODEL_BULK: ${OPENAI_MODEL_BULK:-gpt-5.6-luna}
+  # Персональные данные наружу не уходят: провайдера для них нет вовсе, и
+  # система откажет в запросе, а не отправит его (v0.4 §2.3). Значение
+  # намеренно не берётся из .env — это решение, а не настройка.
+  AI_SENSITIVE_PROVIDER: none
+  # Рекламный кабинет не подключается до прохождения проверок безопасности
+  # (v0.4 §2.1), даже если токен уже получен. Предохранитель отдельно от
+  # переключателя: одного переключения адаптера недостаточно.
+  AD_PLATFORM_ADAPTER: ${AD_PLATFORM_ADAPTER:-mock}
+  AD_PLATFORM_LIVE_APPROVED: ${AD_PLATFORM_LIVE_APPROVED:-false}
+  YANDEX_DIRECT_TOKEN: ${YANDEX_DIRECT_TOKEN:-}
+  YANDEX_DIRECT_LOGIN: ${YANDEX_DIRECT_LOGIN:-}
+  YANDEX_DIRECT_SANDBOX: ${YANDEX_DIRECT_SANDBOX:-true}
+  YANDEX_METRICA_TOKEN: ${YANDEX_METRICA_TOKEN:-}
+  WORDSTAT_PROVIDER: ${WORDSTAT_PROVIDER:-none}
+  YANDEX_WORDSTAT_TOKEN: ${YANDEX_WORDSTAT_TOKEN:-}
+  YANDEX_CLOUD_FOLDER_ID: ${YANDEX_CLOUD_FOLDER_ID:-}
+
 services:
   caddy:
     image: caddy:2-alpine
@@ -52,6 +91,7 @@ services:
     expose:
       - "8000"
     environment:
+      <<: *model-env
       APP_ENV: staging
       APP_BASE_URL: https://${DOMAIN}
       LOG_LEVEL: info
@@ -62,25 +102,6 @@ services:
       BOOTSTRAP_OWNER_EMAIL: ${BOOTSTRAP_OWNER_EMAIL}
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
-      # Выбран ChatGPT, но до появления ключа работает детерминированная
-      # заглушка. Значение по умолчанию — stub, а не openai: без ключа
-      # «openai» означал бы ошибку на каждом вызове.
-      AI_PROVIDER: ${AI_PROVIDER:-stub}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      # Персональные данные наружу не уходят: провайдера для них нет вовсе,
-      # и система откажет в запросе, а не отправит его (v0.4 §2.3).
-      AI_SENSITIVE_PROVIDER: none
-      # Рекламный кабинет не подключается до прохождения проверок безопасности
-      # (v0.4 §2.1), даже если токен уже получен. Предохранитель отдельно от
-      # переключателя: одного переключения адаптера недостаточно.
-      AD_PLATFORM_ADAPTER: ${AD_PLATFORM_ADAPTER:-mock}
-      AD_PLATFORM_LIVE_APPROVED: ${AD_PLATFORM_LIVE_APPROVED:-false}
-      YANDEX_DIRECT_TOKEN: ${YANDEX_DIRECT_TOKEN:-}
-      WORDSTAT_PROVIDER: ${WORDSTAT_PROVIDER:-none}
-      YANDEX_WORDSTAT_TOKEN: ${YANDEX_WORDSTAT_TOKEN:-}
-      YANDEX_CLOUD_FOLDER_ID: ${YANDEX_CLOUD_FOLDER_ID:-}
-      YANDEX_DIRECT_LOGIN: ${YANDEX_DIRECT_LOGIN:-}
-      YANDEX_DIRECT_SANDBOX: ${YANDEX_DIRECT_SANDBOX:-true}
       AUTOPILOT_ENABLED: "false"
     depends_on:
       postgres:
@@ -99,13 +120,13 @@ services:
       ["celery", "-A", "ads_os.worker.app", "worker", "-Q", "default", "--concurrency", "2"]
     restart: unless-stopped
     environment:
+      # Модель нужна именно здесь: разбор сайта и определение вида конкурента
+      # выполняются в воркере, а не в API.
+      <<: *model-env
       APP_ENV: staging
       LOG_LEVEL: info
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
-      AI_PROVIDER: stub
-      AI_SENSITIVE_PROVIDER: none
-      AD_PLATFORM_ADAPTER: mock
     # Проверка живости своя: унаследованная от образа API стучится на порт 8000,
     # которого у воркера нет. Она была бы вечно красной при исправно работающем
     # процессе — а такая проверка хуже отсутствующей, потому что на неё
