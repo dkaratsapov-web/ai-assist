@@ -228,3 +228,79 @@ class TestГруппировка:
 
         stray = next(r for r in await rows(session, item) if "казань" in r.phrase)
         assert stray.cluster_name is None
+
+
+class TestРучныеГруппы:
+    """Пересчёт не должен стирать раскладку, сделанную руками."""
+
+    async def test_ручная_группа_переживает_пересчёт(
+        self, session: AsyncSession, project: tuple[Organization, Project]
+    ) -> None:
+        org, item = project
+        await store(
+            session,
+            org,
+            item,
+            [Phrase("пластиковые окна тверь", 5400), Phrase("купить пластиковые окна", 3100)],
+        )
+        row = (await rows(session, item))[0]
+        await keyword_store.move_to_group(
+            session, [row.id], project_id=item.id, group="Своя группа"
+        )
+
+        await keyword_store.recluster(session, project_id=item.id)
+
+        assert (await rows(session, item))[0].cluster_name == "Своя группа"
+
+    async def test_остальные_фразы_пересчёт_трогает(
+        self, session: AsyncSession, project: tuple[Organization, Project]
+    ) -> None:
+        """Иначе одна ручная правка заморозила бы всю структуру."""
+        org, item = project
+        await store(
+            session,
+            org,
+            item,
+            [Phrase("пластиковые окна тверь", 5400), Phrase("купить пластиковые окна", 3100)],
+        )
+        first = (await rows(session, item))[0]
+        await keyword_store.move_to_group(
+            session, [first.id], project_id=item.id, group="Своя группа"
+        )
+
+        await keyword_store.recluster(session, project_id=item.id)
+
+        others = [r for r in await rows(session, item) if r.id != first.id]
+        assert all(r.cluster_name and r.cluster_name != "Своя группа" for r in others)
+
+    async def test_роспуск_возвращает_фразы_расчёту(
+        self, session: AsyncSession, project: tuple[Organization, Project]
+    ) -> None:
+        org, item = project
+        await store(session, org, item, [Phrase("пластиковые окна тверь", 5400)])
+        row = (await rows(session, item))[0]
+        await keyword_store.move_to_group(session, [row.id], project_id=item.id, group="Своя")
+
+        await keyword_store.dissolve_group(session, project_id=item.id, name="Своя")
+        await keyword_store.recluster(session, project_id=item.id)
+
+        after = (await rows(session, item))[0]
+        assert after.cluster_manual is False
+        assert after.cluster_name != "Своя"
+
+    async def test_нецелевая_фраза_вылетает_из_группы_даже_ручной(
+        self, session: AsyncSession, project: tuple[Organization, Project]
+    ) -> None:
+        """Раз фраза признана нецелевой, объявления по ней не будет — и место
+        в структуре она занимать не должна."""
+        org, item = project
+        await store(session, org, item, [Phrase("пластиковые окна тверь", 5400)])
+        row = (await rows(session, item))[0]
+        await keyword_store.move_to_group(session, [row.id], project_id=item.id, group="Своя")
+        row.intent = Intent.IRRELEVANT
+        row.is_manual = True
+        await session.flush()
+
+        await keyword_store.recluster(session, project_id=item.id)
+
+        assert (await rows(session, item))[0].cluster_name is None

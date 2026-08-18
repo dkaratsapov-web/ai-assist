@@ -890,6 +890,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/keywords/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Группы вместе с фразами
+         * @description Отдаёт группы так, как они сейчас лежат в ядре.
+         *
+         *     Читаются из базы, а не пересчитываются на лету. Раньше было наоборот, и это
+         *     делало правку невозможной в принципе: человек переносил фразу, а следующее
+         *     открытие экрана показывало прежнюю раскладку — расчёт не знал о его
+         *     решении и выводил группы заново.
+         */
+        get: operations["list_groups_api_v1_projects__project_id__keywords_groups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/groups/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Перенести фразы в группу */
+        post: operations["move_phrases_api_v1_projects__project_id__keywords_groups_move_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/groups/recluster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Пересобрать группы
+         * @description Раскладывает фразы заново.
+         *
+         *     Ручные группы не трогает: пересчёт, стирающий чужую работу, — это причина
+         *     больше никогда не нажимать эту кнопку.
+         */
+        post: operations["recluster_groups_api_v1_projects__project_id__keywords_groups_recluster_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/keywords/groups/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Распустить группу
+         * @description Распускает группу: фразы остаются, группы больше нет.
+         *
+         *     Фразы возвращаются расчёту, а не помечаются ручными. Человек сказал «эта
+         *     группа неверна», а не «эти фразы не нужны в структуре».
+         */
+        delete: operations["dissolve_group_api_v1_projects__project_id__keywords_groups__name__delete"];
+        options?: never;
+        head?: never;
+        /** Переименовать группу */
+        patch: operations["rename_group_api_v1_projects__project_id__keywords_groups__name__patch"];
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/keywords/import": {
         parameters: {
             query?: never;
@@ -2181,6 +2270,79 @@ export interface components {
             rivals_with: number;
             /** Why */
             why: string;
+        };
+        /** GroupChangeRead */
+        GroupChangeRead: {
+            /** Groups */
+            groups: number;
+            /** Moved */
+            moved: number;
+        };
+        /** GroupList */
+        GroupList: {
+            /** Items */
+            items: components["schemas"]["GroupRead"][];
+            /** Total */
+            total: number;
+            /** Ungrouped */
+            ungrouped?: components["schemas"]["GroupPhraseRead"][];
+        };
+        /**
+         * GroupMove
+         * @description Перенос фраз в группу.
+         */
+        GroupMove: {
+            /** Group */
+            group?: string | null;
+            /** Keyword Ids */
+            keyword_ids: string[];
+        };
+        /**
+         * GroupPhraseRead
+         * @description Фраза внутри группы.
+         */
+        GroupPhraseRead: {
+            /** Frequency */
+            frequency: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            intent: components["schemas"]["Intent"];
+            /**
+             * Manual
+             * @default false
+             */
+            manual: boolean;
+            /** Phrase */
+            phrase: string;
+        };
+        /**
+         * GroupRead
+         * @description Группа вместе с фразами.
+         *
+         *     Фразы приходят внутри группы, а не отдельным запросом: экран показывает
+         *     их вместе, и второй запрос дал бы мигание — сначала группы, потом
+         *     содержимое.
+         */
+        GroupRead: {
+            /**
+             * Manual
+             * @default false
+             */
+            manual: boolean;
+            /** Name */
+            name: string;
+            /** Phrases */
+            phrases: components["schemas"]["GroupPhraseRead"][];
+            /** Total Frequency */
+            total_frequency: number;
+        };
+        /** GroupRename */
+        GroupRename: {
+            /** Name */
+            name: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -5073,6 +5235,191 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CollectionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_groups_api_v1_projects__project_id__keywords_groups_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupList"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    move_phrases_api_v1_projects__project_id__keywords_groups_move_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupMove"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupChangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recluster_groups_api_v1_projects__project_id__keywords_groups_recluster_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupChangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dissolve_group_api_v1_projects__project_id__keywords_groups__name__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupChangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    rename_group_api_v1_projects__project_id__keywords_groups__name__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GroupRename"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupChangeRead"];
                 };
             };
             /** @description Validation Error */

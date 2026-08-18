@@ -1056,6 +1056,58 @@ class ClusterRead(BaseModel):
     total_frequency: int
 
 
+class GroupPhraseRead(BaseModel):
+    """Фраза внутри группы."""
+
+    id: uuid.UUID
+    phrase: str
+    frequency: int | None
+    intent: Intent
+    #: Фразу положил сюда человек, а не расчёт. Пересчёт её не тронет.
+    manual: bool = False
+
+
+class GroupRead(BaseModel):
+    """Группа вместе с фразами.
+
+    Фразы приходят внутри группы, а не отдельным запросом: экран показывает
+    их вместе, и второй запрос дал бы мигание — сначала группы, потом
+    содержимое.
+    """
+
+    name: str
+    phrases: list[GroupPhraseRead]
+    total_frequency: int
+    #: Группу собрал человек: её имя и состав пересчёт не меняет.
+    manual: bool = False
+
+
+class GroupList(BaseModel):
+    items: list[GroupRead]
+    total: int
+    #: Фразы, не попавшие ни в одну группу. Отдельно, а не группой с пустым
+    #: именем: в кампанию они не идут, и путать их с настоящими нельзя.
+    ungrouped: list[GroupPhraseRead] = Field(default_factory=list)
+
+
+class GroupMove(BaseModel):
+    """Перенос фраз в группу."""
+
+    keyword_ids: list[uuid.UUID] = Field(min_length=1, max_length=2000)
+    #: Пусто означает «убрать из групп»: фраза остаётся в ядре, но в структуру
+    #: кампании не идёт.
+    group: str | None = Field(default=None, max_length=200)
+
+
+class GroupRename(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class GroupChangeRead(BaseModel):
+    moved: int
+    groups: int
+
+
 class ClusterList(BaseModel):
     items: list[ClusterRead]
     total: int

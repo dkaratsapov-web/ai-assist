@@ -51,6 +51,14 @@ class Keyword(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     #: целиком, и связь на удаляемую запись только мешала бы.
     cluster_name: Mapped[str | None] = mapped_column(String(400), nullable=True)
 
+    #: Группу назначил человек, а не расчёт.
+    #:
+    #: До появления этого признака группы пересчитывались при каждом сборе и
+    #: правку не переживали: специалист переносил фразу, а следующая загрузка
+    #: возвращала её обратно. Редактирование, которое отменяется само, хуже
+    #: отсутствующего — на него тратят время, а результата нет.
+    cluster_manual: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
 
 class KeywordBrief(UUIDPrimaryKey, Timestamps, OrganizationScoped, Base):
     """Ответы клиента, из которых строятся маски для Вордстата.

@@ -77,6 +77,12 @@ export type CollectionMaskRead = Schemas["CollectionMaskRead"];
 export type CleanupResult = Schemas["CleanupResult"];
 export type ClusterRead = Schemas["ClusterRead"];
 export type ClusterList = Schemas["ClusterList"];
+export type GroupList = Schemas["GroupList"];
+export type GroupRead = Schemas["GroupRead"];
+export type GroupPhraseRead = Schemas["GroupPhraseRead"];
+export type GroupMove = Schemas["GroupMove"];
+export type GroupRename = Schemas["GroupRename"];
+export type GroupChangeRead = Schemas["GroupChangeRead"];
 export type MinusWordRead = Schemas["MinusWordRead"];
 export type MinusWordList = Schemas["MinusWordList"];
 export type AdDraftRead = Schemas["AdDraftRead"];
@@ -637,6 +643,43 @@ export class ApiClient {
     return this.request<void>(`/api/v1/projects/${projectId}/access/${userId}`, {
       method: "DELETE",
     });
+  }
+
+  /** Группы вместе с фразами — так, как они сейчас лежат в ядре. */
+  listGroups(projectId: string): Promise<GroupList> {
+    return this.request<GroupList>(`/api/v1/projects/${projectId}/keywords/groups`);
+  }
+
+  /** Перенести фразы в группу. Пустое имя убирает их из групп. */
+  moveToGroup(projectId: string, payload: GroupMove): Promise<GroupChangeRead> {
+    return this.request<GroupChangeRead>(`/api/v1/projects/${projectId}/keywords/groups/move`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Переименовать группу. Её фразы становятся ручными. */
+  renameGroup(projectId: string, name: string, payload: GroupRename): Promise<GroupChangeRead> {
+    return this.request<GroupChangeRead>(
+      `/api/v1/projects/${projectId}/keywords/groups/${encodeURIComponent(name)}`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+    );
+  }
+
+  /** Распустить группу: фразы остаются, группы больше нет. */
+  dissolveGroup(projectId: string, name: string): Promise<GroupChangeRead> {
+    return this.request<GroupChangeRead>(
+      `/api/v1/projects/${projectId}/keywords/groups/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** Разложить фразы заново. Ручные группы не трогает. */
+  reclusterGroups(projectId: string): Promise<GroupChangeRead> {
+    return this.request<GroupChangeRead>(
+      `/api/v1/projects/${projectId}/keywords/groups/recluster`,
+      { method: "POST" },
+    );
   }
 
   /** Ход сбора частотностей: где сбор сейчас и сколько осталось квоты. */

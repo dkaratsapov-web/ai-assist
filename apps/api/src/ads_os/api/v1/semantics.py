@@ -12,12 +12,12 @@ from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import Select, select
 
 from ...config import get_settings
-from ...errors import AppError
+from ...errors import AppError, NotFoundError
 from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...models.collection import KeywordCollection
-from ...services import niches, profile, utm, wordstat_quota
+from ...services import keyword_store, niches, profile, utm, wordstat_quota
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -56,6 +56,12 @@ from ..schemas import (
     CrossMinusRead,
     CrossMinusResultRead,
     DuplicateRead,
+    GroupChangeRead,
+    GroupList,
+    GroupMove,
+    GroupPhraseRead,
+    GroupRead,
+    GroupRename,
     ImportSummary,
     KeywordFileImport,
     KeywordImport,
@@ -1539,3 +1545,166 @@ async def _collection_read(collection: KeywordCollection | None) -> CollectionRe
         finished_at=collection.finished_at,
         blocked_reason=blocked,
     )
+
+
+# ─── Группы: чтение и правка ──────────────────────────────────────────────────
+
+
+@router.get(
+    "/{project_id}/keywords/groups",
+    response_model=GroupList,
+    summary="Группы вместе с фразами",
+)
+async def list_groups(
+    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
+) -> GroupList:
+    """Отдаёт группы так, как они сейчас лежат в ядре.
+
+    Читаются из базы, а не пересчитываются на лету. Раньше было наоборот, и это
+    делало правку невозможной в принципе: человек переносил фразу, а следующее
+    открытие экрана показывало прежнюю раскладку — расчёт не знал о его
+    решении и выводил группы заново.
+    """
+    await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _keywords(session, ctx, project_id)
+    targeted = [row for row in rows if row.intent is not Intent.IRRELEVANT]
+
+    groups: dict[str, list[Keyword]] = {}
+    ungrouped: list[Keyword] = []
+
+    for row in targeted:
+        if row.cluster_name:
+            groups.setdefault(row.cluster_name, []).append(row)
+        else:
+            ungrouped.append(row)
+
+    items = [
+        GroupRead(
+            name=name,
+            phrases=[_group_phrase(row) for row in _by_frequency(members)],
+            total_frequency=sum(row.frequency or 0 for row in members),
+            manual=any(row.cluster_manual for row in members),
+        )
+        for name, members in groups.items()
+    ]
+    # Крупные группы сверху: с них начинают работу, и они же решают структуру
+    # кампании.
+    items.sort(key=lambda group: group.total_frequency, reverse=True)
+
+    return GroupList(
+        items=items,
+        total=len(items),
+        ungrouped=[_group_phrase(row) for row in _by_frequency(ungrouped)],
+    )
+
+
+@router.post(
+    "/{project_id}/keywords/groups/move",
+    response_model=GroupChangeRead,
+    summary="Перенести фразы в группу",
+)
+async def move_phrases(
+    project_id: uuid.UUID, payload: GroupMove, session: SessionDep, ctx: WriteDep
+) -> GroupChangeRead:
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    change = await keyword_store.move_to_group(
+        session, payload.keyword_ids, project_id=project.id, group=payload.group
+    )
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.KEYWORDS_CLEANED,
+        subject=project.name,
+        actor_name=ctx.user_name,
+        project_id=project.id,
+        details={"перенесено фраз": str(change.moved), "группа": payload.group or "без группы"},
+    )
+
+    return GroupChangeRead(moved=change.moved, groups=change.groups)
+
+
+@router.patch(
+    "/{project_id}/keywords/groups/{name}",
+    response_model=GroupChangeRead,
+    summary="Переименовать группу",
+)
+async def rename_group(
+    project_id: uuid.UUID,
+    name: str,
+    payload: GroupRename,
+    session: SessionDep,
+    ctx: WriteDep,
+) -> GroupChangeRead:
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    change = await keyword_store.rename_group(
+        session, project_id=project.id, old=name, new=payload.name
+    )
+    if change.moved == 0:
+        raise NotFoundError()
+
+    return GroupChangeRead(moved=change.moved, groups=change.groups)
+
+
+@router.delete(
+    "/{project_id}/keywords/groups/{name}",
+    response_model=GroupChangeRead,
+    summary="Распустить группу",
+)
+async def dissolve_group(
+    project_id: uuid.UUID, name: str, session: SessionDep, ctx: WriteDep
+) -> GroupChangeRead:
+    """Распускает группу: фразы остаются, группы больше нет.
+
+    Фразы возвращаются расчёту, а не помечаются ручными. Человек сказал «эта
+    группа неверна», а не «эти фразы не нужны в структуре».
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    change = await keyword_store.dissolve_group(session, project_id=project.id, name=name)
+    if change.moved == 0:
+        raise NotFoundError()
+
+    return GroupChangeRead(moved=change.moved, groups=change.groups)
+
+
+@router.post(
+    "/{project_id}/keywords/groups/recluster",
+    response_model=GroupChangeRead,
+    summary="Пересобрать группы",
+)
+async def recluster_groups(
+    project_id: uuid.UUID, session: SessionDep, ctx: WriteDep
+) -> GroupChangeRead:
+    """Раскладывает фразы заново.
+
+    Ручные группы не трогает: пересчёт, стирающий чужую работу, — это причина
+    больше никогда не нажимать эту кнопку.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    groups = await keyword_store.recluster(session, project_id=project.id)
+    rows = await _keywords(session, ctx, project_id)
+
+    return GroupChangeRead(
+        moved=sum(1 for row in rows if not row.cluster_manual and row.cluster_name),
+        groups=groups,
+    )
+
+
+def _group_phrase(row: Keyword) -> GroupPhraseRead:
+    return GroupPhraseRead(
+        id=row.id,
+        phrase=row.phrase,
+        frequency=row.frequency,
+        intent=row.intent,
+        manual=row.cluster_manual,
+    )
+
+
+def _by_frequency(rows: list[Keyword]) -> list[Keyword]:
+    """Частые фразы сверху: по ним и судят о группе."""
+    return sorted(rows, key=lambda row: (-(row.frequency or 0), row.phrase))

@@ -9,7 +9,9 @@ import type {
   CollectionMaskRead,
   CollectionRead,
   CleanupResult,
-  ClusterRead,
+  CrossMinusRead,
+  GroupList,
+  GroupRead,
   CrossMinusResultRead,
   ImportSummary,
   Intent,
@@ -70,7 +72,6 @@ function SemanticsScreen() {
   const [projects, setProjects] = useState<ProjectRead[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [keywords, setKeywords] = useState<KeywordRead[] | null>(null);
-  const [clusters, setClusters] = useState<ClusterRead[]>([]);
   const [minus, setMinus] = useState<MinusWordList | null>(null);
   const [cross, setCross] = useState<CrossMinusResultRead | null>(null);
   const [sets, setSets] = useState<MinusWordSetRead[]>([]);
@@ -89,6 +90,7 @@ function SemanticsScreen() {
   const [cleanup, setCleanup] = useState<CleanupResult | null>(null);
   const [brief, setBrief] = useState<BriefRead | null>(null);
   const [collection, setCollection] = useState<CollectionRead | null>(null);
+  const [groups, setGroups] = useState<GroupList | null>(null);
   const [collecting, setCollecting] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingRead | null>(null);
   const [applying, setApplying] = useState(false);
@@ -130,33 +132,33 @@ function SemanticsScreen() {
       try {
         const [
           list,
-          groups,
           minusWords,
           savedSets,
           crossing,
           briefData,
           onboardingData,
           collectionData,
+          groupsData,
         ] = await Promise.all([
           api.listKeywords(selectedId),
-          api.listClusters(selectedId),
           api.listMinusWords(selectedId),
           api.listMinusWordSets(),
           api.getCrossMinus(selectedId),
           api.getBrief(selectedId),
           api.getOnboarding(selectedId),
           api.getCollection(selectedId),
+          api.listGroups(selectedId),
         ]);
         if (ignore) return;
         setError(null);
         setKeywords(list.items);
-        setClusters(groups.items);
         setMinus(minusWords);
         setSets(savedSets.items);
         setCross(crossing);
         setBrief(briefData);
         setOnboarding(onboardingData);
         setCollection(collectionData);
+        setGroups(groupsData);
         setBriefDraft({
           sells: briefData.sells ?? "",
           synonyms: briefData.synonyms ?? "",
@@ -174,6 +176,36 @@ function SemanticsScreen() {
   }, [api, selectedId, reloadToken]);
 
   const reload = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  const moveToGroup = async (ids: string[], group: string | null) => {
+    if (!selectedId || ids.length === 0) return;
+    try {
+      await api.moveToGroup(selectedId, { keyword_ids: ids, group });
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const renameGroup = async (name: string, next: string) => {
+    if (!selectedId) return;
+    try {
+      await api.renameGroup(selectedId, name, { name: next });
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const dissolveGroup = async (name: string) => {
+    if (!selectedId) return;
+    try {
+      await api.dissolveGroup(selectedId, name);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
 
   const startCollection = async () => {
     if (!selectedId) return;
@@ -463,88 +495,17 @@ function SemanticsScreen() {
             </Card>
           ) : (
             <>
-              {clusters.length > 0 && (
-                <Card>
-                  <CardHeader
-                    title="Группы под объявления"
-                    description="Фразы одной группы ведут на одну страницу и требуют одного объявления"
-                  />
-                  <div className="flex flex-col">
-                    {clusters.map((group) => (
-                      <div
-                        key={group.name}
-                        className="border-border-subtle flex flex-wrap items-baseline justify-between gap-2 border-b py-2.5 last:border-b-0"
-                      >
-                        <div className="flex min-w-0 flex-col">
-                          <span className="text-body-sm text-text-primary">{group.name}</span>
-                          {/* Ядро — это объяснение группировки. Без него человек
-                              не может ни проверить её, ни поправить. */}
-                          {group.core.length > 0 && (
-                            <span className="text-caption text-text-secondary">
-                              объединены по: {group.core.join(", ")}
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-caption text-text-secondary shrink-0 tabular-nums">
-                          фраз: {group.phrases} · частотность: {group.total_frequency}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </Card>
+              {groups && (groups.items.length > 0 || (groups.ungrouped ?? []).length > 0) && (
+                <GroupsCard
+                  groups={groups}
+                  onRename={renameGroup}
+                  onDissolve={dissolveGroup}
+                  onMove={moveToGroup}
+                />
               )}
 
               {cross && (cross.items.length > 0 || cross.duplicates.length > 0) && (
-                <Card>
-                  <CardHeader
-                    title="Фразы конкурируют между собой"
-                    description="Общая фраза перехватывает запросы уточнённой — в отчёте это выглядит нормально"
-                  />
-
-                  {cross.duplicates.length > 0 && (
-                    <div className="mb-3 flex flex-col gap-1.5">
-                      <p className="text-caption text-text-secondary">
-                        Одинаковые для Директа — порядок слов он не различает
-                      </p>
-                      {cross.duplicates.map((group) => (
-                        <p key={group.phrases[0]} className="text-body-sm text-text-primary">
-                          {group.phrases.join(" = ")}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {cross.items.length > 0 && (
-                    <div className="flex flex-col">
-                      {cross.items.slice(0, 20).map((item) => (
-                        <div
-                          key={item.phrase}
-                          className="border-border-subtle flex flex-col gap-1 border-b py-2.5 last:border-b-0"
-                        >
-                          <span className="text-body-sm text-text-primary font-medium">
-                            {item.phrase}
-                          </span>
-                          <span className="text-caption text-text-secondary">
-                            Отминусовать: {item.minus_words.map((word) => `−${word}`).join(", ")}
-                          </span>
-                          {/* Показываем, чьи запросы перехватываются: без этого
-                              совет нельзя проверить и непонятно, что сломается,
-                              если ему последовать. */}
-                          <span className="text-caption text-text-secondary">
-                            Иначе заберёт запросы: {item.shadows.slice(0, 3).join(", ")}
-                            {item.shadows.length > 3 && ` и ещё ${item.shadows.length - 3}`}
-                          </span>
-                        </div>
-                      ))}
-                      {cross.items.length > 20 && (
-                        <p className="text-caption text-text-secondary pt-2">
-                          Показаны первые 20 из {cross.items.length}. Остальные попадут в выгрузку —
-                          там они проставлены к каждой фразе.
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </Card>
+                <CrossMinusCard cross={cross} />
               )}
 
               {minus &&
@@ -692,13 +653,12 @@ function SemanticsScreen() {
                 ]}
               />
 
-              <Card>
-                <div className="flex flex-col">
-                  {shown.map((keyword) => (
-                    <KeywordRow key={keyword.id} keyword={keyword} onMove={move} />
-                  ))}
-                </div>
-              </Card>
+              <PhraseTable
+                keywords={shown}
+                groups={(groups?.items ?? []).map((g) => g.name)}
+                onMove={move}
+                onGroup={moveToGroup}
+              />
             </>
           )}
         </>
@@ -1374,6 +1334,592 @@ function MaskProgressRow({ mask }: { mask: CollectionMaskRead }) {
           {state?.label ?? mask.state}
         </StatusBadge>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Кросс-минусовка.
+ *
+ * Раньше этот блок вываливал на экран все минус-слова каждой фразы подряд —
+ * сотни слов в строку. Страница переставала листаться, а нужного в этой стене
+ * всё равно было не разглядеть.
+ *
+ * Теперь наружу вынесено то, ради чего блок существует: сколько фраз
+ * перехватывают чужие запросы и что с этим делать. Сами слова — под строкой
+ * раскрытия и с кнопкой «скопировать»: их не читают, их переносят в Директ.
+ */
+function CrossMinusCard({ cross }: { cross: CrossMinusResultRead }) {
+  return (
+    <Card>
+      <CardHeader
+        title="Фразы конкурируют между собой"
+        description="Общая фраза перехватывает запросы уточнённой — в отчёте это выглядит нормально"
+        action={
+          <span className="text-caption text-text-secondary tabular-nums">
+            {cross.items.length} {plural(cross.items.length, "фраза", "фразы", "фраз")}
+          </span>
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        {cross.duplicates.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <span className="text-body-sm text-text-primary">
+              Одинаковые для Директа — порядок слов он не различает
+            </span>
+            {cross.duplicates.map((group) => (
+              <span key={group.phrases[0]} className="text-caption text-text-secondary">
+                {group.phrases.join(" = ")}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {cross.items.length > 0 && (
+          <Details summary={`Показать минус-слова по каждой фразе (${cross.items.length})`}>
+            <div className="flex flex-col">
+              {cross.items.map((item) => (
+                <CrossMinusRow key={item.phrase} item={item} />
+              ))}
+            </div>
+          </Details>
+        )}
+
+        <Hint>
+          Переносить руками не нужно: эти минус-слова уже проставлены к каждой фразе в выгрузке для
+          Коммандера.
+        </Hint>
+      </div>
+    </Card>
+  );
+}
+
+function CrossMinusRow({ item }: { item: CrossMinusRead }) {
+  const words = item.minus_words.map((word) => `-${word}`).join(" ");
+
+  return (
+    <div className="border-border-subtle flex flex-wrap items-start justify-between gap-2 border-b py-2 last:border-b-0">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-body-sm text-text-primary">{item.phrase}</span>
+        {/* Список обрезан по высоте: у популярной фразы минус-слов бывает под
+            триста, и в полный рост они занимают экран целиком. */}
+        <span className="text-caption text-text-secondary clamp-2 break-all">{words}</span>
+        <span className="text-caption text-text-secondary">
+          Иначе заберёт запросы: {item.shadows.slice(0, 3).join(", ")}
+          {item.shadows.length > 3 && ` и ещё ${item.shadows.length - 3}`}
+        </span>
+      </div>
+      <CopyButton value={words} />
+    </div>
+  );
+}
+
+/** Сколько строк показываем сразу. Дальше — по кнопке. */
+const PAGE_SIZE = 200;
+
+/**
+ * Таблица фраз.
+ *
+ * Заменяет список из карточек, в котором каждая фраза занимала три строки и
+ * шестьдесят пикселей высоты. На ядре в тысячу фраз — а это обычный размер —
+ * такой список превращался в шесть тысяч пикселей прокрутки, и найти в нём
+ * что-либо можно было только поиском по странице браузера.
+ *
+ * Что изменилось по существу:
+ *
+ * **Строка стала строкой.** Одна фраза — одна линия, всё в колонках. Числа
+ * выровнены и моноширинные: ради сравнения частотностей список и читают.
+ *
+ * **Шапка не уезжает.** Без неё после сотни строк непонятно, что в какой
+ * колонке.
+ *
+ * **Выделение и действия пачкой.** Разметить двести фраз по одной — это два
+ * часа работы; выделить и нажать один раз — минута.
+ *
+ * **Показывается не всё сразу.** Две сотни строк рисуются мгновенно, две
+ * тысячи — с заметной задержкой на каждом нажатии.
+ */
+function PhraseTable({
+  keywords,
+  groups,
+  onMove,
+  onGroup,
+}: {
+  keywords: KeywordRead[];
+  groups: string[];
+  onMove: (id: string, intent: Intent) => void;
+  onGroup: (ids: string[], group: string | null) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<"frequency" | "phrase">("frequency");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [limit, setLimit] = useState(PAGE_SIZE);
+  const [grouping, setGrouping] = useState(false);
+  const [groupDraft, setGroupDraft] = useState("");
+
+  const needle = search.trim().toLowerCase();
+  const rows = useMemo(() => {
+    const found = needle
+      ? keywords.filter((k) => k.phrase.toLowerCase().includes(needle))
+      : keywords;
+    return [...found].sort((a, b) =>
+      sort === "frequency"
+        ? (b.frequency ?? 0) - (a.frequency ?? 0) || a.phrase.localeCompare(b.phrase)
+        : a.phrase.localeCompare(b.phrase),
+    );
+  }, [keywords, needle, sort]);
+
+  const shown = rows.slice(0, limit);
+  const allShownSelected = shown.length > 0 && shown.every((row) => selected.has(row.id));
+
+  const toggle = (id: string) => {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    setSelected((current) => {
+      if (allShownSelected) {
+        const next = new Set(current);
+        shown.forEach((row) => next.delete(row.id));
+        return next;
+      }
+      return new Set([...current, ...shown.map((row) => row.id)]);
+    });
+  };
+
+  const chosen = [...selected];
+
+  const applyGroup = (name: string | null) => {
+    onGroup(chosen, name);
+    setSelected(new Set());
+    setGrouping(false);
+    setGroupDraft("");
+  };
+
+  return (
+    <Card padding="none">
+      <div className="border-border-subtle flex flex-wrap items-center gap-2 border-b p-3">
+        <div className="min-w-48 flex-1">
+          <Input
+            placeholder="Поиск по фразам"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() => setSort(sort === "frequency" ? "phrase" : "frequency")}
+        >
+          {sort === "frequency" ? "По частотности" : "По алфавиту"}
+        </Button>
+        <span className="text-caption text-text-secondary tabular-nums">
+          {rows.length} {plural(rows.length, "фраза", "фразы", "фраз")}
+        </span>
+      </div>
+
+      {/* Панель действий появляется только при выделении: постоянная строка с
+          неактивными кнопками занимает место и ничего не сообщает. */}
+      {chosen.length > 0 && (
+        <div className="border-border-subtle bg-bg-secondary flex flex-wrap items-center gap-2 border-b px-3 py-2">
+          <span className="text-caption text-text-primary tabular-nums">
+            Выделено: {chosen.length}
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => setGrouping(true)}>
+            В группу
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => applyGroup(null)}>
+            Убрать из групп
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              chosen.forEach((id) => onMove(id, "irrelevant"));
+              setSelected(new Set());
+            }}
+          >
+            В нецелевые
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            Снять выделение
+          </Button>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead className="bg-surface sticky top-(--layout-topbar-height) z-10">
+            <tr className="border-border-subtle text-micro text-text-secondary border-b text-left">
+              <th className="w-8 py-2 pl-3">
+                <input
+                  type="checkbox"
+                  checked={allShownSelected}
+                  onChange={toggleAll}
+                  aria-label="Выделить все показанные"
+                  className="accent-text-primary size-3.5 align-middle"
+                />
+              </th>
+              <th className="py-2 font-medium">Фраза</th>
+              <th className="w-24 py-2 text-right font-medium">В месяц</th>
+              <th className="w-32 py-2 pl-3 font-medium">Тип</th>
+              <th className="w-44 py-2 pl-3 font-medium">Группа</th>
+              <th className="w-24 py-2 pr-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((keyword) => (
+              <PhraseRow
+                key={keyword.id}
+                keyword={keyword}
+                checked={selected.has(keyword.id)}
+                onToggle={() => toggle(keyword.id)}
+                onMove={onMove}
+              />
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {rows.length > shown.length && (
+        <div className="border-border-subtle border-t p-3">
+          <Button size="sm" variant="secondary" onClick={() => setLimit(limit + PAGE_SIZE)}>
+            Показать ещё {Math.min(PAGE_SIZE, rows.length - shown.length)}
+          </Button>
+        </div>
+      )}
+
+      {shown.length === 0 && (
+        <p className="text-body-sm text-text-secondary p-4">
+          {needle ? "По этому запросу фраз нет." : "Фраз нет."}
+        </p>
+      )}
+
+      <Modal
+        open={grouping}
+        onClose={() => setGrouping(false)}
+        title={`Перенести фраз: ${chosen.length}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setGrouping(false)}>
+              Отмена
+            </Button>
+            <Button onClick={() => applyGroup(groupDraft.trim())} disabled={!groupDraft.trim()}>
+              Перенести
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Input
+            label="Название группы"
+            placeholder="Пластиковые окна"
+            value={groupDraft}
+            onChange={(e) => setGroupDraft(e.target.value)}
+          />
+          {groups.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-caption text-text-secondary">Или выберите готовую</span>
+              <div className="flex flex-wrap gap-1.5">
+                {groups.map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => setGroupDraft(name)}
+                    className="border-border bg-bg-secondary text-caption text-text-primary rounded-pill hover:bg-surface-hover focus-visible:outline-focus border px-2.5 py-1 focus-visible:outline-2"
+                  >
+                    {name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          <Hint>
+            Перенесённые фразы становятся вашим решением: пересчёт групп их больше не трогает.
+          </Hint>
+        </div>
+      </Modal>
+    </Card>
+  );
+}
+
+function PhraseRow({
+  keyword,
+  checked,
+  onToggle,
+  onMove,
+}: {
+  keyword: KeywordRead;
+  checked: boolean;
+  onToggle: () => void;
+  onMove: (id: string, intent: Intent) => void;
+}) {
+  return (
+    <tr className="border-border-subtle hover:bg-surface-hover border-b last:border-b-0">
+      <td className="py-1.5 pl-3 align-middle">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={onToggle}
+          aria-label={`Выделить «${keyword.phrase}»`}
+          className="accent-text-primary size-3.5 align-middle"
+        />
+      </td>
+      <td className="text-caption text-text-primary py-1.5 pr-3 align-middle">
+        {keyword.phrase}
+        {/* Причина — рядом с фразой и мелким: она нужна, только когда решение
+            вызывает вопрос, а вопрос возникает у одной строки из двадцати. */}
+        {keyword.reason_label && (
+          <span className="text-text-secondary"> · {keyword.reason_label}</span>
+        )}
+      </td>
+      <td className="text-caption text-text-secondary py-1.5 text-right align-middle tabular-nums">
+        {keyword.frequency !== null ? keyword.frequency : "—"}
+      </td>
+      <td className="py-1.5 pl-3 align-middle">
+        <StatusBadge tone={INTENT_TONE[keyword.intent] ?? "neutral"} size="sm">
+          {keyword.intent_label}
+        </StatusBadge>
+      </td>
+      <td className="text-caption text-text-secondary truncate py-1.5 pl-3 align-middle">
+        {keyword.cluster_name ?? "—"}
+      </td>
+      <td className="py-1.5 pr-3 text-right align-middle">
+        <button
+          type="button"
+          onClick={() =>
+            onMove(keyword.id, keyword.intent === "irrelevant" ? "commercial" : "irrelevant")
+          }
+          className="text-caption text-text-secondary hover:text-text-primary focus-visible:outline-focus rounded-control px-1 focus-visible:outline-2"
+        >
+          {keyword.intent === "irrelevant" ? "Вернуть" : "Убрать"}
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * Группы под объявления.
+ *
+ * Раньше здесь был список из названий и чисел — посмотреть, что внутри группы,
+ * было нельзя, а поправить тем более. Между тем структура кампании решается
+ * именно здесь: одна группа — одно объявление и одна посадочная, и ошибка в
+ * составе стоит дороже всего остального в этом экране.
+ *
+ * Отсюда три вещи. Фразы раскрываются внутри группы, а не в отдельном окне.
+ * Название правится на месте. И видно, какие группы собрал человек: пересчёт
+ * их не трогает, и не показать этого значило бы оставить необъяснимое
+ * поведение.
+ */
+function GroupsCard({
+  groups,
+  onRename,
+  onDissolve,
+  onMove,
+}: {
+  groups: GroupList;
+  onRename: (name: string, next: string) => void;
+  onDissolve: (name: string) => void;
+  onMove: (ids: string[], group: string | null) => void;
+}) {
+  const names = groups.items.map((group) => group.name);
+  // Список необязателен в контракте: сервер шлёт его всегда, но
+  // сгенерированный тип этого не знает.
+  const ungrouped = groups.ungrouped ?? [];
+
+  return (
+    <Card>
+      <CardHeader
+        title="Группы под объявления"
+        description="Одна группа — одно объявление и одна посадочная страница"
+        action={
+          <span className="text-caption text-text-secondary tabular-nums">
+            {groups.total} {plural(groups.total, "группа", "группы", "групп")}
+          </span>
+        }
+      />
+
+      <div className="flex flex-col">
+        {groups.items.map((group) => (
+          <GroupRow
+            key={group.name}
+            group={group}
+            others={names.filter((name) => name !== group.name)}
+            onRename={onRename}
+            onDissolve={onDissolve}
+            onMove={onMove}
+          />
+        ))}
+      </div>
+
+      {ungrouped.length > 0 && (
+        <div className="border-border-subtle mt-3 border-t pt-3">
+          <Details
+            summary={`Без группы: ${ungrouped.length} ${plural(ungrouped.length, "фраза", "фразы", "фраз")}`}
+          >
+            <p>
+              Эти фразы в кампанию не пойдут: объявление собирается по группе. Перенесите их в
+              таблице фраз или распустите ненужную группу, чтобы расчёт разложил всё заново.
+            </p>
+            <div className="flex flex-col">
+              {ungrouped.slice(0, 30).map((phrase) => (
+                <div
+                  key={phrase.id}
+                  className="border-border-subtle flex items-center justify-between gap-3 border-b py-1.5 last:border-b-0"
+                >
+                  <span className="text-caption text-text-primary">{phrase.phrase}</span>
+                  <span className="text-caption text-text-secondary tabular-nums">
+                    {phrase.frequency ?? "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Details>
+        </div>
+      )}
+    </Card>
+  );
+}
+
+function GroupRow({
+  group,
+  others,
+  onRename,
+  onDissolve,
+  onMove,
+}: {
+  group: GroupRead;
+  others: string[];
+  onRename: (name: string, next: string) => void;
+  onDissolve: (name: string) => void;
+  onMove: (ids: string[], group: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(group.name);
+
+  const save = () => {
+    const next = draft.trim();
+    if (next && next !== group.name) onRename(group.name, next);
+    setEditing(false);
+  };
+
+  return (
+    <div className="border-border-subtle border-b py-2 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {editing ? (
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <div className="min-w-48 flex-1">
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") save();
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                autoFocus
+              />
+            </div>
+            <Button size="sm" onClick={save}>
+              Сохранить
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
+              Отмена
+            </Button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(!open)}
+            className="focus-visible:outline-focus rounded-control flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2"
+          >
+            <span aria-hidden="true" className="text-text-secondary text-caption">
+              {open ? "▾" : "▸"}
+            </span>
+            <span className="text-body-sm text-text-primary truncate font-medium">
+              {group.name}
+            </span>
+            {/* Пометка обязательна: без неё непонятно, почему пересчёт одни
+                группы трогает, а другие нет. */}
+            {group.manual && (
+              <StatusBadge tone="neutral" size="sm">
+                ваша
+              </StatusBadge>
+            )}
+          </button>
+        )}
+
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-caption text-text-secondary tabular-nums">
+            {group.phrases.length} · {group.total_frequency}
+          </span>
+          {!editing && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(group.name);
+                  setEditing(true);
+                }}
+                className="text-caption text-text-secondary hover:text-text-primary focus-visible:outline-focus rounded-control px-1 focus-visible:outline-2"
+              >
+                Переименовать
+              </button>
+              <button
+                type="button"
+                onClick={() => onDissolve(group.name)}
+                className="text-caption text-text-secondary hover:text-text-primary focus-visible:outline-focus rounded-control px-1 focus-visible:outline-2"
+              >
+                Распустить
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {open && (
+        <div className="mt-1.5 ml-5 flex flex-col">
+          {group.phrases.map((phrase) => (
+            <div
+              key={phrase.id}
+              className="border-border-subtle flex flex-wrap items-center justify-between gap-2 border-b py-1 last:border-b-0"
+            >
+              <span className="text-caption text-text-primary min-w-0 flex-1 truncate">
+                {phrase.phrase}
+              </span>
+              <span className="text-caption text-text-secondary shrink-0 tabular-nums">
+                {phrase.frequency ?? "—"}
+              </span>
+              {/* Перенос прямо отсюда: искать эту же фразу в общей таблице,
+                  чтобы переложить её в соседнюю группу, — лишняя работа. */}
+              <select
+                aria-label={`Перенести «${phrase.phrase}»`}
+                value=""
+                onChange={(e) => {
+                  const target = e.target.value;
+                  if (target) onMove([phrase.id], target === "__none__" ? null : target);
+                }}
+                className="border-border rounded-control text-caption text-text-secondary bg-surface shrink-0 border px-1.5 py-0.5"
+              >
+                <option value="">перенести…</option>
+                {others.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+                <option value="__none__">убрать из групп</option>
+              </select>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

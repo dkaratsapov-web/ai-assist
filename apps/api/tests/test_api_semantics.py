@@ -1500,3 +1500,176 @@ class TestСборЧастотностей:
         assert body["exists"] is True
         assert body["done_count"] == 0
         assert body["masks"][0]["state"] == "pending"
+
+
+class TestРедактированиеГрупп:
+    """Группы должны переживать правку.
+
+    До этого они пересчитывались при каждом открытии экрана, и редактировать их
+    было физически нечем: перенос жил до следующего запроса.
+    """
+
+    async def loaded(
+        self, client: AsyncClient, org: Organization, user: User, row: Project
+    ) -> dict:
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        return (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+
+    async def test_группы_приходят_вместе_с_фразами(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Второй запрос за содержимым дал бы мигание: сначала группы, потом
+        фразы."""
+        org, user, row = project
+
+        body = await self.loaded(client, org, user, row)
+
+        assert body["total"] > 0
+        assert body["items"][0]["phrases"]
+
+    async def test_нецелевые_в_группы_не_идут(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        body = await self.loaded(client, org, user, row)
+
+        phrases = [p["phrase"] for group in body["items"] for p in group["phrases"]]
+        assert all("вакансии" not in phrase for phrase in phrases)
+
+    async def test_перенос_фразы_переживает_пересчёт(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Ради этого всё и затевалось: перенос, который отменяется сам, хуже
+        отсутствующего."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        moved = body["items"][0]["phrases"][0]
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [moved["id"]], "group": "Своя группа"},
+        )
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/recluster", headers=headers(org, user)
+        )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        own = next(g for g in after["items"] if g["name"] == "Своя группа")
+        assert [p["phrase"] for p in own["phrases"]] == [moved["phrase"]]
+
+    async def test_фразу_можно_убрать_из_групп(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Удалять фразу ради этого нельзя: она собрана, и завтра для неё
+        найдётся место."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        target = body["items"][0]["phrases"][0]
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [target["id"]], "group": None},
+        )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        assert target["phrase"] in [p["phrase"] for p in after["ungrouped"]]
+
+    async def test_переименование_переживает_пересчёт(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        old = body["items"][0]["name"]
+
+        await client.patch(
+            f"/api/v1/projects/{row.id}/keywords/groups/{old}",
+            headers=headers(org, user),
+            json={"name": "Пластиковые окна — основная"},
+        )
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/recluster", headers=headers(org, user)
+        )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        assert "Пластиковые окна — основная" in [g["name"] for g in after["items"]]
+
+    async def test_роспуск_возвращает_фразы_расчёту(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Человек сказал «эта группа неверна», а не «этих фраз не должно быть
+        в структуре»."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        name = body["items"][0]["name"]
+        count = len(body["items"][0]["phrases"])
+
+        result = (
+            await client.delete(
+                f"/api/v1/projects/{row.id}/keywords/groups/{name}", headers=headers(org, user)
+            )
+        ).json()
+
+        assert result["moved"] == count
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        assert name not in [g["name"] for g in after["items"]]
+
+    async def test_несуществующая_группа_это_не_найдено(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        org, user, row = project
+
+        response = await client.delete(
+            f"/api/v1/projects/{row.id}/keywords/groups/Нет%20такой", headers=headers(org, user)
+        )
+
+        assert response.status_code == 404
+
+    async def test_ручная_группа_помечена(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Без пометки человек не отличит свою раскладку от расчётной и не
+        поймёт, почему пересчёт одни группы трогает, а другие нет."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        moved = body["items"][0]["phrases"][0]
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [moved["id"]], "group": "Своя группа"},
+        )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        own = next(g for g in after["items"] if g["name"] == "Своя группа")
+        assert own["manual"] is True
