@@ -20,6 +20,7 @@ export type ProjectUpdate = Schemas["ProjectUpdate"];
 export type ProjectAccessRead = Schemas["ProjectAccessRead"];
 export type ProjectAccessList = Schemas["ProjectAccessList"];
 export type ProjectAccessCreate = Schemas["ProjectAccessCreate"];
+export type ProjectAccessUpdate = Schemas["ProjectAccessUpdate"];
 export type ProgressRead = Schemas["ProgressRead"];
 export type OverviewRead = Schemas["OverviewRead"];
 export type ProjectSummaryRead = Schemas["ProjectSummaryRead"];
@@ -615,6 +616,18 @@ export class ApiClient {
   grantProjectAccess(projectId: string, payload: ProjectAccessCreate): Promise<ProjectAccessRead> {
     return this.request<ProjectAccessRead>(`/api/v1/projects/${projectId}/access`, {
       method: "POST",
+      body: JSON.stringify(payload),
+    });
+  }
+
+  /** Поменять роль тому, кому проект уже открыт. */
+  changeProjectRole(
+    projectId: string,
+    userId: string,
+    payload: ProjectAccessUpdate,
+  ): Promise<ProjectAccessRead> {
+    return this.request<ProjectAccessRead>(`/api/v1/projects/${projectId}/access/${userId}`, {
+      method: "PATCH",
       body: JSON.stringify(payload),
     });
   }

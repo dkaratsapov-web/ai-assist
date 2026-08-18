@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
+from ads_os.services import wordstat
 from ads_os.services.morphology import fold_beglye, stem
 from ads_os.services.semantics import (
     Intent,
@@ -410,3 +411,23 @@ class TestПодборПосадочной:
 
     def test_пустое_ядро_ведёт_на_главную(self) -> None:
         assert match_landing((), self.PAGES, fallback="https://x.ru/") == "https://x.ru/"
+
+
+class TestМусорВБрифе:
+    """Маска из пункта меню или из телефона — это потраченный запрос из сотни
+    в час и сотня фраз про чужую тему в ядре."""
+
+    def test_контакты_в_брифе_маской_не_становятся(self) -> None:
+        brief = wordstat.Brief(sells="8 (922) 155-53-66, design@studio.ru, дизайн интерьера")
+
+        assert wordstat.terms(brief) == ("дизайн интерьера",)
+
+    def test_пункты_меню_в_брифе_маской_не_становятся(self) -> None:
+        brief = wordstat.Brief(sells="связаться с нами, наши услуги, о нашей команде, проекты")
+
+        assert wordstat.masks(brief) == ()
+
+    def test_настоящая_услуга_рядом_с_мусором_выживает(self) -> None:
+        brief = wordstat.Brief(sells="проекты, натяжные потолки, контакты")
+
+        assert wordstat.terms(brief) == ("натяжные потолки",)

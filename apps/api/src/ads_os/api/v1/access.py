@@ -31,7 +31,12 @@ from ...services.auth import revoke_all_for_user
 from ...tenancy.context import Role
 from ...tenancy.repository import TenantRepository
 from ..deps import SessionDep, TenantDep, WriteDep
-from ..schemas import ProjectAccessCreate, ProjectAccessList, ProjectAccessRead
+from ..schemas import (
+    ProjectAccessCreate,
+    ProjectAccessList,
+    ProjectAccessRead,
+    ProjectAccessUpdate,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -295,3 +300,60 @@ def _read(user: User, *, granted_at: object) -> ProjectAccessRead:
         last_login_at=user.last_login_at,
         granted_at=granted_at if isinstance(granted_at, datetime) else None,
     )
+
+
+@router.patch(
+    "/{project_id}/access/{user_id}",
+    response_model=ProjectAccessRead,
+    summary="Изменить роль в проекте",
+)
+async def change_role(
+    project_id: uuid.UUID,
+    user_id: uuid.UUID,
+    payload: ProjectAccessUpdate,
+    session: SessionDep,
+    ctx: WriteDep,
+) -> ProjectAccessRead:
+    """Меняет роль человека, которому проект уже открыт.
+
+    Без этого поправить ошибку можно было бы только закрыв доступ и выдав
+    заново — а это отзыв сессий и запись в журнале о том, чего не было.
+    """
+    _require_owner(ctx)
+
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    access = (
+        await session.execute(
+            select(ProjectAccess)
+            .where(ProjectAccess.project_id == project.id)
+            .where(ProjectAccess.user_id == user_id)
+            .where(ProjectAccess.organization_id == ctx.organization_id)
+        )
+    ).scalar_one_or_none()
+
+    if access is None:
+        raise NotFoundError()
+
+    user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise NotFoundError()
+
+    # Владельца понижать отсюда нельзя: он видит проект не по этой записи, и
+    # смена роли здесь оставила бы организацию без ответственного.
+    if user.role is Role.OWNER:
+        raise ForbiddenError("Роль владельца организации меняется в настройках")
+
+    user.role = Role(payload.role)
+    await session.flush()
+
+    await record(
+        session,
+        ctx,
+        ActivityAction.MEMBER_UPDATED,
+        subject=f"{user.email}: {payload.role}",
+        actor_name=ctx.user_name,
+        project_id=project.id,
+    )
+
+    return _read(user, granted_at=access.created_at)

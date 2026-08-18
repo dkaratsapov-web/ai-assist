@@ -20,6 +20,7 @@ import re
 from dataclasses import dataclass
 
 from .morphology import fold_beglye, stem, tokenize
+from .profile import is_service
 
 #: Сколько исходных слов берём в работу. Больше — не лучше: каждая маска это
 #: отдельный заход в Вордстат руками, и список из сорока масок не собирает
@@ -87,6 +88,12 @@ def terms(brief: Brief) -> tuple[str, ...]:
     """
     unique: list[str] = []
     for item in _items(brief.sells) + _items(brief.synonyms):
+        # Вторая линия защиты от мусора в брифе. Первая стоит при чтении сайта,
+        # но бриф заполняет и человек, и вставить туда он может что угодно —
+        # а маска из телефона или из пункта меню стоит запроса из сотни в час
+        # и приносит сотню фраз про чужую тему.
+        if not is_service(item):
+            continue
         if item not in unique:
             unique.append(item)
     return tuple(unique[:MAX_TERMS])

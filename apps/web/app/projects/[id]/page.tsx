@@ -381,6 +381,15 @@ function AccessCard({ projectId }: { projectId: string }) {
     }
   };
 
+  const changeRole = async (userId: string, next: "viewer" | "specialist") => {
+    try {
+      await api.changeProjectRole(projectId, userId, { role: next });
+      reload();
+    } catch (err) {
+      setFailure(toApiError(err).message);
+    }
+  };
+
   const revoke = async (userId: string) => {
     try {
       await api.revokeProjectAccess(projectId, userId);
@@ -410,20 +419,26 @@ function AccessCard({ projectId }: { projectId: string }) {
               >
                 <div className="flex min-w-0 flex-col">
                   <span className="text-body-sm text-text-primary">{person.email}</span>
+                  {/* Отметка входа отвечает на вопрос «дошло ли приглашение».
+                      Без неё владелец не знает, ждать ему или писать человеку.
+                      Роль текстом не дублируется: она видна переключателем. */}
                   <span className="text-caption text-text-secondary">
-                    {person.role === "viewer" ? "Только просмотр" : "Может менять"}
-                    {" · "}
-                    {/* Отметка входа отвечает на вопрос «дошло ли приглашение».
-                        Без неё владелец не знает, ждать ему или писать человеку. */}
                     {person.last_login_at
                       ? `заходил ${new Date(person.last_login_at).toLocaleDateString("ru-RU")}`
                       : "ещё не заходил"}
                   </span>
                 </div>
                 {!forbidden && (
-                  <Button size="sm" variant="ghost" onClick={() => void revoke(person.user_id)}>
-                    Закрыть доступ
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <RolePicker
+                      value={person.role === "viewer" ? "viewer" : "specialist"}
+                      onChange={(next) => void changeRole(person.user_id, next)}
+                      size="sm"
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => void revoke(person.user_id)}>
+                      Закрыть доступ
+                    </Button>
+                  </div>
                 )}
               </div>
             ))}
@@ -446,12 +461,7 @@ function AccessCard({ projectId }: { projectId: string }) {
                 }}
               />
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => setRole(role === "viewer" ? "specialist" : "viewer")}
-            >
-              {role === "viewer" ? "Только просмотр" : "Может менять"}
-            </Button>
+            <RolePicker value={role} onChange={setRole} />
             <Button onClick={() => void grant()} loading={busy} disabled={email.trim() === ""}>
               Открыть доступ
             </Button>
@@ -546,5 +556,56 @@ function StepLink({
         </span>
       </Link>
     </Card>
+  );
+}
+
+/**
+ * Выбор роли: два варианта, из которых один выбран.
+ *
+ * Раньше здесь стояла одна кнопка, показывавшая текущее значение. Прочитать её
+ * можно было двояко — «сейчас выбрано это» или «нажми, чтобы стало это», — и
+ * человек выдавал доступ, будучи уверенным в обратном. Кнопка-переключатель
+ * без второго варианта рядом неоднозначна всегда, сколько ни правь подпись.
+ */
+function RolePicker({
+  value,
+  onChange,
+  size = "md",
+}: {
+  value: "viewer" | "specialist";
+  onChange: (next: "viewer" | "specialist") => void;
+  size?: "sm" | "md";
+}) {
+  const options = [
+    { key: "viewer" as const, label: "Только просмотр" },
+    { key: "specialist" as const, label: "Может менять" },
+  ];
+
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Что человек может делать в проекте"
+      className="border-border rounded-control bg-bg-secondary inline-flex shrink-0 border p-0.5"
+    >
+      {options.map((option) => (
+        <button
+          key={option.key}
+          type="button"
+          role="radio"
+          aria-checked={value === option.key}
+          onClick={() => onChange(option.key)}
+          className={[
+            "rounded-control focus-visible:outline-focus transition-colors duration-(--duration-fast)",
+            "focus-visible:outline-2 focus-visible:outline-offset-1",
+            size === "sm" ? "text-caption px-2 py-1" : "text-body-sm px-3 py-1.5",
+            value === option.key
+              ? "bg-surface text-text-primary shadow-card font-medium"
+              : "text-text-secondary hover:text-text-primary",
+          ].join(" ")}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   );
 }

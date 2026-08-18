@@ -3865,6 +3865,24 @@
         "title": "ProjectAccessRead",
         "type": "object"
       },
+      "ProjectAccessUpdate": {
+        "description": "Смена роли уже выданному доступу.\n\nОтдельная возможность нужна потому, что иначе поправить ошибку можно было\nбы только закрыв доступ и выдав заново — а это отзыв сессий человека и\nновая запись в журнале о том, чего не происходило.",
+        "properties": {
+          "role": {
+            "enum": [
+              "specialist",
+              "viewer"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "ProjectAccessUpdate",
+        "type": "object"
+      },
       "ProjectCreate": {
         "properties": {
           "name": {
@@ -6947,6 +6965,118 @@
           }
         },
         "summary": "Закрыть доступ к проекту",
+        "tags": [
+          "access"
+        ]
+      },
+      "patch": {
+        "description": "Меняет роль человека, которому проект уже открыт.\n\nБез этого поправить ошибку можно было бы только закрыв доступ и выдав\nзаново — а это отзыв сессий и запись в журнале о том, чего не было.",
+        "operationId": "change_role_api_v1_projects__project_id__access__user_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectAccessUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectAccessRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Изменить роль в проекте",
         "tags": [
           "access"
         ]

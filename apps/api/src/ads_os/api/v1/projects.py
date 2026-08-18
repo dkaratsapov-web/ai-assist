@@ -8,7 +8,7 @@ from fastapi import APIRouter, Query, status
 from sqlalchemy import Select, func, select
 
 from ...errors import ConflictError
-from ...models import Competitor, Keyword, Project, ProjectEconomics, SiteAudit
+from ...models import Competitor, Keyword, Project, ProjectAccess, ProjectEconomics, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...services.activity import changed_fields, record
@@ -91,6 +91,23 @@ async def create_project(
             created_by_id=ctx.user_id,
         )
     )
+
+    # Создавший проект обязан его видеть.
+    #
+    # У человека с доступом к отдельным проектам список открытого — это вся
+    # его видимость. Без этой записи он создал бы проект и тут же его потерял:
+    # проект есть, а в списке пусто. Владельца и тех, кто видит всё, это не
+    # касается — у них allowed_projects пуст по смыслу «открыто всё».
+    if not ctx.sees_all_projects:
+        session.add(
+            ProjectAccess(
+                organization_id=ctx.organization_id,
+                user_id=ctx.user_id,
+                project_id=project.id,
+                granted_by=ctx.user_id,
+            )
+        )
+        await session.flush()
 
     await record(
         session,

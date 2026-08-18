@@ -511,6 +511,17 @@ class ProjectAccessCreate(BaseModel):
     role: Literal["specialist", "viewer"] = "viewer"
 
 
+class ProjectAccessUpdate(BaseModel):
+    """Смена роли уже выданному доступу.
+
+    Отдельная возможность нужна потому, что иначе поправить ошибку можно было
+    бы только закрыв доступ и выдав заново — а это отзыв сессий человека и
+    новая запись в журнале о том, чего не происходило.
+    """
+
+    role: Literal["specialist", "viewer"]
+
+
 class ProjectAccessRead(BaseModel):
     """Человек, которому открыт проект."""
 

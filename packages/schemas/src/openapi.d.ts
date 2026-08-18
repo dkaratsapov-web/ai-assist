@@ -472,7 +472,14 @@ export interface paths {
         delete: operations["revoke_access_api_v1_projects__project_id__access__user_id__delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Изменить роль в проекте
+         * @description Меняет роль человека, которому проект уже открыт.
+         *
+         *     Без этого поправить ошибку можно было бы только закрыв доступ и выдав
+         *     заново — а это отзыв сессий и запись в журнале о том, чего не было.
+         */
+        patch: operations["change_role_api_v1_projects__project_id__access__user_id__patch"];
         trace?: never;
     };
     "/api/v1/projects/{project_id}/ads": {
@@ -2807,6 +2814,21 @@ export interface components {
              */
             user_id: string;
         };
+        /**
+         * ProjectAccessUpdate
+         * @description Смена роли уже выданному доступу.
+         *
+         *     Отдельная возможность нужна потому, что иначе поправить ошибку можно было
+         *     бы только закрыв доступ и выдав заново — а это отзыв сессий человека и
+         *     новая запись в журнале о том, чего не происходило.
+         */
+        ProjectAccessUpdate: {
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "specialist" | "viewer";
+        };
         /** ProjectCreate */
         ProjectCreate: {
             /** Name */
@@ -4145,6 +4167,46 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_role_api_v1_projects__project_id__access__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectAccessUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectAccessRead"];
+                };
             };
             /** @description Validation Error */
             422: {

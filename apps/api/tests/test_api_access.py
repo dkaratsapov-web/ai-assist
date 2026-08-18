@@ -380,3 +380,126 @@ class TestГраницаВидимости:
 
 async def allowed(session: AsyncSession, user: User) -> object:
     return await allowed_projects(session, user)
+
+
+class TestРоль:
+    """Роль выданного доступа должна меняться на месте.
+
+    Иначе поправить ошибку можно только закрыв доступ и выдав заново — а это
+    отзыв сессий человека и запись в журнале о том, чего не происходило.
+    """
+
+    async def test_роль_выбирается_при_выдаче(
+        self,
+        client: AsyncClient,
+        owner_ctx: tuple[Organization, User, Project, Project],
+    ) -> None:
+        org, owner, project, _ = owner_ctx
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{project.id}/access",
+                headers=headers(org, owner),
+                json={"email": "client@yandex.ru", "role": "specialist"},
+            )
+        ).json()
+
+        assert body["role"] == "specialist"
+
+    async def test_роль_меняется_после_выдачи(
+        self,
+        client: AsyncClient,
+        owner_ctx: tuple[Organization, User, Project, Project],
+    ) -> None:
+        org, owner, project, _ = owner_ctx
+        created = (
+            await client.post(
+                f"/api/v1/projects/{project.id}/access",
+                headers=headers(org, owner),
+                json={"email": "client@yandex.ru"},
+            )
+        ).json()
+        assert created["role"] == "viewer"
+
+        body = (
+            await client.patch(
+                f"/api/v1/projects/{project.id}/access/{created['user_id']}",
+                headers=headers(org, owner),
+                json={"role": "specialist"},
+            )
+        ).json()
+
+        assert body["role"] == "specialist"
+
+    async def test_владельца_отсюда_не_понизить(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        owner_ctx: tuple[Organization, User, Project, Project],
+    ) -> None:
+        """Иначе организация осталась бы без ответственного."""
+        org, owner, project, _ = owner_ctx
+        session.add(
+            ProjectAccess(organization_id=org.id, user_id=owner.id, project_id=project.id)
+        )
+        await session.commit()
+
+        response = await client.patch(
+            f"/api/v1/projects/{project.id}/access/{owner.id}",
+            headers=headers(org, owner),
+            json={"role": "viewer"},
+        )
+
+        assert response.status_code == 403
+
+    async def test_роль_меняет_только_владелец(
+        self,
+        client: AsyncClient,
+        owner_ctx: tuple[Organization, User, Project, Project],
+    ) -> None:
+        org, owner, project, _ = owner_ctx
+        created = (
+            await client.post(
+                f"/api/v1/projects/{project.id}/access",
+                headers=headers(org, owner),
+                json={"email": "client@yandex.ru"},
+            )
+        ).json()
+
+        response = await client.patch(
+            f"/api/v1/projects/{project.id}/access/{created['user_id']}",
+            headers=headers(org, owner, role="specialist"),
+            json={"role": "specialist"},
+        )
+
+        assert response.status_code == 403
+
+
+class TestСозданиеПроекта:
+    async def test_созданный_проект_виден_создателю(
+        self,
+        client: AsyncClient,
+        session: AsyncSession,
+        owner_ctx: tuple[Organization, User, Project, Project],
+    ) -> None:
+        """Человек с доступом к отдельным проектам создал бы проект и тут же
+        его потерял: проект есть, а в списке пусто."""
+        org, _, project, _ = owner_ctx
+        guest = await make_user(session, org, "guest@yandex.ru")
+        guest.all_projects = False
+        session.add(ProjectAccess(organization_id=org.id, user_id=guest.id, project_id=project.id))
+        await session.commit()
+
+        created = (
+            await client.post(
+                "/api/v1/projects",
+                headers=headers(org, guest, role="specialist"),
+                json={"name": "Новый проект"},
+            )
+        ).json()
+
+        visible = await ProjectRepo(
+            session, context(org, guest, await allowed(session, guest))
+        ).list()
+
+        assert created["id"] in [str(p.id) for p in visible]

@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from ads_os.services import profile
 from ads_os.services.profile import ClientProfile, extract, niche_questions, open_questions
 
 PAGE = """
@@ -133,3 +136,69 @@ class TestВопросыКлиенту:
 
     def test_без_ниши_нишевых_вопросов_нет(self) -> None:
         assert niche_questions(None) == ()
+
+
+class TestНавигацияНеУслуга:
+    """Пункты меню и контакты не должны попадать в «что продаём».
+
+    Разбор брал их и раньше, и это выглядело безобидной неточностью в анкете.
+    Безобидной она не была: из брифа строятся маски для Вордстата, и система
+    собирала частотность по номеру телефона, тратя запрос из сотни в час.
+    """
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Связаться с нами",
+            "Наши услуги",
+            "О нашей команде",
+            "Проекты",
+            "Портфолио",
+            "Оставить заявку",
+            "Заказать звонок",
+            "Отзывы клиентов",
+            "Политика конфиденциальности",
+            "8 (922) 155-53-66",
+            "design@shadrina-interiors.ru",
+            "+7 900 123-45-67",
+        ],
+    )
+    def test_навигация_и_контакты_отсеиваются(self, text: str) -> None:
+        assert profile.is_service(text) is False
+
+    @pytest.mark.parametrize(
+        "text",
+        [
+            "Дизайн интерьера",
+            "Натяжные потолки",
+            "Остекление балконов под ключ",
+            "Ремонт квартир",
+            "Пластиковые окна ПВХ",
+        ],
+    )
+    def test_настоящие_услуги_остаются(self, text: str) -> None:
+        assert profile.is_service(text) is True
+
+    def test_меню_не_попадает_в_анкету(self) -> None:
+        html = """
+        <html><body>
+          <nav>
+            <a href="/">Главная</a>
+            <a href="/services">Наши услуги</a>
+            <a href="/projects">Проекты</a>
+            <a href="/team">О нашей команде</a>
+            <a href="/contacts">Связаться с нами</a>
+            <a href="tel:+79221555366">8 (922) 155-53-66</a>
+            <a href="mailto:design@studio.ru">design@studio.ru</a>
+          </nav>
+          <h1>Дизайн интерьера</h1>
+          <h2>Авторский надзор</h2>
+        </body></html>
+        """
+
+        found = profile.extract(html).services
+
+        assert "Дизайн интерьера" in found
+        assert all("связаться" not in item.lower() for item in found)
+        assert all("@" not in item for item in found)
+        assert all(not item.strip().startswith("8 (") for item in found)

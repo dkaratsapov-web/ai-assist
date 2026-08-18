@@ -17,12 +17,20 @@ from collections.abc import AsyncIterator
 from typing import Annotated
 
 from fastapi import Depends, Header, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import Settings, get_settings
 from ..db.session import get_sessionmaker
 from ..errors import AppError, ForbiddenError
-from ..services.auth import COOKIE_NAME, AuthenticatedUser, resolve_session, touch
+from ..models import User
+from ..services.auth import (
+    COOKIE_NAME,
+    AuthenticatedUser,
+    allowed_projects,
+    resolve_session,
+    touch,
+)
 from ..tenancy.context import Role, TenantContext
 
 
@@ -103,7 +111,20 @@ async def get_tenant_context(
     except ValueError as exc:
         raise ForbiddenError("Неизвестная роль") from exc
 
-    return TenantContext(organization_id=x_organization_id, user_id=x_user_id, role=role)
+    # Список открытых проектов читается и здесь. Без него путь через заголовки
+    # вёл бы себя иначе, чем настоящий вход: ограничение доступа работало бы в
+    # бою и молчало при разработке — то есть проверить его было бы негде, а
+    # заметить поломку можно было бы только на живых данных клиента.
+    user = (
+        await db.execute(select(User).where(User.id == x_user_id))
+    ).scalar_one_or_none()
+
+    return TenantContext(
+        organization_id=x_organization_id,
+        user_id=x_user_id,
+        role=role,
+        allowed_projects=await allowed_projects(db, user) if user is not None else None,
+    )
 
 
 TenantDep = Annotated[TenantContext, Depends(get_tenant_context)]
