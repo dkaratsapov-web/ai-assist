@@ -7,6 +7,7 @@
 from .access import ProjectAccess
 from .activity import ActivityAction, ActivityLog
 from .audit import IssueDismissal, ModuleStatus, SiteAudit
+from .collection import KeywordCollection
 from .competitor import Competitor
 from .minus_set import MinusWordSet
 from .notification import Notification, NotificationKind, NotificationLevel
@@ -24,6 +25,7 @@ __all__ = [
     "IssueDismissal",
     "Keyword",
     "KeywordBrief",
+    "KeywordCollection",
     "MainConversion",
     "MinusWord",
     "MinusWordSet",
