@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Единый источник дизайн-токенов ADS OS (v0.4 §19)",
+  "description": "Единый источник дизайн-токенов AI Helper Pro (v0.4 §19)",
   "exports": {
     ".": "./dist/tokens.ts",
     "./tokens.css": "./dist/tokens.css",

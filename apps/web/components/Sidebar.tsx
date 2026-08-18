@@ -44,11 +44,11 @@ export function Sidebar({ mobileOpen, onNavigate }: SidebarProps) {
         <div className="flex h-(--layout-topbar-height) shrink-0 items-center gap-2.5 px-4">
           <span
             aria-hidden="true"
-            className="bg-surface-inverse text-text-inverse rounded-control flex size-8 items-center justify-center text-[15px] font-semibold"
+            className="bg-surface-inverse text-text-inverse rounded-control flex size-8 items-center justify-center text-[13px] font-semibold tracking-tight"
           >
-            A
+            AI
           </span>
-          <span className="text-h3 text-text-primary tracking-tight">ADS OS</span>
+          <span className="text-h3 text-text-primary tracking-tight">AI Helper Pro</span>
         </div>
 
         <div className="scrollbar-slim flex-1 overflow-y-auto px-3 pb-4">

@@ -1,4 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="ADS OS">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="AI Helper Pro">
   <rect width="64" height="64" rx="14" fill="#0A0A0A"/>
-  <path d="M32 14 46 50h-7.6l-2.7-7.2h-7.4L25.6 50H18L32 14zm0 12.6-2.9 9.4h5.8L32 26.6z" fill="#FFFFFF"/>
+  <!-- Буквы нарисованы фигурами, а не текстом: шрифта в значке вкладки нет,
+       и текстовый вариант в части браузеров показывается как пустой квадрат. -->
+  <path d="M24 14 38 50h-7.6l-2.7-7.2h-7.4L17.6 50H10L24 14zm0 12.6-2.9 9.4h5.8L24 26.6z" fill="#FFFFFF"/>
+  <rect x="43" y="14" width="7" height="36" rx="1.5" fill="#FFFFFF"/>
 </svg>

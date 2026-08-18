@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 
 /**
- * Набор иконок ADS OS.
+ * Набор иконок AI Helper Pro.
  *
  * Все иконки тонкие, монохромные, с единым stroke-width 1.5 и currentColor
  * (v0.3 §121). Заливка не используется — так иконка одинаково читается на

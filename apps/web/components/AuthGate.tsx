@@ -138,7 +138,7 @@ function SignIn() {
       <Card>
         <div className="flex flex-col gap-5 text-center">
           <div className="flex flex-col gap-2">
-            <h1 className="text-h2 text-text-primary">ADS OS</h1>
+            <h1 className="text-h2 text-text-primary">AI Helper Pro</h1>
             <p className="text-body-sm text-text-secondary">Помощник по контекстной рекламе</p>
           </div>
 

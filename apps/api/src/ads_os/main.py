@@ -54,10 +54,10 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="ADS OS API",
+        title="AI Helper Pro API",
         version="0.1.0",
         description=(
-            "Backend ADS OS. Схемы этого API — источник правды для контракта: "
+            "Backend AI Helper Pro. Схемы этого API — источник правды для контракта: "
             "типы фронтенда генерируются из OpenAPI (v0.4 §18)."
         ),
         lifespan=lifespan,

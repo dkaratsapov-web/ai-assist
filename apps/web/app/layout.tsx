@@ -17,7 +17,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "ADS OS",
+  title: "AI Helper Pro",
   description: "Операционная система для специалиста по контекстной рекламе",
   icons: { icon: "/favicon.svg" },
 };

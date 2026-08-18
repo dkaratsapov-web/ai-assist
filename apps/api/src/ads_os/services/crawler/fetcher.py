@@ -18,7 +18,7 @@ from .ssrf import UrlNotAllowedError, resolve_and_validate
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "ADS-OS-Crawler/0.1 (+https://ai-helper.pro)"
+USER_AGENT = "AIHelperPro-Crawler/0.1 (+https://ai-helper.pro)"
 
 
 @dataclass(frozen=True, slots=True)

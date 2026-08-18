@@ -2,7 +2,7 @@
   "name": "@ads-os/web",
   "version": "0.1.0",
   "private": true,
-  "description": "ADS OS Web — основной интерфейс (Control Plane)",
+  "description": "AI Helper Pro — основной интерфейс (Control Plane)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
