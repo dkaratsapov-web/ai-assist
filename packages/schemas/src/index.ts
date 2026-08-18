@@ -83,6 +83,8 @@ export type GroupPhraseRead = Schemas["GroupPhraseRead"];
 export type GroupMove = Schemas["GroupMove"];
 export type GroupRename = Schemas["GroupRename"];
 export type GroupChangeRead = Schemas["GroupChangeRead"];
+export type GroupSuggestionRead = Schemas["GroupSuggestionRead"];
+export type SuggestedGroupRead = Schemas["SuggestedGroupRead"];
 export type CampaignPreviewRead = Schemas["CampaignPreviewRead"];
 export type CampaignGroupRead = Schemas["CampaignGroupRead"];
 export type CampaignCheckRead = Schemas["CampaignCheckRead"];
@@ -686,6 +688,17 @@ export class ApiClient {
   reclusterGroups(projectId: string): Promise<GroupChangeRead> {
     return this.request<GroupChangeRead>(
       `/api/v1/projects/${projectId}/keywords/groups/recluster`,
+      { method: "POST" },
+    );
+  }
+
+  /**
+   * Попросить модель предложить раскладку. Именно предложить: система его не
+   * применяет, решение остаётся за человеком.
+   */
+  suggestGroups(projectId: string): Promise<GroupSuggestionRead> {
+    return this.request<GroupSuggestionRead>(
+      `/api/v1/projects/${projectId}/keywords/groups/suggest`,
       { method: "POST" },
     );
   }

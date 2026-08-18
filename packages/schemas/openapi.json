@@ -2692,6 +2692,55 @@
         "title": "GroupRename",
         "type": "object"
       },
+      "GroupSuggestionRead": {
+        "description": "Предложение модели по раскладке фраз.\n\nИменно предложение: система его не применяет. Ошибка модели здесь стоит\nпеределанной структуры кампании, поэтому решение остаётся за человеком —\nцеликом, по группам или никак.",
+        "properties": {
+          "confidence": {
+            "default": 0.0,
+            "title": "Confidence",
+            "type": "number"
+          },
+          "considered": {
+            "default": 0,
+            "title": "Considered",
+            "type": "integer"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestedGroupRead"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "groups_now": {
+            "default": 0,
+            "title": "Groups Now",
+            "type": "integer"
+          },
+          "model": {
+            "default": "",
+            "title": "Model",
+            "type": "string"
+          },
+          "ok": {
+            "default": false,
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "skipped_manual": {
+            "default": 0,
+            "title": "Skipped Manual",
+            "type": "integer"
+          }
+        },
+        "title": "GroupSuggestionRead",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5042,6 +5091,44 @@
         ],
         "title": "StepState",
         "type": "string"
+      },
+      "SuggestedGroupRead": {
+        "description": "Группа, предложенная моделью.\n\nФразы приходят со своими идентификаторами: принятие группы — это обычный\nперенос фраз, тот же самый, что человек делает руками. Отдельного пути\nзаписи для модели нет намеренно.",
+        "properties": {
+          "moved_from": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Moved From",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "phrases": {
+            "items": {
+              "$ref": "#/components/schemas/GroupPhraseRead"
+            },
+            "title": "Phrases",
+            "type": "array"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "total_frequency": {
+            "default": 0,
+            "title": "Total Frequency",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "SuggestedGroupRead",
+        "type": "object"
       },
       "SuggestionRead": {
         "description": "Кого предлагается добавить в конкуренты.",
@@ -10148,6 +10235,100 @@
           }
         },
         "summary": "Пересобрать группы",
+        "tags": [
+          "semantics"
+        ]
+      }
+    },
+    "/api/v1/projects/{project_id}/keywords/groups/suggest": {
+      "post": {
+        "description": "Просит модель разложить фразы по группам.\n\nРасчёт группирует по общим основам слов, и это работает ровно до тех пор,\nпока одну вещь называют одними словами. «Пластиковые окна» и\n«стеклопакеты» для него разные темы — в кампании это две группы вместо\nодной и два объявления, конкурирующих за один запрос. Модель различает\nсмысл, а не буквы.\n\nРезультат не применяется. Ни здесь, ни отдельной кнопкой «применить всё\nмолча»: ошибка модели в раскладке стоит переделанной структуры кампании,\nпоэтому предложение показывается рядом с текущими группами, а принимает\nего человек — целиком или по группам, обычным переносом фраз.\n\nФразы, разложенные руками, модели не показываются: чужую работу пересчёт\nне отменяет. Это то же правило, по которому живёт пересборка групп.",
+        "operationId": "suggest_groups_api_v1_projects__project_id__keywords_groups_suggest_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Project Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-organization-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Organization-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-user-role",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-User-Role"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupSuggestionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Предложить раскладку моделью",
         "tags": [
           "semantics"
         ]

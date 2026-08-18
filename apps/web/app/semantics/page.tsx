@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import type {
   ApiError,
@@ -12,6 +12,8 @@ import type {
   CrossMinusRead,
   GroupList,
   GroupRead,
+  GroupSuggestionRead,
+  SuggestedGroupRead,
   CrossMinusResultRead,
   ImportSummary,
   Intent,
@@ -91,6 +93,11 @@ function SemanticsScreen() {
   const [brief, setBrief] = useState<BriefRead | null>(null);
   const [collection, setCollection] = useState<CollectionRead | null>(null);
   const [groups, setGroups] = useState<GroupList | null>(null);
+  const [suggestion, setSuggestion] = useState<GroupSuggestionRead | null>(null);
+  const [suggesting, setSuggesting] = useState(false);
+  //: Для какого проекта просили предложение. Без этого при переключении
+  //: проекта на экране осталась бы раскладка от чужого ядра.
+  const suggestedFor = useRef<string | null>(null);
   const [collecting, setCollecting] = useState(false);
   const [onboarding, setOnboarding] = useState<OnboardingRead | null>(null);
   const [applying, setApplying] = useState(false);
@@ -159,6 +166,11 @@ function SemanticsScreen() {
         setOnboarding(onboardingData);
         setCollection(collectionData);
         setGroups(groupsData);
+        // Предложение относится к проекту, для которого его просили. Внутри
+        // одного проекта оно переживает перезагрузку: иначе принять его по
+        // группам было бы нельзя — первая же принятая группа уносила бы
+        // остальные.
+        if (suggestedFor.current !== selectedId) setSuggestion(null);
         setBriefDraft({
           sells: briefData.sells ?? "",
           synonyms: briefData.synonyms ?? "",
@@ -201,6 +213,43 @@ function SemanticsScreen() {
     if (!selectedId) return;
     try {
       await api.dissolveGroup(selectedId, name);
+      reload();
+    } catch (err) {
+      setError(toApiError(err));
+    }
+  };
+
+  const askModel = async () => {
+    if (!selectedId) return;
+    setSuggesting(true);
+    try {
+      suggestedFor.current = selectedId;
+      setSuggestion(await api.suggestGroups(selectedId));
+    } catch (err) {
+      setError(toApiError(err));
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
+  const acceptSuggested = async (names: string[]) => {
+    if (!selectedId || !suggestion) return;
+
+    // Списки необязательны в контракте: сервер шлёт их всегда, но
+    // сгенерированный тип этого не знает.
+    const all = suggestion.groups ?? [];
+    const chosen = all.filter((group) => names.includes(group.name));
+    try {
+      // По одной группе за раз, а не одним запросом: каждая группа — это
+      // отдельное решение человека, и принимать их вперемешку нельзя.
+      for (const group of chosen) {
+        await api.moveToGroup(selectedId, {
+          keyword_ids: (group.phrases ?? []).map((phrase) => phrase.id),
+          group: group.name,
+        });
+      }
+      const rest = all.filter((group) => !names.includes(group.name));
+      setSuggestion(rest.length > 0 ? { ...suggestion, groups: rest } : null);
       reload();
     } catch (err) {
       setError(toApiError(err));
@@ -501,6 +550,16 @@ function SemanticsScreen() {
                   onRename={renameGroup}
                   onDissolve={dissolveGroup}
                   onMove={moveToGroup}
+                  onAsk={askModel}
+                  asking={suggesting}
+                />
+              )}
+
+              {suggestion && (
+                <SuggestionCard
+                  suggestion={suggestion}
+                  onAccept={acceptSuggested}
+                  onDismiss={() => setSuggestion(null)}
                 />
               )}
 
@@ -1723,11 +1782,15 @@ function GroupsCard({
   onRename,
   onDissolve,
   onMove,
+  onAsk,
+  asking,
 }: {
   groups: GroupList;
   onRename: (name: string, next: string) => void;
   onDissolve: (name: string) => void;
   onMove: (ids: string[], group: string | null) => void;
+  onAsk: () => void;
+  asking: boolean;
 }) {
   const names = groups.items.map((group) => group.name);
   // Список необязателен в контракте: сервер шлёт его всегда, но
@@ -1740,9 +1803,14 @@ function GroupsCard({
         title="Группы под объявления"
         description="Одна группа — одно объявление и одна посадочная страница"
         action={
-          <span className="text-caption text-text-secondary tabular-nums">
-            {groups.total} {plural(groups.total, "группа", "группы", "групп")}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-caption text-text-secondary tabular-nums">
+              {groups.total} {plural(groups.total, "группа", "группы", "групп")}
+            </span>
+            <Button size="sm" variant="secondary" onClick={onAsk} disabled={asking}>
+              {asking ? "Модель думает…" : "Предложить раскладку"}
+            </Button>
+          </div>
         }
       />
 
@@ -1916,6 +1984,151 @@ function GroupRow({
                 ))}
                 <option value="__none__">убрать из групп</option>
               </select>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Раскладка, предложенная моделью.
+ *
+ * Расчёт группирует по общим основам слов и потому разводит «пластиковые окна»
+ * и «стеклопакеты» по разным группам: буквы разные. В кампании это два
+ * объявления, конкурирующих за один запрос. Модель различает смысл — и здесь
+ * показывает, что у неё получилось.
+ *
+ * Показывает, но не применяет. Ошибка модели в раскладке стоит переделанной
+ * структуры кампании, поэтому предложение стоит рядом с текущими группами, а
+ * решение принимает человек: целиком, по одной группе или никак.
+ */
+function SuggestionCard({
+  suggestion,
+  onAccept,
+  onDismiss,
+}: {
+  suggestion: GroupSuggestionRead;
+  onAccept: (names: string[]) => void;
+  onDismiss: () => void;
+}) {
+  const groups = suggestion.groups ?? [];
+
+  return (
+    <Card tone={groups.length > 0 ? "default" : "quiet"}>
+      <CardHeader
+        title="Раскладка от модели"
+        description="Предложение, а не решение: применяется только тем, что вы примете"
+        action={
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="text-caption text-text-secondary hover:text-text-primary focus-visible:outline-focus rounded-control px-1 focus-visible:outline-2"
+            >
+              Скрыть
+            </button>
+            {groups.length > 0 && (
+              <Button size="sm" onClick={() => onAccept(groups.map((group) => group.name))}>
+                Принять всё
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {!suggestion.ok ? (
+        <Hint>{suggestion.reason || "Предложения нет."}</Hint>
+      ) : (
+        <>
+          <Hint>
+            Сейчас групп: {suggestion.groups_now}. Модель предлагает {groups.length}. Разобрано
+            фраз: {suggestion.considered}
+            {(suggestion.skipped_manual ?? 0) > 0 &&
+              `, ваших фраз не трогали: ${suggestion.skipped_manual}`}
+            .
+          </Hint>
+
+          <div className="mt-3 flex flex-col">
+            {groups.map((group) => (
+              <SuggestedGroupRow key={group.name} group={group} onAccept={onAccept} />
+            ))}
+          </div>
+
+          {suggestion.model && (
+            <p className="text-caption text-text-secondary mt-3">
+              Разбирала модель {suggestion.model}. Уверенность —{" "}
+              {Math.round((suggestion.confidence ?? 0) * 100)}%. Проверьте: за структуру кампании
+              отвечаете вы, а не она.
+            </p>
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
+function SuggestedGroupRow({
+  group,
+  onAccept,
+}: {
+  group: SuggestedGroupRead;
+  onAccept: (names: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const phrases = group.phrases ?? [];
+  const from = group.moved_from ?? [];
+
+  return (
+    <div className="border-border-subtle border-b py-2 last:border-b-0">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          className="focus-visible:outline-focus rounded-control flex min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-2"
+        >
+          <span aria-hidden="true" className="text-text-secondary text-caption">
+            {open ? "▾" : "▸"}
+          </span>
+          <span className="text-body-sm text-text-primary truncate font-medium">{group.name}</span>
+        </button>
+
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="text-caption text-text-secondary tabular-nums">
+            {phrases.length} · {group.total_frequency}
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => onAccept([group.name])}>
+            Принять
+          </Button>
+        </div>
+      </div>
+
+      {/* Объяснение и «откуда придут» — рядом с названием, а не внутри:
+          принимать предложение вслепую нельзя, а раскрывать каждую группу
+          ради одной строки — лишняя работа. */}
+      {group.reason && (
+        <p className="text-caption text-text-secondary clamp-2 mt-0.5 ml-5">{group.reason}</p>
+      )}
+      {from.length > 0 && (
+        <p className="text-caption text-text-secondary clamp-2 mt-0.5 ml-5">
+          Сейчас в: {from.join(", ")}
+        </p>
+      )}
+
+      {open && (
+        <div className="mt-1.5 ml-5 flex flex-col">
+          {phrases.map((phrase) => (
+            <div
+              key={phrase.id}
+              className="border-border-subtle flex items-center justify-between gap-3 border-b py-1 last:border-b-0"
+            >
+              <span className="text-caption text-text-primary min-w-0 flex-1 truncate">
+                {phrase.phrase}
+              </span>
+              <span className="text-caption text-text-secondary shrink-0 tabular-nums">
+                {phrase.frequency ?? "—"}
+              </span>
             </div>
           ))}
         </div>

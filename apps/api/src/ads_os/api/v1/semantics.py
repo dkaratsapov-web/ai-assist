@@ -17,7 +17,16 @@ from ...models import Keyword, KeywordBrief, MinusWord, Project, SiteAudit
 from ...models.activity import ActivityAction
 from ...models.audit import ModuleStatus
 from ...models.collection import KeywordCollection
-from ...services import campaign, keyword_store, niches, profile, utm, wordstat_quota
+from ...models.usage import UsageService, UsageUnit
+from ...services import (
+    ai_clustering,
+    campaign,
+    keyword_store,
+    niches,
+    profile,
+    utm,
+    wordstat_quota,
+)
 from ...services.activity import record
 from ...services.ads import build_variants
 from ...services.cleanup import REASON_HINTS, REASON_LABELS, Reason, reason_for
@@ -35,6 +44,7 @@ from ...services.semantics import (
     suggest_minus_words,
 )
 from ...services.tables import UnreadableFileError, to_lines
+from ...services.usage import record as record_usage
 from ...services.wordstat import WHY_MANUAL, Brief, masks, steps
 from ...tenancy.repository import TenantRepository
 from ...worker.tasks.collect import build_masks, enqueue_collection
@@ -65,6 +75,7 @@ from ..schemas import (
     GroupPhraseRead,
     GroupRead,
     GroupRename,
+    GroupSuggestionRead,
     ImportSummary,
     KeywordFileImport,
     KeywordImport,
@@ -84,6 +95,7 @@ from ..schemas import (
     SearchProjectRead,
     SearchResult,
     SitelinkRead,
+    SuggestedGroupRead,
     UtmNotesRead,
 )
 
@@ -142,9 +154,7 @@ class BriefRepository(TenantRepository[KeywordBrief]):
     model = KeywordBrief
 
     def scoped(self, *, include_deleted: bool = False) -> Select[tuple[KeywordBrief]]:
-        return select(self.model).where(
-            self.model.organization_id == self.ctx.organization_id
-        )
+        return select(self.model).where(self.model.organization_id == self.ctx.organization_id)
 
 
 @router.post(
@@ -350,9 +360,7 @@ async def update_keyword(
     """
     await ProjectRepository(session, ctx).get_or_404(project_id)
 
-    row = next(
-        (r for r in await _keywords(session, ctx, project_id) if r.id == keyword_id), None
-    )
+    row = next((r for r in await _keywords(session, ctx, project_id) if r.id == keyword_id), None)
     if row is None:
         raise KeywordNotFoundError()
 
@@ -597,9 +605,7 @@ def _brief_read(project: Project, row: KeywordBrief | None) -> BriefRead:
         region=project.primary_region,
         masks=[
             MaskRead(query=mask.query, purpose=mask.purpose)
-            for mask in masks(
-                brief, niche_words=niche_words, region=project.primary_region
-            )
+            for mask in masks(brief, niche_words=niche_words, region=project.primary_region)
         ],
         steps=list(steps(project.primary_region)),
         why_manual=WHY_MANUAL,
@@ -705,9 +711,7 @@ def _cleanup_result(rows: list[Keyword], *, affected: int, clusters: int) -> Cle
     response_model=ClusterList,
     summary="Группы фраз под объявления",
 )
-async def list_clusters(
-    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
-) -> ClusterList:
+async def list_clusters(project_id: uuid.UUID, session: SessionDep, ctx: TenantDep) -> ClusterList:
     """Группы считаются заново при каждом запросе.
 
     Хранить их отдельно смысла нет: они целиком выводятся из фраз, а фразы
@@ -776,9 +780,7 @@ async def list_minus_words(
         suggestions=suggestions,
         learned=await _learned_words(session, ctx, project_id, already=saved),
         from_niche=[
-            word
-            for word in niches.minus_words(niches.get(project.niche))
-            if word not in saved
+            word for word in niches.minus_words(niches.get(project.niche)) if word not in saved
         ],
         total=len(rows),
     )
@@ -980,9 +982,7 @@ def _recluster(rows: list[Keyword]) -> int:
     return len(groups)
 
 
-async def _keywords(
-    session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
-) -> list[Keyword]:
+async def _keywords(session: SessionDep, ctx: TenantDep, project_id: uuid.UUID) -> list[Keyword]:
     stmt = KeywordRepository(session, ctx).scoped().where(Keyword.project_id == project_id)
     return list((await session.execute(stmt)).scalars().all())
 
@@ -990,9 +990,7 @@ async def _keywords(
 async def _minus_word_rows(
     session: SessionDep, ctx: TenantDep, project_id: uuid.UUID
 ) -> list[MinusWord]:
-    stmt = (
-        MinusWordRepository(session, ctx).scoped().where(MinusWord.project_id == project_id)
-    )
+    stmt = MinusWordRepository(session, ctx).scoped().where(MinusWord.project_id == project_id)
     return sorted((await session.execute(stmt)).scalars().all(), key=lambda row: row.word)
 
 
@@ -1023,9 +1021,7 @@ def _to_read(row: Keyword, *, minus_words: frozenset[str] = frozenset()) -> Keyw
     response_model=AdDraftList,
     summary="Черновики объявлений по группам фраз",
 )
-async def list_ad_drafts(
-    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
-) -> AdDraftList:
+async def list_ad_drafts(project_id: uuid.UUID, session: SessionDep, ctx: TenantDep) -> AdDraftList:
     """Собирает по черновику на каждую группу фраз.
 
     Текст берётся с посадочной страницы клиента — из последнего завершённого
@@ -1115,9 +1111,7 @@ async def list_ad_drafts(
                 ],
                 keywords=list(draft.keywords),
                 violations=[
-                    AdViolationRead(
-                        problem=v.problem, field_name=v.field_name, message=v.message
-                    )
+                    AdViolationRead(problem=v.problem, field_name=v.field_name, message=v.message)
                     for v in draft.violations
                 ],
                 is_ready=draft.is_ready,
@@ -1128,8 +1122,9 @@ async def list_ad_drafts(
         ready=sum(1 for _, draft in drafts if draft.is_ready),
         source_note=note,
         utm=UtmNotesRead(
-            example=utm.preview(fallback or "https://site.ru/", template,
-                                campaign_name=utm.slug(project.name)),
+            example=utm.preview(
+                fallback or "https://site.ru/", template, campaign_name=utm.slug(project.name)
+            ),
             notes=list(utm.NOTES),
         ),
     )
@@ -1173,9 +1168,7 @@ async def get_cross_minus(
     response_class=Response,
     responses={200: {"content": {"text/csv": {}}, "description": "CSV с кампанией"}},
 )
-async def export_campaign(
-    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
-) -> Response:
+async def export_campaign(project_id: uuid.UUID, session: SessionDep, ctx: TenantDep) -> Response:
     """Отдаёт готовую кампанию одним файлом.
 
     Это единственный способ довести работу до реального запуска, пока доступ к
@@ -1359,9 +1352,7 @@ async def search(
 
     projects = [
         row
-        for row in (await session.execute(ProjectRepository(session, ctx).scoped()))
-        .scalars()
-        .all()
+        for row in (await session.execute(ProjectRepository(session, ctx).scoped())).scalars().all()
         if needle in row.name.lower()
     ][:limit]
 
@@ -1381,9 +1372,7 @@ async def search(
 
     names = {
         row.id: row.name
-        for row in (await session.execute(ProjectRepository(session, ctx).scoped()))
-        .scalars()
-        .all()
+        for row in (await session.execute(ProjectRepository(session, ctx).scoped())).scalars().all()
     }
 
     return SearchResult(
@@ -1558,9 +1547,7 @@ async def _collection_read(collection: KeywordCollection | None) -> CollectionRe
     response_model=GroupList,
     summary="Группы вместе с фразами",
 )
-async def list_groups(
-    project_id: uuid.UUID, session: SessionDep, ctx: TenantDep
-) -> GroupList:
+async def list_groups(project_id: uuid.UUID, session: SessionDep, ctx: TenantDep) -> GroupList:
     """Отдаёт группы так, как они сейчас лежат в ядре.
 
     Читаются из базы, а не пересчитываются на лету. Раньше было наоборот, и это
@@ -1698,6 +1685,105 @@ async def recluster_groups(
     )
 
 
+@router.post(
+    "/{project_id}/keywords/groups/suggest",
+    response_model=GroupSuggestionRead,
+    summary="Предложить раскладку моделью",
+)
+async def suggest_groups(
+    project_id: uuid.UUID, session: SessionDep, ctx: WriteDep
+) -> GroupSuggestionRead:
+    """Просит модель разложить фразы по группам.
+
+    Расчёт группирует по общим основам слов, и это работает ровно до тех пор,
+    пока одну вещь называют одними словами. «Пластиковые окна» и
+    «стеклопакеты» для него разные темы — в кампании это две группы вместо
+    одной и два объявления, конкурирующих за один запрос. Модель различает
+    смысл, а не буквы.
+
+    Результат не применяется. Ни здесь, ни отдельной кнопкой «применить всё
+    молча»: ошибка модели в раскладке стоит переделанной структуры кампании,
+    поэтому предложение показывается рядом с текущими группами, а принимает
+    его человек — целиком или по группам, обычным переносом фраз.
+
+    Фразы, разложенные руками, модели не показываются: чужую работу пересчёт
+    не отменяет. Это то же правило, по которому живёт пересборка групп.
+    """
+    project = await ProjectRepository(session, ctx).get_or_404(project_id)
+
+    rows = await _keywords(session, ctx, project_id)
+    targeted = [row for row in rows if row.intent is not Intent.IRRELEVANT]
+    manual = [row for row in targeted if row.cluster_manual]
+    free = _by_frequency([row for row in targeted if not row.cluster_manual])
+
+    groups_now = len({row.cluster_name for row in targeted if row.cluster_name})
+
+    # Частые фразы наверху списка не случайно: если ядро длиннее предела, до
+    # модели должны дойти те фразы, которые решают структуру кампании.
+    considered = free[: ai_clustering.MAX_PHRASES]
+
+    result = await ai_clustering.suggest(
+        [row.phrase for row in considered],
+        organization_id=ctx.organization_id,
+        project_id=project.id,
+    )
+
+    if result.tokens:
+        await record_usage(
+            session,
+            organization_id=ctx.organization_id,
+            service=UsageService.AI,
+            operation="keyword_clustering",
+            quantity=result.tokens,
+            unit=UsageUnit.TOKENS,
+            project_id=project.id,
+            meta={"фраз": str(len(considered)), "групп": str(len(result.groups))},
+        )
+
+    return GroupSuggestionRead(
+        ok=result.ok,
+        reason=result.reason,
+        groups=_suggested_groups(result.groups, considered),
+        groups_now=groups_now,
+        skipped_manual=len(manual),
+        considered=len(considered),
+        confidence=result.confidence,
+        model=result.model,
+    )
+
+
+def _suggested_groups(
+    groups: tuple[ai_clustering.Group, ...], rows: list[Keyword]
+) -> list[SuggestedGroupRead]:
+    """Сопоставляет предложение модели с настоящими фразами ядра.
+
+    Модель вернула тексты, взятые из присланного списка, — здесь они снова
+    становятся строками базы со своими идентификаторами. Принятие группы после
+    этого — обычный перенос фраз, тот же, что человек делает руками: отдельного
+    пути записи для модели в системе нет.
+    """
+    by_phrase = {row.phrase: row for row in rows}
+    items: list[SuggestedGroupRead] = []
+
+    for group in groups:
+        members = [by_phrase[phrase] for phrase in group.phrases if phrase in by_phrase]
+        if not members:
+            continue
+
+        items.append(
+            SuggestedGroupRead(
+                name=group.name,
+                reason=group.reason,
+                phrases=[_group_phrase(row) for row in _by_frequency(members)],
+                total_frequency=sum(row.frequency or 0 for row in members),
+                moved_from=sorted({row.cluster_name for row in members if row.cluster_name}),
+            )
+        )
+
+    items.sort(key=lambda group: group.total_frequency, reverse=True)
+    return items
+
+
 def _group_phrase(row: Keyword) -> GroupPhraseRead:
     return GroupPhraseRead(
         id=row.id,
@@ -1777,9 +1863,7 @@ async def preview_campaign(
             region=project.primary_region,
             internal_links=links,
         )
-        warnings += [
-            f"{group.name}: {v.message}" for draft in variants for v in draft.violations
-        ]
+        warnings += [f"{group.name}: {v.message}" for draft in variants for v in draft.violations]
 
         shown.append(
             CampaignGroupRead(

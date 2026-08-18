@@ -14,6 +14,7 @@ from ads_os.api.deps import get_session
 from ads_os.main import create_app
 from ads_os.models import Organization, Project, SiteAudit, User
 from ads_os.models.audit import ModuleStatus
+from ads_os.services import ai_clustering
 
 from .conftest import make_user
 
@@ -90,9 +91,7 @@ class TestИмпорт:
             )
 
         body = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user))
         ).json()
 
         assert body["total"] == 6
@@ -128,9 +127,7 @@ class TestИмпорт:
         )
 
         after = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user))
         ).json()["items"]
         changed = next(item for item in after if item["id"] == items[0]["id"])
 
@@ -255,9 +252,7 @@ class TestМинусСлова:
         )
 
         body = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/minus-words", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/minus-words", headers=headers(org, user))
         ).json()
 
         assert "вакансии" not in {s["word"] for s in body["suggestions"]}
@@ -806,14 +801,10 @@ class TestЧисткаЯдра:
             headers=headers(org, user),
         )
 
-        await client.post(
-            f"/api/v1/projects/{row.id}/keywords/recheck", headers=headers(org, user)
-        )
+        await client.post(f"/api/v1/projects/{row.id}/keywords/recheck", headers=headers(org, user))
 
         after = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user))
         ).json()["items"]
         kept = next(item for item in after if item["id"] == items[0]["id"])
 
@@ -855,9 +846,7 @@ class TestЧисткаЯдра:
             headers=headers(org, user),
         )
         items = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user))
         ).json()["items"]
         target = next(item for item in items if item["phrase"] == "пластиковые окна москва")
         await client.patch(
@@ -871,9 +860,7 @@ class TestЧисткаЯдра:
         )
 
         left = (
-            await client.get(
-                f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user)
-            )
+            await client.get(f"/api/v1/projects/{row.id}/keywords", headers=headers(org, user))
         ).json()["items"]
 
         assert target["id"] in {item["id"] for item in left}
@@ -1808,3 +1795,196 @@ class TestПередКоммандером:
 
         assert orphan["phrase"] in body["ungrouped"]
         assert body["can_export"] is False
+
+
+class TestГруппировкаМоделью:
+    """Модель предлагает раскладку, решение остаётся за человеком.
+
+    Проверяется главное: предложение не применяется само, чужая работа модели
+    не показывается, а без подключённой модели экран объясняет причину, а не
+    показывает пустое место.
+    """
+
+    async def loaded(
+        self, client: AsyncClient, org: Organization, user: User, row: Project
+    ) -> dict:
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/import",
+            json={"text": LIST},
+            headers=headers(org, user),
+        )
+        return (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+
+    async def test_без_модели_приходит_причина(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Заглушка отвечает по схеме, но выдуманным: выдавать это за раскладку
+        нельзя."""
+        org, user, row = project
+        await self.loaded(client, org, user, row)
+
+        body = (
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                headers=headers(org, user),
+            )
+        ).json()
+
+        assert body["ok"] is False
+        assert body["reason"]
+        assert body["groups"] == []
+
+    async def test_предложение_приходит_с_идентификаторами(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Принятие группы — обычный перенос фраз, тот же, что руками. Без
+        идентификаторов принять предложение было бы нечем."""
+        org, user, row = project
+        await self.loaded(client, org, user, row)
+
+        with patch(
+            "ads_os.services.ai_clustering.suggest",
+            return_value=ai_clustering.Result(
+                groups=(
+                    ai_clustering.Group(
+                        name="Покупка окон",
+                        phrases=("купить пластиковые окна", "пластиковые окна цена"),
+                        reason="Готовность купить.",
+                    ),
+                ),
+                confidence=0.8,
+                model="модель-1",
+                tokens=100,
+            ),
+        ):
+            body = (
+                await client.post(
+                    f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                    headers=headers(org, user),
+                )
+            ).json()
+
+        assert body["ok"] is True
+        assert body["groups"][0]["name"] == "Покупка окон"
+        assert all(phrase["id"] for phrase in body["groups"][0]["phrases"])
+        assert body["model"] == "модель-1"
+
+    async def test_предложение_само_не_применяется(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Ошибка модели в раскладке стоит переделанной структуры кампании."""
+        org, user, row = project
+        before = await self.loaded(client, org, user, row)
+
+        with patch(
+            "ads_os.services.ai_clustering.suggest",
+            return_value=ai_clustering.Result(
+                groups=(
+                    ai_clustering.Group(name="Всё вместе", phrases=("купить пластиковые окна",)),
+                ),
+                model="модель-1",
+            ),
+        ):
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                headers=headers(org, user),
+            )
+
+        after = (
+            await client.get(
+                f"/api/v1/projects/{row.id}/keywords/groups", headers=headers(org, user)
+            )
+        ).json()
+        assert [g["name"] for g in after["items"]] == [g["name"] for g in before["items"]]
+
+    async def test_ручные_группы_модели_не_показываются(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Пересчёт, отменяющий чужую работу, — причина больше не пользоваться
+        этой кнопкой."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        pinned = body["items"][0]["phrases"][0]
+
+        await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/move",
+            headers=headers(org, user),
+            json={"keyword_ids": [pinned["id"]], "group": "Своя группа"},
+        )
+
+        with patch(
+            "ads_os.services.ai_clustering.suggest",
+            return_value=ai_clustering.Result(reason="нет модели"),
+        ) as called:
+            answer = (
+                await client.post(
+                    f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                    headers=headers(org, user),
+                )
+            ).json()
+
+        sent = called.call_args.args[0]
+        assert pinned["phrase"] not in sent
+        assert answer["skipped_manual"] == 1
+
+    async def test_нецелевые_фразы_модели_не_отдаются(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Группа собирается под объявление, а по нецелевым объявлений нет."""
+        org, user, row = project
+        await self.loaded(client, org, user, row)
+
+        with patch(
+            "ads_os.services.ai_clustering.suggest",
+            return_value=ai_clustering.Result(reason="нет модели"),
+        ) as called:
+            await client.post(
+                f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                headers=headers(org, user),
+            )
+
+        sent = called.call_args.args[0]
+        assert all("вакансии" not in phrase for phrase in sent)
+
+    async def test_видно_откуда_придут_фразы(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Без этого непонятно, что предложение вообще меняет."""
+        org, user, row = project
+        body = await self.loaded(client, org, user, row)
+        first = body["items"][0]
+
+        with patch(
+            "ads_os.services.ai_clustering.suggest",
+            return_value=ai_clustering.Result(
+                groups=(
+                    ai_clustering.Group(name="Новая", phrases=(first["phrases"][0]["phrase"],)),
+                ),
+                model="модель-1",
+            ),
+        ):
+            answer = (
+                await client.post(
+                    f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+                    headers=headers(org, user),
+                )
+            ).json()
+
+        assert answer["groups"][0]["moved_from"] == [first["name"]]
+
+    async def test_наблюдателю_модель_не_вызвать(
+        self, client: AsyncClient, project: tuple[Organization, User, Project]
+    ) -> None:
+        """Вызов стоит денег: право смотреть не даёт права тратить."""
+        org, user, row = project
+
+        response = await client.post(
+            f"/api/v1/projects/{row.id}/keywords/groups/suggest",
+            headers={**headers(org, user), "X-User-Role": "viewer"},
+        )
+
+        assert response.status_code == 403

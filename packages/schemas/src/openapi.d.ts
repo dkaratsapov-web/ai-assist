@@ -978,6 +978,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/keywords/groups/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Предложить раскладку моделью
+         * @description Просит модель разложить фразы по группам.
+         *
+         *     Расчёт группирует по общим основам слов, и это работает ровно до тех пор,
+         *     пока одну вещь называют одними словами. «Пластиковые окна» и
+         *     «стеклопакеты» для него разные темы — в кампании это две группы вместо
+         *     одной и два объявления, конкурирующих за один запрос. Модель различает
+         *     смысл, а не буквы.
+         *
+         *     Результат не применяется. Ни здесь, ни отдельной кнопкой «применить всё
+         *     молча»: ошибка модели в раскладке стоит переделанной структуры кампании,
+         *     поэтому предложение показывается рядом с текущими группами, а принимает
+         *     его человек — целиком или по группам, обычным переносом фраз.
+         *
+         *     Фразы, разложенные руками, модели не показываются: чужую работу пересчёт
+         *     не отменяет. Это то же правило, по которому живёт пересборка групп.
+         */
+        post: operations["suggest_groups_api_v1_projects__project_id__keywords_groups_suggest_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}/keywords/groups/{name}": {
         parameters: {
             query?: never;
@@ -2449,6 +2483,53 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * GroupSuggestionRead
+         * @description Предложение модели по раскладке фраз.
+         *
+         *     Именно предложение: система его не применяет. Ошибка модели здесь стоит
+         *     переделанной структуры кампании, поэтому решение остаётся за человеком —
+         *     целиком, по группам или никак.
+         */
+        GroupSuggestionRead: {
+            /**
+             * Confidence
+             * @default 0
+             */
+            confidence: number;
+            /**
+             * Considered
+             * @default 0
+             */
+            considered: number;
+            /** Groups */
+            groups?: components["schemas"]["SuggestedGroupRead"][];
+            /**
+             * Groups Now
+             * @default 0
+             */
+            groups_now: number;
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Ok
+             * @default false
+             */
+            ok: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Skipped Manual
+             * @default 0
+             */
+            skipped_manual: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -3489,6 +3570,32 @@ export interface components {
          * @enum {string}
          */
         StepState: "completed" | "active" | "waiting" | "blocked" | "error";
+        /**
+         * SuggestedGroupRead
+         * @description Группа, предложенная моделью.
+         *
+         *     Фразы приходят со своими идентификаторами: принятие группы — это обычный
+         *     перенос фраз, тот же самый, что человек делает руками. Отдельного пути
+         *     записи для модели нет намеренно.
+         */
+        SuggestedGroupRead: {
+            /** Moved From */
+            moved_from?: string[];
+            /** Name */
+            name: string;
+            /** Phrases */
+            phrases?: components["schemas"]["GroupPhraseRead"][];
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /**
+             * Total Frequency
+             * @default 0
+             */
+            total_frequency: number;
+        };
         /**
          * SuggestionRead
          * @description Кого предлагается добавить в конкуренты.
@@ -5484,6 +5591,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GroupChangeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    suggest_groups_api_v1_projects__project_id__keywords_groups_suggest_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "x-organization-id"?: string | null;
+                "x-user-id"?: string | null;
+                "x-user-role"?: string | null;
+            };
+            path: {
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupSuggestionRead"];
                 };
             };
             /** @description Validation Error */
